@@ -1,6 +1,6 @@
 {
   "name": "hal-9000",
-  "description": "All-in-one MCP server suite providing ChromaDB vector database, Memory Bank persistent storage, and DEVONthink document research integration for Claude Code",
+  "description": "Complete Claude Code productivity suite: MCP servers (ChromaDB, Memory Bank, Sequential Thinking, DEVONthink), 12 custom agents, session management, terminal automation (tmux-cli), safety hooks, Docker environments (ClaudeBox), and multi-agent orchestration (Claude Squad)",
   "version": "1.0.0",
   "author": {
     "name": "Hal Hildebrand",
@@ -15,8 +15,21 @@
     "vector-database",
     "memory-bank",
     "devonthink",
+    "sequential-thinking",
     "knowledge-management",
-    "document-research"
+    "document-research",
+    "session-management",
+    "terminal-automation",
+    "tmux-cli",
+    "vault",
+    "safety-hooks",
+    "agents",
+    "custom-agents",
+    "java-development",
+    "claudebox",
+    "claude-squad",
+    "multi-agent",
+    "docker"
   ],
   "mcpServers": {
     "chromadb": {
@@ -39,6 +52,13 @@
         "MEMORY_BANK_ROOT": "${HOME}/memory-bank"
       }
     },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
     "devonthink": {
       "command": "node",
       "args": [
@@ -47,21 +67,14 @@
       "env": {}
     }
   },
+  "commands": {
+    "check": "./commands/check.md",
+    "load": "./commands/load.md",
+    "sessions": "./commands/sessions.md",
+    "session-delete": "./commands/session-delete.md"
+  },
   "install": {
-    "steps": [
-      {
-        "name": "Install ChromaDB MCP",
-        "command": "pip3 install --user chroma-mcp"
-      },
-      {
-        "name": "Install Memory Bank",
-        "command": "npm install -g @allpepper/memory-bank-mcp@latest"
-      },
-      {
-        "name": "Create Memory Bank directory",
-        "command": "mkdir -p ${HOME}/memory-bank"
-      }
-    ],
-    "postInstall": "Please configure environment variables:\n- CHROMADB_TENANT: Your ChromaDB tenant ID\n- CHROMADB_DATABASE: Your database name\n- CHROMADB_API_KEY: Your API key\n\nFor DEVONthink: Ensure dt-mcp is cloned to ~/git/dt-mcp"
+    "script": "./install.sh",
+    "postInstall": "Installation complete! Please restart Claude Code to load all components.\n\nInstalled:\n• MCP Servers: ChromaDB, Memory Bank, Sequential Thinking, DEVONthink\n• Custom Agents: 12 specialized agents (java-developer, code-review-expert, etc.)\n• Session Commands: /check, /load, /sessions, /session-delete\n• Terminal Tools: tmux-cli, find-session, vault, env-safe\n• Safety Hooks: Git, file, and environment protection\n• ClaudeBox: Docker development environments\n• Claude Squad (cs): Multi-agent orchestration\n\nNext steps:\n1. Configure ChromaDB environment variables (if using cloud mode)\n2. Try: tmux-cli --help, vault --help, cs\n3. Test: /sessions, claudebox run\n4. See AGENTS.md for agent documentation"
   }
 }

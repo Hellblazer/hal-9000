@@ -9,37 +9,7 @@
     {
       "name": "hal-9000",
       "source": "./plugins/hal-9000",
-      "description": "All-in-one MCP server suite: ChromaDB, Memory Bank, and DEVONthink integration",
-      "version": "1.0.0"
-    },
-    {
-      "name": "session-tools",
-      "source": "./plugins/session-tools",
-      "description": "Session management commands for Claude Code workflows",
-      "version": "1.0.0"
-    },
-    {
-      "name": "hell-agents",
-      "source": "./plugins/hell-agents",
-      "description": "Curated collection of specialized Claude Code agent configurations and best practices for parallel task execution",
-      "version": "1.0.0"
-    },
-    {
-      "name": "claude-code-tools",
-      "source": "./plugins/claude-code-tools",
-      "description": "Comprehensive toolkit: tmux-cli terminal automation, session search, vault for .env backup, safety hooks, and developer productivity tools",
-      "version": "1.0.0"
-    },
-    {
-      "name": "claudebox",
-      "source": "./plugins/claudebox",
-      "description": "Docker-based development environment for Claude Code with containerized isolation, pre-configured profiles, and multi-instance squad mode",
-      "version": "1.0.0"
-    },
-    {
-      "name": "claude-squad",
-      "source": "./plugins/claude-squad",
-      "description": "Terminal UI for managing multiple Claude Code instances in parallel with isolated git worktrees, background task completion, and auto-accept mode",
+      "description": "Complete productivity suite: MCP servers (ChromaDB, Memory Bank, Sequential Thinking, DEVONthink), 12 custom agents, session management, terminal automation (tmux-cli), safety hooks, Docker environments (ClaudeBox), and multi-agent orchestration (Claude Squad). Everything you need in one plugin!",
       "version": "1.0.0"
     }
   ]

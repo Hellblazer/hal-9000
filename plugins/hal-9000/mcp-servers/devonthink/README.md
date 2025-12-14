@@ -1,36 +1,35 @@
 # DEVONthink MCP Server
 
-Integration with DEVONthink for document research, knowledge synthesis, and information retrieval.
+Integration with DEVONthink for document research and knowledge synthesis.
 
-## What It Does
+## Features
 
-DEVONthink MCP enables:
-- **Document Search**: Search across your DEVONthink databases
-- **Advanced Analysis**: Summarize, extract themes, compare documents
-- **Knowledge Graphs**: Build and traverse document relationships
-- **Smart Organization**: Auto-organize documents, create groups
-- **Research Workflows**: Explore topics, track evolution over time
-- **Batch Operations**: Process multiple documents efficiently
+- Document search across DEVONthink databases
+- Document analysis (summarize, extract themes, compare)
+- Knowledge graph construction and traversal
+- Smart organization (auto-organize, create groups)
+- Research workflows (explore topics, track evolution)
+- Batch operations
 
 ## Use Cases
 
-- Research complex topics across document collections
+- Research topics across document collections
 - Synthesize information from multiple sources
-- Track how topics evolve over time
+- Track topic evolution over time
 - Organize large document repositories
-- Extract insights from PDFs, web archives, and notes
-- Build knowledge graphs from your research
+- Extract insights from PDFs, web archives, notes
+- Build knowledge graphs from research
 
 ## Prerequisites
 
 - **macOS**: DEVONthink MCP only works on macOS
-- **DEVONthink**: DEVONthink Pro or Server installed and running
-- **Node.js**: Version 16 or higher
+- **DEVONthink**: Pro or Server installed and running
+- **Node.js**: 16+
 - **dt-mcp server**: Custom MCP server for DEVONthink
 
 ## Installation
 
-This MCP server requires the `dt-mcp` repository:
+Requires the `dt-mcp` repository:
 
 ```bash
 # Clone the dt-mcp repository
@@ -45,7 +44,7 @@ cd ~/git/hal-9000/mcp-servers/devonthink
 ./install.sh
 ```
 
-**Note**: If you don't have the dt-mcp repository, you'll need to obtain it separately. Contact the repository maintainer for access.
+Contact the repository maintainer if you don't have access to dt-mcp.
 
 ## Configuration
 
@@ -53,10 +52,8 @@ The `config.json` points to the dt-mcp server location. Update the path if you c
 
 ## Available Tools
 
-Once installed, Claude Code can use:
-
 ### Search & Retrieval
-- `search` - Basic, advanced, batch, and smart group searches
+- `search` - Basic, advanced, batch, smart group searches
 - `document` - Read, create, update, delete, OCR documents
 
 ### Analysis & Synthesis
@@ -78,7 +75,7 @@ Once installed, Claude Code can use:
 
 ### Topic Research
 ```
-Use research workflow to explore "quantum computing"
+Research quantum computing
 Organize findings into collections
 Build knowledge graph of related concepts
 Track evolution over time

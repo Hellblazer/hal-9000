@@ -10,6 +10,19 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}Installing ChromaDB MCP Server...${NC}"
 echo ""
 
+# Check if ChromaDB MCP is already installed
+if command -v claude &> /dev/null && claude mcp list 2>/dev/null | grep -q "chromadb"; then
+    echo -e "${YELLOW}⚠️  ChromaDB MCP server is already configured${NC}"
+    echo ""
+    read -p "Overwrite existing configuration? (y/N): " overwrite
+    if [[ ! "$overwrite" =~ ^[Yy]$ ]]; then
+        echo "Skipping ChromaDB installation (keeping existing configuration)"
+        exit 0
+    fi
+    echo "Proceeding with installation (will overwrite)..."
+    echo ""
+fi
+
 # Check for Python
 if ! command -v python3 &> /dev/null; then
     echo "Error: Python 3 is required but not installed."

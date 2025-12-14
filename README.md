@@ -1,307 +1,280 @@
-# HAL-9000: Hellbound Claude Marketplace
+# HAL-9000 Claude Marketplace
 
-A [Claude Code plugin marketplace](https://code.claude.com/docs/en/plugin-marketplaces) providing MCP servers and productivity tools.
+A [Claude Code plugin marketplace](https://code.claude.com/docs/en/plugin-marketplaces) providing MCP servers, custom agents, and development tools.
 
-## What is This?
+## Overview
 
-HAL-9000 is a **Claude Code plugin marketplace** that you can add to Claude Code to install powerful extensions:
-
-- **hal-9000 plugin**: All-in-one MCP server suite (ChromaDB, Memory Bank, DEVONthink)
-- **session-tools plugin**: Session management commands for workflow continuity
+HAL-9000 is a single plugin that bundles:
+- MCP servers (ChromaDB, Memory Bank, Sequential Thinking, DEVONthink)
+- Custom agent configurations (12 specialized agents)
+- Session management commands
+- Terminal automation tools (tmux-cli, vault, env-safe)
+- Safety hooks for git, files, and environment variables
+- Docker development environments (ClaudeBox)
+- Multi-agent orchestration (Claude Squad)
 
 ## Installation
 
-### Add Marketplace to Claude Code
+### Add Marketplace
 
-1. **Clone this repository**:
+1. Clone this repository:
    ```bash
    git clone https://github.com/hal.hildebrand/hal-9000.git
    ```
 
-2. **Add marketplace in Claude Code**:
+2. Add to Claude Code:
    - Open Claude Code settings
    - Navigate to Marketplaces
    - Add local marketplace: `/path/to/hal-9000`
 
-3. **Install plugins**:
-   - Browse the hal-9000 marketplace in Claude Code
-   - Install "hal-9000" plugin for MCP servers
-   - Install "session-tools" plugin for session management
-   - Follow post-installation instructions
+3. Install the plugin:
+   - Browse hal-9000 marketplace in Claude Code
+   - Install "hal-9000" plugin
+   - Run the installation script when prompted
 
-### Quick Setup (Alternative)
+### Installation Modes
 
-If you want to install without using the marketplace feature, use the legacy installer:
+The installer provides three modes:
 
-```bash
-cd hal-9000
-./install.sh
-```
+**Mode 1: Complete** (default)
+- Installs on host machine
+- Also installs to `~/.claudebox/hal-9000` for container sharing
+- ClaudeBox containers mount and inherit components
 
-## Available Plugins
+**Mode 2: Host Only**
+- Installs only on host machine
+- Skips ClaudeBox shared directory
 
-### 🔌 hal-9000 Plugin
+**Mode 3: ClaudeBox Shared Only**
+- Installs only to `~/.claudebox/hal-9000`
+- For custom container setups
 
-All-in-one MCP server suite:
+### ClaudeBox Container Sharing
+
+Mode 1 installs components to `~/.claudebox/hal-9000/`. ClaudeBox containers mount this as `/hal-9000` and run `/hal-9000/setup.sh` to configure. MCP servers, agents, commands, and tools become available in all containers without reinstalling.
+
+### Safe Installation
+
+MCP server installers check for existing configurations using `claude mcp list`. If a server is already configured, the installer prompts before overwriting. Press N to skip and preserve existing configuration.
+
+## Components
+
+### MCP Servers
 
 **ChromaDB**
 - Vector database for semantic search
 - Document storage with embeddings
-- Hybrid search (semantic + keyword)
+- Hybrid search (semantic and keyword)
 
 **Memory Bank**
 - Persistent memory across sessions
 - Project-based knowledge organization
-- Agent coordination
+- Multi-agent coordination
+
+**Sequential Thinking**
+- Step-by-step reasoning tool
+- Problem decomposition
+- Hypothesis verification
 
 **DEVONthink** (macOS only)
 - Document research integration
 - Knowledge graph construction
-- AI-powered analysis
+- Requires DEVONthink Pro/Server
 
-[Full Documentation](plugins/hal-9000/README.md)
+### Custom Agents
 
-### ⚡ session-tools Plugin
+12 specialized agent configurations installed to `~/.claude/agents/`:
 
-Session management commands:
+**Development**
+- java-developer
+- java-architect-planner
+- java-debugger
 
+**Review & Analysis**
+- code-review-expert
+- plan-auditor
+- deep-analyst
+- codebase-deep-analyzer
+
+**Research**
+- deep-research-synthesizer
+- devonthink-researcher
+
+**Organization**
+- knowledge-tidier
+- pdf-chromadb-processor
+- project-management-setup
+
+See AGENTS.md for usage patterns.
+
+### Session Commands
+
+Slash commands for session management:
 - `/check` - Save session context
-- `/load` - Resume saved session
-- `/sessions` - List all sessions
+- `/load` - Resume session
+- `/sessions` - List sessions
 - `/session-delete` - Delete session
 
-[Full Documentation](plugins/session-tools/README.md)
+### Terminal Tools
 
-### 🎯 hell-agents Plugin
-
-Specialized Claude Code agent configurations and workflows:
-
-**Development Agents**
-- java-developer, java-architect-planner, java-debugger
-
-**Review & Analysis Agents**
-- code-review-expert, plan-auditor, deep-analyst, codebase-deep-analyzer
-
-**Research & Exploration Agents**
-- Explore, deep-research-synthesizer, devonthink-researcher
-
-**Planning & Organization Agents**
-- Plan, project-management-setup, knowledge-tidier
-
-[Full Documentation](plugins/hell-agents/README.md)
-
-### 🛠️ claude-code-tools Plugin
-
-Comprehensive toolkit for enhancing Claude Code:
-
-**tmux-cli** - Terminal automation ("Playwright for terminals")
-- Control interactive CLI applications
-- Debug with pdb/gdb
+**tmux-cli**
+- Terminal automation for interactive CLI apps
+- Control debuggers (pdb, gdb)
 - Launch multiple Claude instances
-- Test interactive scripts
 
-**Session Search**
-- find-session: Unified search across all agents
-- find-claude-session: Claude-specific search
+**vault**
+- Encrypted .env file backup with SOPS
+- Secure credential management
+
+**env-safe**
+- Safe .env file inspection
+- Prevents accidental secret exposure
+
+**find-session**
+- Search across all agent sessions
 - Cross-project session discovery
 
-**Security & Safety**
-- vault: Encrypted .env backup with SOPS
-- env-safe: Safe .env inspection
-- Safety hooks: Git, file, and environment protection
+**Safety Hooks**
+- Git operation protection (add, commit, checkout blocks)
+- File operation guards (rm block)
+- Environment file protection
 
-**Optional: lmsh** - Natural language shell (requires Rust)
+### Development Environments
 
-[Full Documentation](plugins/claude-code-tools/README.md)
+**ClaudeBox**
+- Docker-based containerized development
+- Pre-configured language profiles
+- Project isolation with persistent configs
 
-### 🐳 claudebox Plugin
-
-Docker-based development environment for Claude Code:
-
-**Containerized Isolation**
-- Each project in separate Docker container
-- Pre-configured language profiles (Python, Rust, Go, C/C++, Node, Java)
-- Persistent auth, history, and configs
-
-**Multi-Instance Support**
-- Work on multiple projects simultaneously
-- Project-specific firewall allowlists
-- Automatic dependency resolution
-
-**Squad Mode** - Multi-agent workflows
-- Launch multiple Claude instances in parallel
-- Tmux-based session management
-- Configuration-driven agent definitions
-
-**Developer Tools**
-- GitHub CLI, Delta, fzf, oh-my-zsh
-- Python venv auto-creation
-- Tmux socket mounting
-
-[Full Documentation](plugins/claudebox/README.md)
-
-### 🎮 claude-squad Plugin
-
-Terminal UI for multi-agent workflows:
-
-**Multi-Instance Management**
-- Run multiple Claude Code/Codex/Gemini/Aider instances in parallel
-- Each task in isolated git worktree
+**Claude Squad**
+- Multi-agent terminal UI
+- Isolated git worktrees per task
 - Background task completion
-- Auto-accept mode for autonomous execution
-
-**Workflow Features**
-- TUI keyboard-driven interface
-- Review changes before applying
-- Commit and push directly from UI
-- Session persistence and resume
-
-**Integration**
-- Works with Claude Code, Codex, Gemini, Aider
-- tmux-based session isolation
-- Git worktrees prevent conflicts
-- GitHub CLI integration
-
-**Use Cases**
-- Parallel feature development
-- Code review workflows
-- Multi-framework projects
-- Background task queues
-
-[Full Documentation](plugins/claude-squad/README.md)
+- Supports Claude Code, Codex, Gemini, Aider
 
 ## Requirements
 
-### hal-9000 Plugin
-- **ChromaDB**: Python 3.8+
-- **Memory Bank**: Node.js 16+
-- **DEVONthink**: macOS, DEVONthink Pro/Server, dt-mcp repository
-
-### session-tools Plugin
+### Required
+- Python 3.8+ (ChromaDB)
+- Node.js 16+ (Memory Bank, Sequential Thinking)
 - Bash shell
-- Git (optional, for git status)
 
-### claude-code-tools Plugin
-- **Required**: Python 3.11+, uv, tmux
-- **Optional**: SOPS (for vault), jq (for auto-config), Rust/Cargo (for lmsh)
+### Host Mode Additional
+- Docker (ClaudeBox)
+- tmux (auto-installed if missing)
+- gh - GitHub CLI (auto-installed if missing)
 
-### claudebox Plugin
-- **Required**: Docker, bash
-- **Optional**: tmux (for squad mode), gh (GitHub CLI)
-
-### claude-squad Plugin
-- **Required**: tmux, gh (GitHub CLI), git
-- **Optional**: Claude Code, Codex, Gemini, or Aider (at least one AI assistant)
+### Optional
+- macOS + DEVONthink Pro/Server (DEVONthink MCP)
+- SOPS (vault encryption)
+- jq (config merging)
 
 ## Configuration
 
-### ChromaDB Cloud Setup
+### ChromaDB
 
-Set environment variables in Claude Code:
-```
+**Cloud Mode:**
+Set environment variables:
+```bash
 CHROMADB_TENANT=your-tenant-id
 CHROMADB_DATABASE=your-database-name
 CHROMADB_API_KEY=your-api-key
 ```
 
-Get these from [ChromaDB Cloud](https://www.trychroma.com/)
+Get credentials from [ChromaDB Cloud](https://www.trychroma.com/).
 
-### ChromaDB Local Setup
+**Local Mode:**
+The installer can configure local storage at `~/.chromadb`.
 
-Edit plugin config to use local mode:
-```json
-{
-  "args": ["--client-type", "local", "--path", "${HOME}/.chromadb"]
-}
-```
+### Memory Bank
 
-### Memory Bank Location
+Default location: `~/memory-bank`
 
-Default: `~/memory-bank`
+Override with `MEMORY_BANK_ROOT` environment variable.
 
-To change, update `MEMORY_BANK_ROOT` environment variable.
+### DEVONthink
 
-### DEVONthink Setup
-
-Clone and install dt-mcp:
+Requires dt-mcp repository:
 ```bash
 git clone https://github.com/yourusername/dt-mcp.git ~/git/dt-mcp
 cd ~/git/dt-mcp
 npm install
 ```
 
-## Usage Examples
+The installer can handle this if needed.
 
-### With ChromaDB
-```
-Store this document in ChromaDB with ID "api-design-notes"
-Search ChromaDB for documents similar to "authentication patterns"
-```
+## Usage
 
-### With Memory Bank
+### MCP Servers
+
+**ChromaDB:**
 ```
-Save this architecture decision to memory bank project "my-app"
-What did we decide about the database schema? (checks memory bank)
+Store this document in ChromaDB with ID "api-design"
+Search ChromaDB for documents about "authentication patterns"
 ```
 
-### With DEVONthink
+**Memory Bank:**
 ```
-Search DEVONthink for papers on "quantum computing"
-Analyze these 5 documents and extract common themes
-Build a knowledge graph from my research database
+Save this decision to memory bank project "my-app"
+What did we decide about the database schema?
 ```
 
-### With Session Tools
+**Sequential Thinking:**
 ```
-/check oauth-feature Add OAuth2 authentication flow
+Debug this issue using sequential thinking
+Break down this architecture decision step by step
+```
+
+### Session Commands
+
+```bash
+/check oauth-feature Add OAuth2 authentication
 /load oauth-feature
 /sessions
+/session-delete oauth-feature
 ```
 
-## Additional Resources
+### Terminal Tools
 
-### CLAUDE.md Templates
+```bash
+# Terminal automation
+tmux-cli launch "python -m pdb script.py"
 
-The `templates/` directory contains CLAUDE.md templates for different project types:
-- Java projects (Maven/Gradle)
-- TypeScript projects (Node.js/React)
-- Python projects (pip/poetry)
+# Encrypted backup
+vault backup .env
 
-Copy a template to your project root and customize it.
+# Session search
+find-session "authentication bug"
+```
 
-### Documentation
+### ClaudeBox
+
+```bash
+claudebox run
+claudebox run --profile python
+```
+
+### Claude Squad
+
+```bash
+cs                    # Launch with Claude Code
+cs -p "aider"        # Launch with Aider
+cs -y                # Auto-accept mode
+```
+
+## Documentation
 
 - [hal-9000 Plugin](plugins/hal-9000/README.md)
-- [session-tools Plugin](plugins/session-tools/README.md)
+- [Agent Usage](plugins/hal-9000/AGENTS.md)
 - [ChromaDB MCP](plugins/hal-9000/mcp-servers/chromadb/README.md)
 - [Memory Bank MCP](plugins/hal-9000/mcp-servers/memory-bank/README.md)
+- [Sequential Thinking MCP](plugins/hal-9000/mcp-servers/sequential-thinking/)
 - [DEVONthink MCP](plugins/hal-9000/mcp-servers/devonthink/README.md)
-
-## Marketplace Structure
-
-```
-hal-9000/
-├── .claude-plugin/
-│   └── marketplace.json          # Marketplace definition
-├── plugins/
-│   ├── hal-9000/                 # MCP server suite
-│   │   ├── .claude-plugin/
-│   │   │   └── plugin.json
-│   │   ├── mcp-servers/          # Individual MCP docs
-│   │   └── README.md
-│   └── session-tools/            # Session commands
-│       ├── .claude-plugin/
-│       │   └── plugin.json
-│       ├── commands/             # Command files
-│       └── README.md
-├── templates/                    # CLAUDE.md templates
-└── README.md
-```
 
 ## Troubleshooting
 
-### Marketplace not showing up
-- Verify path is correct in Claude Code settings
+### Marketplace not showing
+- Verify path in Claude Code settings
 - Check `.claude-plugin/marketplace.json` exists
 - Restart Claude Code
 
@@ -315,24 +288,14 @@ hal-9000/
 - Verify environment variables are set
 - Check individual MCP server READMEs
 
-## Contributing
-
-Contributions welcome! To add a plugin:
-
-1. Create plugin directory in `plugins/`
-2. Add `.claude-plugin/plugin.json`
-3. Update `.claude-plugin/marketplace.json`
-4. Add documentation
-5. Submit PR
-
 ## License
 
-Apache 2.0 - See [LICENSE](LICENSE)
+Apache 2.0
 
 ## Acknowledgments
 
-Built for the Claude Code community.
-
 - ChromaDB: [Chroma](https://www.trychroma.com/)
 - Memory Bank: [@allpepper/memory-bank-mcp](https://github.com/allpepper/memory-bank-mcp)
-- Session tools: Inspired by tmux session management
+- Claude Code Tools: [claude-code-tools](https://github.com/pchalasani/claude-code-tools)
+- ClaudeBox: [Hellblazer/claudebox](https://github.com/Hellblazer/claudebox)
+- Claude Squad: [smtg-ai/claude-squad](https://github.com/smtg-ai/claude-squad)

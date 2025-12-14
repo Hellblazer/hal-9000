@@ -10,6 +10,19 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}Installing Memory Bank MCP Server...${NC}"
 echo ""
 
+# Check if Memory Bank MCP is already installed
+if command -v claude &> /dev/null && claude mcp list 2>/dev/null | grep -q "memory-bank\|allPepper-memory-bank"; then
+    echo -e "${YELLOW}⚠️  Memory Bank MCP server is already configured${NC}"
+    echo ""
+    read -p "Overwrite existing configuration? (y/N): " overwrite
+    if [[ ! "$overwrite" =~ ^[Yy]$ ]]; then
+        echo "Skipping Memory Bank installation (keeping existing configuration)"
+        exit 0
+    fi
+    echo "Proceeding with installation (will overwrite)..."
+    echo ""
+fi
+
 # Check for Node.js
 if ! command -v node &> /dev/null; then
     echo "Error: Node.js is required but not installed."

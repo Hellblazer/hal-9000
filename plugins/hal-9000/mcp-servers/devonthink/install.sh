@@ -11,6 +11,19 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}Installing DEVONthink MCP Server...${NC}"
 echo ""
 
+# Check if DEVONthink MCP is already installed
+if command -v claude &> /dev/null && claude mcp list 2>/dev/null | grep -q "devonthink"; then
+    echo -e "${YELLOW}⚠️  DEVONthink MCP server is already configured${NC}"
+    echo ""
+    read -p "Overwrite existing configuration? (y/N): " overwrite
+    if [[ ! "$overwrite" =~ ^[Yy]$ ]]; then
+        echo "Skipping DEVONthink installation (keeping existing configuration)"
+        exit 0
+    fi
+    echo "Proceeding with installation (will overwrite)..."
+    echo ""
+fi
+
 # Check for macOS
 if [[ "$OSTYPE" != "darwin"* ]]; then
     echo -e "${RED}Error: DEVONthink MCP Server only works on macOS${NC}"

@@ -1,23 +1,22 @@
 # ChromaDB MCP Server
 
-Vector database for semantic search and knowledge management in Claude Code.
+Vector database for semantic search and knowledge management.
 
-## What It Does
+## Features
 
-ChromaDB enables:
-- **Semantic Search**: Find documents by meaning, not just keywords
-- **Knowledge Management**: Store and retrieve information contextually
-- **Document Versioning**: Track changes to documents over time
-- **Collections**: Organize documents into logical groups
-- **Hybrid Search**: Combine semantic and keyword matching
+- Semantic search by meaning, not just keywords
+- Document storage with embeddings
+- Version tracking for documents
+- Collections for organization
+- Hybrid search combining semantic and keyword matching
 
 ## Use Cases
 
-- Store research findings for long-running projects
-- Build a personal knowledge base
-- Track evolving concepts and ideas
-- Find related documents across large collections
-- Maintain project-specific context across sessions
+- Store research findings
+- Build personal knowledge base
+- Track concepts and ideas
+- Find related documents
+- Maintain project context across sessions
 
 ## Installation
 
@@ -27,23 +26,23 @@ Run the installation script:
 ./install.sh
 ```
 
-This will install the chroma-mcp package via pip.
+Installs the chroma-mcp package via pip.
 
 ## Configuration
 
-### Cloud Mode (Recommended for sharing across machines)
+### Cloud Mode
 
-The provided `config.json` uses ChromaDB Cloud. You'll need:
-1. A ChromaDB Cloud account (https://www.trychroma.com/)
-2. Your tenant ID
-3. Your database name
-4. An API key
+Uses ChromaDB Cloud for cross-machine access. Requires:
+1. ChromaDB Cloud account (https://www.trychroma.com/)
+2. Tenant ID
+3. Database name
+4. API key
 
-Update the configuration with your credentials before merging into Claude's config.
+Set environment variables or update the configuration before installation.
 
-### Local Mode (For local-only storage)
+### Local Mode
 
-Alternatively, use local storage:
+For local-only storage:
 
 ```json
 {
@@ -61,40 +60,39 @@ Alternatively, use local storage:
 
 ## Available Tools
 
-Once installed, Claude Code can use:
-- `create_document` - Store new documents
-- `read_document` - Retrieve documents by ID
-- `update_document` - Modify existing documents
+- `create_document` - Store documents
+- `read_document` - Retrieve by ID
+- `update_document` - Modify documents
 - `delete_document` - Remove documents
 - `search_similar` - Find semantically similar documents
-- `hybrid_search` - Combined semantic + keyword search
+- `hybrid_search` - Combined semantic and keyword search
 - `create_collection` - Organize documents
-- `list_collections` - View all collections
-- `bulk_create_documents` - Batch document creation
+- `list_collections` - View collections
+- `bulk_create_documents` - Batch operations
 
 ## Prerequisites
 
-- Python 3.8 or higher
+- Python 3.8+
 - pip
 
 ## Troubleshooting
 
 ### Command not found: chroma-mcp
 
-The install script adds the Python bin directory to your PATH. If it's still not found:
+Add Python bin directory to PATH:
 
 ```bash
 export PATH="$HOME/Library/Python/3.10/bin:$PATH"
 ```
 
-Add this to your `.zshrc` or `.bashrc` to make it permanent.
+Add to `.zshrc` or `.bashrc` to persist.
 
 ### Connection errors
 
-If using ChromaDB Cloud:
-- Verify your API key is correct
+Cloud mode:
+- Verify API key
 - Check tenant ID and database name
-- Ensure you have an active internet connection
+- Ensure internet connection
 
 ## Links
 

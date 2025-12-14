@@ -1,32 +1,37 @@
 # MCP Servers
 
-This directory contains pre-configured MCP (Model Context Protocol) servers that extend Claude Code's capabilities.
+MCP (Model Context Protocol) servers extend Claude Code with additional capabilities.
 
 ## Available Servers
 
 ### ChromaDB
-Vector database for semantic search and knowledge management. Stores documents and enables semantic similarity searches.
+Vector database for semantic search and document storage.
 
 **Location**: `chromadb/`
 
-### Memory Bank (allPepper)
-Persistent memory system for maintaining project context across Claude Code sessions. Organizes knowledge by projects.
+### Memory Bank
+Project-based persistent memory across Claude Code sessions.
 
 **Location**: `memory-bank/`
 
+### Sequential Thinking
+Step-by-step reasoning for complex problem solving.
+
+Installed via npm on demand - no local directory.
+
 ### DEVONthink
-Integration with DEVONthink for document research, knowledge synthesis, and information retrieval.
+Document research and knowledge synthesis. Requires DEVONthink Pro/Server (macOS only).
 
 **Location**: `devonthink/`
 
 ## Installation
 
-Each server has its own directory with:
-- `install.sh` - Installation script for dependencies
-- `config.json` - MCP server configuration snippet
-- `README.md` - Detailed documentation
+Each server directory contains:
+- `install.sh` - Dependency installation
+- `config.json` - MCP server configuration
+- `README.md` - Usage documentation
 
-### Quick Install All
+### Install All
 
 ```bash
 cd mcp-servers
@@ -37,22 +42,21 @@ for dir in */; do
 done
 ```
 
-### Individual Installation
+### Install Individual
 
 ```bash
 cd mcp-servers/chromadb
 ./install.sh
 ```
 
-Then manually merge the `config.json` into your `~/Library/Application Support/Claude/claude_desktop_config.json` under the `mcpServers` key.
+The install script merges `config.json` into Claude's MCP configuration automatically.
 
 ## Configuration Location
 
-MCP servers are configured in:
 - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Linux**: `~/.config/Claude/claude_desktop_config.json`
 
-The configuration file has this structure:
+Configuration structure:
 
 ```json
 {
@@ -68,4 +72,4 @@ The configuration file has this structure:
 
 ## Restart Required
 
-After installing MCP servers, restart Claude Code (or Claude Desktop) to load the new configurations.
+Restart Claude Code after installation to load new MCP servers.
