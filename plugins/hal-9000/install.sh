@@ -5,6 +5,7 @@ set -euo pipefail
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
@@ -141,8 +142,9 @@ if [[ "$INSTALL_HOST" == "true" ]]; then
     echo "Configuring ccstatusline for Claude Code..."
     CLAUDE_SETTINGS="$HOME/.claude/settings.json"
 
-    # Create settings file if it doesn't exist
-    if [[ ! -f "$CLAUDE_SETTINGS" ]]; then
+    # Create settings file if it doesn't exist or contains invalid JSON
+    if [[ ! -f "$CLAUDE_SETTINGS" ]] || ! jq . "$CLAUDE_SETTINGS" >/dev/null 2>&1; then
+        echo "Creating/resetting Claude settings..."
         echo '{}' > "$CLAUDE_SETTINGS"
     fi
 
@@ -155,20 +157,154 @@ if [[ "$INSTALL_HOST" == "true" ]]; then
             STATUS_CMD="npx ccstatusline@latest"
         fi
 
-        # Update settings.json with statusLine (object format)
+        # Update settings.json with statusLine (object format with quoted keys)
         tmp_file=$(mktemp)
-        jq --arg cmd "$STATUS_CMD" \
-           '.statusLine = {type: "command", command: $cmd, padding: 0}' \
-           "$CLAUDE_SETTINGS" > "$tmp_file"
-        mv "$tmp_file" "$CLAUDE_SETTINGS"
+        if jq --arg cmd "$STATUS_CMD" \
+           '.statusLine = {"type": "command", "command": $cmd, "padding": 0}' \
+           "$CLAUDE_SETTINGS" > "$tmp_file" 2>/dev/null; then
+            mv "$tmp_file" "$CLAUDE_SETTINGS"
+            echo -e "${GREEN}✓ Configured ccstatusline in Claude Code settings${NC}"
+            echo -e "  Using: ${CYAN}$STATUS_CMD${NC}"
+        else
+            rm -f "$tmp_file"
+            echo -e "${RED}✗ Failed to update Claude settings - check $CLAUDE_SETTINGS${NC}"
+            echo -e "${YELLOW}⚠ Continuing with installation...${NC}"
+        fi
 
-        echo -e "${GREEN}✓ Configured ccstatusline in Claude Code settings${NC}"
-        echo -e "  Using: ${CYAN}$STATUS_CMD${NC}"
-        echo -e "  Run ${CYAN}bunx ccstatusline@latest${NC} to configure widgets interactively"
+        # Create ccstatusline widget configuration
+        CCSTATUS_CONFIG_DIR="$HOME/.config/ccstatusline"
+        CCSTATUS_SETTINGS="$CCSTATUS_CONFIG_DIR/settings.json"
+
+        mkdir -p "$CCSTATUS_CONFIG_DIR"
+
+        cat > "$CCSTATUS_SETTINGS" <<'EOF'
+{
+  "_comment": "hal-9000 default configuration - edit with 'bunx ccstatusline@latest'",
+  "version": 3,
+  "lines": [
+    [
+      {
+        "_comment": "Shows context usage % (inverted - shows remaining vs used)",
+        "id": "context-percentage-usable-widget",
+        "type": "context-percentage-usable",
+        "metadata": {
+          "inverse": "true"
+        }
+      },
+      {
+        "_comment": "Total time in this Claude Code session",
+        "id": "session-clock-widget",
+        "type": "session-clock",
+        "color": "brightCyan"
+      }
+    ],
+    [
+      {
+        "_comment": "Current git branch name",
+        "id": "git-branch-widget",
+        "type": "git-branch",
+        "color": "brightCyan"
+      },
+      {
+        "_comment": "Git worktree name (shows which aod session you're in)",
+        "id": "git-worktree-widget",
+        "type": "git-worktree",
+        "color": "yellow"
+      }
+    ],
+    []
+  ],
+  "flexMode": "full-minus-40",
+  "compactThreshold": 60,
+  "colorLevel": 2,
+  "defaultPadding": " ",
+  "inheritSeparatorColors": false,
+  "globalBold": false,
+  "powerline": {
+    "enabled": true,
+    "separators": [
+      ""
+    ],
+    "separatorInvertBackground": [
+      false
+    ],
+    "startCaps": [],
+    "endCaps": [],
+    "theme": "custom",
+    "autoAlign": true
+  }
+}
+EOF
+
+        echo -e "${GREEN}✓ Configured ccstatusline widgets${NC}"
+        echo -e "  Line 1: Context % (usable), Session Clock"
+        echo -e "  Line 2: Git Branch, Git Worktree"
+        echo -e "  Run ${CYAN}bunx ccstatusline@latest${NC} to customize widgets"
     else
         echo -e "${YELLOW}⚠ jq not found - skipping ccstatusline configuration${NC}"
         echo -e "  Manually add to $CLAUDE_SETTINGS:"
         echo -e '  {"statusLine": {"type": "command", "command": "bunx -y ccstatusline@latest", "padding": 0}}'
+    fi
+
+    # Optional tmux configuration
+    echo ""
+    echo "Install tmux configuration? (includes CPU/RAM monitoring, Catppuccin theme)"
+    echo "  - CPU/RAM monitoring in status bar"
+    echo "  - Session persistence (tmux-resurrect)"
+    echo "  - Mouse support with clipboard integration"
+    echo "  - Powerline status bar"
+    printf "Install tmux config? (y/N): "
+    read -r install_tmux
+
+    if [[ "$install_tmux" =~ ^[Yy]$ ]]; then
+        # Backup existing config
+        if [[ -f "$HOME/.tmux.conf" ]]; then
+            backup_file="$HOME/.tmux.conf.backup.$(date +%Y%m%d_%H%M%S)"
+            cp "$HOME/.tmux.conf" "$backup_file"
+            echo -e "${GREEN}✓ Backed up existing config to${NC} $backup_file"
+        fi
+
+        # Install new config
+        cp "$SCRIPT_DIR/../../templates/tmux.conf" "$HOME/.tmux.conf"
+        echo -e "${GREEN}✓ Installed tmux configuration${NC}"
+
+        # Install TPM if not present
+        if [[ ! -d "$HOME/.tmux/plugins/tpm" ]]; then
+            echo "Installing Tmux Plugin Manager (TPM)..."
+            git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm
+            echo -e "${GREEN}✓ Installed TPM${NC}"
+            echo -e "  ${CYAN}Run 'prefix + I' in tmux to install plugins${NC}"
+        fi
+
+        echo -e "  ${CYAN}Reload tmux: tmux source ~/.tmux.conf${NC}"
+    else
+        echo -e "${YELLOW}⚠ Skipped tmux configuration${NC}"
+    fi
+
+    # Optional CLAUDE.md template
+    echo ""
+    echo "Install hal-9000 CLAUDE.md template? (includes tmux-cli, agents, knowledge management)"
+    echo "  - tmux-cli usage patterns"
+    echo "  - Agent best practices (12 custom agents)"
+    echo "  - ChromaDB/Memory Bank guidance"
+    echo "  - aod command reference"
+    printf "Install CLAUDE.md template? (y/N): "
+    read -r install_claude_md
+
+    if [[ "$install_claude_md" =~ ^[Yy]$ ]]; then
+        # Backup existing CLAUDE.md
+        if [[ -f "$HOME/.claude/CLAUDE.md" ]]; then
+            backup_file="$HOME/.claude/CLAUDE.md.backup.$(date +%Y%m%d_%H%M%S)"
+            cp "$HOME/.claude/CLAUDE.md" "$backup_file"
+            echo -e "${GREEN}✓ Backed up existing CLAUDE.md to${NC} $backup_file"
+        fi
+
+        # Install template
+        cp "$SCRIPT_DIR/../../templates/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
+        echo -e "${GREEN}✓ Installed CLAUDE.md template${NC}"
+        echo -e "  ${CYAN}Add your personal preferences below the template marker${NC}"
+    else
+        echo -e "${YELLOW}⚠ Skipped CLAUDE.md template${NC}"
     fi
 
     # Download hooks

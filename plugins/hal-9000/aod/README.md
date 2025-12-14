@@ -6,7 +6,7 @@ Multi-branch parallel development using ClaudeBox containers with git worktrees 
 
 aod (Army of Darkness) orchestrates multiple isolated development environments simultaneously. Each environment consists of a git worktree, tmux session, and ClaudeBox container. This enables working on different branches in parallel without switching contexts or losing state.
 
-Inspired by claude-squad's multi-session workflow, aod uses ClaudeBox containers for isolation. Each branch runs in complete isolation with its own container, filesystem state, and terminal session.
+Inspired by claude-squad's multi-session workflow concept, aod is an independent implementation using bash scripting, tmux, and ClaudeBox containers instead of Go. Each branch runs in complete isolation with its own container, filesystem state, and terminal session.
 
 ## Architecture
 
@@ -250,7 +250,7 @@ Creates worktrees, tmux sessions, and containers. Skips existing sessions.
 
 ### aod-list
 
-List all active squad sessions and containers.
+List all active aod sessions and containers.
 
 ```bash
 aod-list
@@ -324,7 +324,7 @@ aod-cleanup
 ```
 
 Prompts for confirmation before:
-- Killing all squad tmux sessions
+- Killing all aod tmux sessions
 - Removing all ClaudeBox containers
 - Removing all git worktrees
 - Cleaning state directory
@@ -529,7 +529,7 @@ aod-cleanup
 # Create branch manually first
 git branch feature/my-feature origin/develop
 
-# Then launch squad
+# Then launch aod
 aod
 ```
 
@@ -618,7 +618,7 @@ docker stats <container-name>
 
 ### Manual Worktree Management
 
-Create worktrees outside squad:
+Create worktrees outside aod:
 
 ```bash
 # Create worktree manually
@@ -703,7 +703,7 @@ Containers mount `~/.claudebox/hal-9000` for MCP servers and agents. All session
 
 ### Inspiration
 
-aod implements a claude-squad-style workflow using bash and tmux instead of Go. Uses ClaudeBox containers for isolation rather than bare Claude Code instances.
+aod implements a parallel multi-session workflow inspired by claude-squad, using bash and tmux instead of Go. Uses ClaudeBox containers for isolation rather than bare Claude Code instances.
 
 ### With Git
 
@@ -725,7 +725,7 @@ Git worktrees share the repository's `.git` directory:
 └── .lock/                 # Concurrent execution lock
 ```
 
-**squadconf** - Configuration file (default: aod.conf in current directory)
+**Configuration file** - Default: aod.conf in current directory
 - Format: branch:profile:description
 - Comments start with #
 - Blank lines ignored
@@ -737,7 +737,7 @@ ClaudeBox containers provide isolation but share:
 - Docker socket access (if ClaudeBox configured)
 - Mounted hal-9000 directory
 
-Don't run untrusted code in squad sessions without additional sandboxing.
+Don't run untrusted code in aod sessions without additional sandboxing.
 
 ## Performance
 
@@ -872,28 +872,27 @@ Sessions are saved to `~/.tmux/resurrect/`. Containers must be restarted manuall
 
 **ccstatusline** displays session metrics in your Claude Code CLI terminal (automatically configured during installation).
 
-**Features:**
-- Real-time token usage, burn rate, context percentage
-- Git branch, worktree, uncommitted changes
-- Model name, session time, cost tracking
-- Powerline-style rendering with custom widgets
-- Multi-line support with unlimited configuration
+**Pre-configured widgets:**
+- Context Percentage - Track when to `/check` (shows at 51.3% in example)
+- Session Clock - Total time in Claude Code session
+- Block Timer - Time in current 5-hour conversation block
+- Git Branch - Current branch name
+- Git Worktree - Shows which aod session you're in
+- Powerline styling with arrow separators
 
-**Interactive Configuration:**
+**Customize (optional):**
 ```bash
-# Run the interactive TUI to customize
-bunx ccstatusline@latest    # If using Bun
-npx ccstatusline@latest     # If using npm/npx
+bunx ccstatusline@latest    # Interactive TUI
 ```
 
 The TUI lets you:
 - Add/remove/reorder widgets
-- Customize colors and formatting
-- Create custom command widgets
+- Change colors and formatting
+- Add custom command widgets
 - Preview changes in real-time
 - Configure multiple status lines
 
-Settings save to `~/.config/ccstatusline/settings.json`.
+Settings: `~/.config/ccstatusline/settings.json`
 
 **Available Widgets:**
 - Session: Model, Clock, Cost, Block Timer
@@ -908,6 +907,31 @@ Each aod session runs an independent Claude Code instance, so each can have cust
 - Current branch and worktree path
 - Session-specific token usage
 - Time spent in this particular session
+
+**Example Configuration:**
+
+Default setup with Powerline styling:
+
+**Normal session:**
+```
+Ctx: 23.1% ▶ Session: 0hr 45m ▶ Block: 0hr 12m ▶ _/feature-auth ▶ 🏠 feature/auth
+```
+
+**High context usage (time to `/check`):**
+```
+Ctx: 87.6% ▶ Session: 3hr 22m ▶ Block: 1hr 05m ▶ _/main ▶ 🏠 main
+```
+
+**Breaking down the widgets:**
+- `Ctx: XX%` - Context usage percentage (green <60%, yellow 60-85%, red >85%)
+- `Session: Xhr Ym` - Total time in this Claude Code session
+- `Block: Xhr Ym` - Time in current 5-hour conversation block
+- `_/branch-name` - Current git branch
+- `🏠 worktree-name` - Git worktree (shows which aod session you're in)
+
+The `▶` arrows are Powerline separators that create a polished visual flow.
+
+**For aod sessions:** Each worktree gets its own independent status line showing per-branch context usage, time tracking, and session identity. When working across multiple branches, you can instantly see which session needs a `/check` or which has been running longest.
 
 **Learn more:** [ccstatusline on GitHub](https://github.com/sirmalloc/ccstatusline)
 

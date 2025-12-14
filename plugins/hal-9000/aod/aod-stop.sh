@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# aod-stop.sh - Stop a specific ClaudeBox Squad session
+# aod-stop.sh - Stop a specific aod session
 #
 # Usage: ./aod-stop.sh <session-name>
 

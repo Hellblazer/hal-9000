@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# aod-attach.sh - Attach to a ClaudeBox Squad session
+# aod-attach.sh - Attach to an aod session
 #
 # Usage: ./aod-attach.sh <session-name>
 
@@ -32,7 +32,7 @@ if ! tmux has-session -t "$session_name" 2>/dev/null; then
 fi
 
 printf "${GREEN}✓${NC} Attaching to session: %s\n" "$session_name"
-printf "${CYAN}ℹ${NC} Press Ctrl+B then D to detach\n\n"
+printf "${CYAN}ℹ${NC} Press Ctrl+b then d to detach\n\n"
 
 sleep 1
 

@@ -72,11 +72,11 @@ check_prerequisites() {
     fi
 }
 
-# Initialize squad directory
-init_squad_dir() {
+# Initialize aod directory
+init_aod_dir() {
     if [[ ! -d "$AOD_DIR" ]]; then
         mkdir -p "$AOD_DIR"
-        info "Initialized squad directory: $AOD_DIR"
+        info "Initialized aod directory: $AOD_DIR"
     fi
 }
 
@@ -164,6 +164,107 @@ create_worktree() {
     success "Worktree created: $worktree_dir"
 }
 
+# Create session-specific CLAUDE.md
+create_session_claudemd() {
+    local session_name="$1"
+    local branch="$2"
+    local worktree_dir="$3"
+    local profile="$4"
+
+    # Get list of other aod sessions
+    local other_sessions
+    other_sessions=$(tmux list-sessions 2>/dev/null | grep "^aod-" | cut -d':' -f1 | grep -v "^${session_name}$" || echo "")
+
+    # Create CLAUDE.md in worktree
+    cat > "$worktree_dir/CLAUDE.md" <<EOF
+# aod Session Context
+
+This is an **aod (Army of Darkness)** session for parallel multi-branch development.
+
+## Current Session
+
+- **Session Name:** \`$session_name\`
+- **Branch:** \`$branch\`
+- **Worktree:** \`$worktree_dir\`
+- **Profile:** \`${profile:-default}\`
+
+## Other Active Sessions
+
+EOF
+
+    if [[ -n "$other_sessions" ]]; then
+        while IFS= read -r other_session; do
+            [[ -z "$other_session" ]] && continue
+            printf -- "- \`%s\`\n" "$other_session" >> "$worktree_dir/CLAUDE.md"
+        done <<< "$other_sessions"
+    else
+        printf "(No other sessions currently active)\n" >> "$worktree_dir/CLAUDE.md"
+    fi
+
+    cat >> "$worktree_dir/CLAUDE.md" <<'EOF'
+
+## Available Commands
+
+**Send command to specific session:**
+```bash
+aod-send SESSION "command"
+# Example: aod-send aod-feature-api "git status"
+```
+
+**Send command to all sessions:**
+```bash
+aod-broadcast "command"
+# Example: aod-broadcast "git fetch"
+```
+
+**List all sessions:**
+```bash
+aod-list
+```
+
+## Session Isolation
+
+Each aod session is completely isolated:
+- Separate git worktree (independent working directory)
+- Separate tmux session (independent terminal)
+- Separate ClaudeBox container (independent environment)
+
+Changes in this session don't affect other sessions until committed to git.
+
+## Common Workflows
+
+**Check status in another branch:**
+```bash
+aod-send aod-feature-api "git status"
+```
+
+**Run tests across all branches:**
+```bash
+aod-broadcast "./mvnw test"
+```
+
+**Sync all branches with upstream:**
+```bash
+aod-broadcast "git fetch origin"
+```
+
+**Switch to another session:**
+```bash
+# Detach: Ctrl+b d
+# Then attach: aod-attach SESSION-NAME
+```
+
+## Tips
+
+- Use \`aod-send\` and \`aod-broadcast\` to coordinate without switching sessions
+- Each session shares the same git repository (.git) - commits are visible across sessions
+- Worktrees are in \`~/.aod/worktrees/\`
+- Check current session: \`tmux display-message -p '#S'\`
+EOF
+
+    info "Created CLAUDE.md in worktree"
+}
+
 # Launch ClaudeBox in tmux session
 launch_session() {
     local session_name="$1"
@@ -242,11 +343,11 @@ main() {
     local config_file="${1:-aod.conf}"
     
     printf "${BLUE}╔════════════════════════════════════════╗${NC}\n"
-    printf "${BLUE}║   ClaudeBox Squad - Multi-Agent Mode  ║${NC}\n"
+    printf "${BLUE}║   aod - Multi-Branch Development      ║${NC}\n"
     printf "${BLUE}╚════════════════════════════════════════╝${NC}\n\n"
 
     check_prerequisites
-    init_squad_dir
+    init_aod_dir
     acquire_lock
     
     # Get repository root
@@ -302,6 +403,9 @@ main() {
 
         # Create worktree
         if create_worktree "$branch" "$worktree_dir"; then
+            # Create session-specific CLAUDE.md
+            create_session_claudemd "$session_name" "$branch" "$worktree_dir" "$profile"
+
             # Launch session
             if launch_session "$session_name" "$worktree_dir" "$slot_num" "$profile"; then
                 # Update state

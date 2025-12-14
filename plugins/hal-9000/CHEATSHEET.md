@@ -384,11 +384,27 @@ npx ccstatusline@latest     # Interactive TUI (npm)
 - **Tokens:** Input, Output, Cached, Total, Context %
 - **Custom:** Text, Commands
 
+### Example Status Line
+
+Default with Powerline:
+```
+Ctx: 51.3% ▶ Session: 22hr 5m ▶ Block: 1hr 39m ▶ _/main ▶ 🏠 main
+```
+
+Widgets:
+- `Ctx: 51.3%` = Context usage (when to `/check`)
+- `Session: 22hr 5m` = Total session time
+- `Block: 1hr 39m` = Current 5-hour block time
+- `_/main` = Git branch
+- `🏠 main` = Worktree/directory
+
+**TUI Navigation:** Press `(a)dd` then `←→` to cycle widget types
+
 ### Quick Tips
 
 - Settings: `~/.config/ccstatusline/settings.json`
 - Each aod session = independent status line
-- Use custom commands for advanced metrics
+- Press `(a)dd` then `←→` to cycle widget types
 - Powerline style requires Nerd Font
 
 **Docs:** https://github.com/sirmalloc/ccstatusline

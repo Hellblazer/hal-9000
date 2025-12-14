@@ -40,7 +40,7 @@ Productivity tools for Claude Code: aod multi-branch development, MCP servers, c
 ### Terminal Tools
 
 - **tmux-cli** - Terminal automation for interactive CLIs
-- **ccstatusline** - Customizable Claude Code status line with real-time metrics
+- **ccstatusline** - Pre-configured Claude Code status line with Powerline styling (context %, session time, git info, worktree status) - requires Nerd Font for full appearance
 - **vault** - Encrypted .env backup with SOPS
 - **env-safe** - Safe .env inspection
 - **find-session** - Search across agent sessions
@@ -50,7 +50,7 @@ Productivity tools for Claude Code: aod multi-branch development, MCP servers, c
 
 - aod (Army of Darkness) - Multi-branch parallel development with git worktrees and isolated containers
 
-aod uses ClaudeBox for containerization. Inspired by claude-squad's multi-session workflow.
+aod uses ClaudeBox for containerization. Inspired by claude-squad's multi-session workflow concept, but is an independent implementation using bash and tmux.
 
 ## Installation
 
@@ -175,3 +175,21 @@ claudebox run --profile python
 ### Commands not working
 - Check `~/.claude/commands/` contains .md files
 - Try `/help` to see available commands
+
+### ccstatusline not showing
+
+**Problem:** Status line doesn't appear in Claude Code
+
+**Solutions:**
+- Verify Node.js or Bun installed: `which bunx` or `which npx`
+- Check Claude settings: `cat ~/.claude/settings.json | jq .statusLine`
+- Test command manually: `bunx -y ccstatusline@latest`
+- Verify widget config exists: `cat ~/.config/ccstatusline/settings.json`
+- Restart Claude Code completely (not just refresh)
+
+**Problem:** Status line shows errors or wrong data
+
+**Solutions:**
+- Reconfigure widgets: `bunx ccstatusline@latest`
+- Check settings valid JSON: `jq . ~/.config/ccstatusline/settings.json`
+- Reset to defaults: Re-run `install.sh` to recreate config

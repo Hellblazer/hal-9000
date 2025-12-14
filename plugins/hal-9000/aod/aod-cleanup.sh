@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# aod-cleanup.sh - Cleanup all ClaudeBox Squad sessions and worktrees
+# aod-cleanup.sh - Cleanup all aod sessions and worktrees
 #
-# WARNING: This will stop all squad sessions and remove worktrees!
+# WARNING: This will stop all aod sessions and remove worktrees!
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -33,12 +33,12 @@ error() {
 }
 
 printf "${YELLOW}╔════════════════════════════════════════════════════════════╗${NC}\n"
-printf "${YELLOW}║              ClaudeBox Squad - Cleanup                     ║${NC}\n"
+printf "${YELLOW}║              aod - Cleanup                                 ║${NC}\n"
 printf "${YELLOW}║  WARNING: This will stop all sessions and remove worktrees║${NC}\n"
 printf "${YELLOW}╚════════════════════════════════════════════════════════════╝${NC}\n\n"
 
 # Confirm
-printf "Are you sure you want to cleanup all squad sessions? (y/N): "
+printf "Are you sure you want to cleanup all aod sessions? (y/N): "
 read -r confirm
 
 if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
@@ -48,8 +48,8 @@ fi
 
 printf "\n"
 
-# Step 1: Kill all squad tmux sessions
-info "Killing all squad tmux sessions..."
+# Step 1: Kill all aod tmux sessions
+info "Killing all aod tmux sessions..."
 
 session_count=0
 while IFS= read -r session; do
@@ -61,7 +61,7 @@ while IFS= read -r session; do
 done < <(tmux list-sessions 2>/dev/null | grep "^aod-" || true)
 
 if [[ $session_count -eq 0 ]]; then
-    info "No squad sessions found"
+    info "No aod sessions found"
 else
     success "Killed $session_count session(s)"
 fi
@@ -127,8 +127,8 @@ fi
 
 printf "\n"
 
-# Step 4: Clean squad directory
-info "Cleaning squad state..."
+# Step 4: Clean aod directory
+info "Cleaning aod state..."
 
 if [[ -f "$AOD_DIR/sessions.log" ]]; then
     rm -f "$AOD_DIR/sessions.log"
@@ -137,7 +137,7 @@ fi
 
 if [[ -d "$AOD_DIR" ]]; then
     # Remove if empty
-    rmdir "$AOD_DIR" 2>/dev/null && success "Removed squad directory" || true
+    rmdir "$AOD_DIR" 2>/dev/null && success "Removed aod directory" || true
 fi
 
 printf "\n"
@@ -145,6 +145,6 @@ printf "${GREEN}╔════════════════════�
 printf "${GREEN}║        Cleanup complete! ✨             ║${NC}\n"
 printf "${GREEN}╚════════════════════════════════════════╝${NC}\n\n"
 
-info "All squad sessions, containers, and worktrees have been cleaned up"
+info "All aod sessions, containers, and worktrees have been cleaned up"
 info "You can run './aod.sh' to start new sessions"
 printf "\n"

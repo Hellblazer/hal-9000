@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# aod-list.sh - List all active ClaudeBox Squad sessions
+# aod-list.sh - List all active aod sessions
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -15,7 +15,7 @@ readonly NC='\033[0m'
 readonly TABLE_WIDTH=70
 
 printf "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}\n"
-printf "${BLUE}║         ClaudeBox Squad - Active Sessions                 ║${NC}\n"
+printf "${BLUE}║         aod - Active Sessions                              ║${NC}\n"
 printf "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}\n\n"
 
 # Check if tmux is running
@@ -24,11 +24,11 @@ if ! command -v tmux >/dev/null; then
     exit 1
 fi
 
-# Get all squad sessions
+# Get all aod sessions
 sessions=$(tmux list-sessions 2>/dev/null | grep "^aod-" || true)
 
 if [[ -z "$sessions" ]]; then
-    printf "${YELLOW}No active squad sessions found.${NC}\n\n"
+    printf "${YELLOW}No active aod sessions found.${NC}\n\n"
     printf "Run './aod.sh' to start sessions\n"
     exit 0
 fi

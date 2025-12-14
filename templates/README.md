@@ -1,8 +1,29 @@
 # CLAUDE.md Templates
 
-Project-specific CLAUDE.md templates for different tech stacks.
+Project-specific CLAUDE.md templates for different tech stacks and Claude Code configurations.
 
-## Available Templates
+## HAL-9000 Configuration
+
+### CLAUDE-aod-global.md
+
+Template for adding aod (Army of Darkness) awareness to your global `~/.claude/CLAUDE.md`.
+
+**Quick install:**
+```bash
+cat ~/git/hal-9000/templates/CLAUDE-aod-global.md >> ~/.claude/CLAUDE.md
+```
+
+**What it provides:**
+- Documents `aod-send` and `aod-broadcast` commands
+- Explains multi-branch session coordination
+- Enables Claude to suggest aod commands when appropriate
+- Works across all projects using aod
+
+**Note:** aod also auto-generates session-specific `CLAUDE.md` in each worktree with current session context (session name, branch, other active sessions, etc.)
+
+---
+
+## Project-Specific Templates
 
 ### Java Projects
 **File**: `java-project.md`
