@@ -185,49 +185,33 @@ else
     fi
 fi
 
-# Clone claude-code-tools repository
+# Install claude-code-tools from PyPI
 echo ""
-echo -e "${BLUE}Claude Code Tools Repository${NC}"
-echo ""
-DEFAULT_TOOLS_DIR="$HOME/git/claude-code-tools"
-read -p "Clone directory [$DEFAULT_TOOLS_DIR]: " TOOLS_DIR
-TOOLS_DIR=${TOOLS_DIR:-$DEFAULT_TOOLS_DIR}
-
-if [ -d "$TOOLS_DIR" ]; then
-    echo "Directory already exists: $TOOLS_DIR"
-    read -p "Update existing repository? (y/N): " UPDATE_REPO
-    if [[ "$UPDATE_REPO" =~ ^[Yy]$ ]]; then
-        cd "$TOOLS_DIR"
-        git pull
-    fi
-else
-    echo "Cloning claude-code-tools to $TOOLS_DIR..."
-    mkdir -p "$(dirname "$TOOLS_DIR")"
-    git clone https://github.com/pchalasani/claude-code-tools.git "$TOOLS_DIR"
-fi
-
-# Install claude-code-tools
-echo ""
-echo -e "${BLUE}Installing claude-code-tools...${NC}"
+echo -e "${BLUE}Installing claude-code-tools from PyPI...${NC}"
 uv tool install --force claude-code-tools
 
 # Verify installation
 echo ""
 echo -e "${BLUE}Verifying installation...${NC}"
-if command -v tmux-cli &> /dev/null; then
-    echo -e "${GREEN}✓ tmux-cli${NC}"
-fi
-if command -v find-session &> /dev/null; then
-    echo -e "${GREEN}✓ find-session${NC}"
-fi
-if command -v find-claude-session &> /dev/null; then
-    echo -e "${GREEN}✓ find-claude-session${NC}"
-fi
-if command -v vault &> /dev/null; then
-    echo -e "${GREEN}✓ vault${NC}"
-fi
-if command -v env-safe &> /dev/null; then
-    echo -e "${GREEN}✓ env-safe${NC}"
+TOOLS_INSTALLED=true
+for tool in tmux-cli find-session find-claude-session vault env-safe; do
+    if command -v "$tool" &> /dev/null; then
+        echo -e "${GREEN}✓ $tool${NC}"
+    else
+        echo -e "${RED}✗ $tool not found${NC}"
+        TOOLS_INSTALLED=false
+    fi
+done
+
+if ! $TOOLS_INSTALLED; then
+    echo ""
+    echo -e "${YELLOW}Some tools not found in PATH. Add to your shell config:${NC}"
+    echo "export PATH=\"\$HOME/.local/bin:\$PATH\""
+    echo ""
+    read -p "Continue anyway? (y/N): " CONTINUE
+    if [[ ! "$CONTINUE" =~ ^[Yy]$ ]]; then
+        exit 1
+    fi
 fi
 
 # Optional: Install lmsh
@@ -240,7 +224,37 @@ if $RUST_AVAILABLE; then
     fi
 fi
 
-# Configure hooks
+# Download hooks from GitHub
+echo ""
+echo -e "${BLUE}Downloading safety hooks from GitHub...${NC}"
+HOOKS_DIR="$HOME/.claude/hooks/claude-code-tools"
+mkdir -p "$HOOKS_DIR"
+
+HOOKS_BASE_URL="https://raw.githubusercontent.com/pchalasani/claude-code-tools/main/hooks"
+HOOKS=(
+    "bash_hook.py"
+    "env_file_protection_hook.py"
+    "file_size_conditional_hook.py"
+    "git_add_block_hook.py"
+    "git_checkout_safety_hook.py"
+    "git_commit_block_hook.py"
+    "grep_block_hook.py"
+    "notification_hook.sh"
+    "posttask_subtask_flag.py"
+    "pretask_subtask_flag.py"
+    "rm_block_hook.py"
+)
+
+echo "Downloading hooks to $HOOKS_DIR..."
+for hook in "${HOOKS[@]}"; do
+    echo "  Downloading $hook..."
+    curl -fsSL "$HOOKS_BASE_URL/$hook" -o "$HOOKS_DIR/$hook"
+    chmod +x "$HOOKS_DIR/$hook"
+done
+
+echo -e "${GREEN}✓ Hooks downloaded${NC}"
+
+# Configure hooks in Claude settings
 echo ""
 echo -e "${BLUE}Configuring Claude Code Hooks${NC}"
 echo ""
@@ -261,7 +275,7 @@ HOOKS_CONFIG=$(cat <<EOF
         "hooks": [
           {
             "type": "command",
-            "command": "$TOOLS_DIR/hooks/notification_hook.sh"
+            "command": "$HOOKS_DIR/notification_hook.sh"
           }
         ]
       }
@@ -272,7 +286,7 @@ HOOKS_CONFIG=$(cat <<EOF
         "hooks": [
           {
             "type": "command",
-            "command": "$TOOLS_DIR/hooks/bash_hook.py"
+            "command": "$HOOKS_DIR/bash_hook.py"
           }
         ]
       },
@@ -281,7 +295,7 @@ HOOKS_CONFIG=$(cat <<EOF
         "hooks": [
           {
             "type": "command",
-            "command": "$TOOLS_DIR/hooks/file_size_conditional_hook.py"
+            "command": "$HOOKS_DIR/file_size_conditional_hook.py"
           }
         ]
       },
@@ -290,7 +304,7 @@ HOOKS_CONFIG=$(cat <<EOF
         "hooks": [
           {
             "type": "command",
-            "command": "$TOOLS_DIR/hooks/pretask_subtask_flag.py"
+            "command": "$HOOKS_DIR/pretask_subtask_flag.py"
           }
         ]
       },
@@ -299,7 +313,7 @@ HOOKS_CONFIG=$(cat <<EOF
         "hooks": [
           {
             "type": "command",
-            "command": "$TOOLS_DIR/hooks/grep_block_hook.py"
+            "command": "$HOOKS_DIR/grep_block_hook.py"
           }
         ]
       }
@@ -310,7 +324,7 @@ HOOKS_CONFIG=$(cat <<EOF
         "hooks": [
           {
             "type": "command",
-            "command": "$TOOLS_DIR/hooks/posttask_subtask_flag.py"
+            "command": "$HOOKS_DIR/posttask_subtask_flag.py"
           }
         ]
       }
@@ -494,11 +508,11 @@ if $RUST_AVAILABLE && command -v lmsh &> /dev/null; then
     echo "  - lmsh: Natural language shell"
 fi
 echo ""
-echo "Repository: $TOOLS_DIR"
+echo "Hooks installed to: $HOOKS_DIR"
 echo ""
 echo "Next steps:"
 echo "1. Add shell functions to ~/.bashrc or ~/.zshrc (see above)"
 echo "2. Restart Claude Code to load hooks"
 echo "3. Try: tmux-cli --help, find-session --help, vault --help"
-echo "4. Read documentation: $TOOLS_DIR/README.md"
+echo "4. Read documentation: https://github.com/pchalasani/claude-code-tools"
 echo ""

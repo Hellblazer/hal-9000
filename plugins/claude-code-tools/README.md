@@ -137,16 +137,18 @@ lmsh> show recent docker containers
 
 **Installation Methods:**
 - **Preferred:** Homebrew (macOS/Linux)
-- **Fallback:** curl/rustup for uv and Rust
+- **Fallback:** curl for uv, rustup for Rust
 - **APT/DNF:** Linux package managers
 
-**Configuration:**
-- Clones claude-code-tools repository (default: `~/git/claude-code-tools`)
-- Installs tools via `uv tool install`
-- Merges safety hooks into Claude settings
+**Installation Process:**
+- Installs claude-code-tools from PyPI via `uv tool install`
+- Downloads safety hooks from GitHub to `~/.claude/hooks/claude-code-tools/`
+- Merges hooks configuration into Claude settings (with backup)
 - Adds tmux-cli documentation to global CLAUDE.md
-- Optionally installs lmsh (if Rust available)
+- Optionally installs lmsh via cargo (if Rust available)
 - Provides shell function snippets for .bashrc/.zshrc
+
+**No Git Clone Required** - Everything installed via package managers!
 
 ## Requirements
 
@@ -334,15 +336,15 @@ cargo install lmsh
 
 ## Configuration
 
-### Repository Location
+### Hooks Location
 
-Default: `~/git/claude-code-tools`
+Installed to: `~/.claude/hooks/claude-code-tools/`
 
-To use different location, update hooks paths in `~/.claude/settings.json`
+Configuration in: `~/.claude/settings.json`
 
 ### Customize Hooks
 
-Edit hooks in `~/git/claude-code-tools/hooks/`:
+Edit hooks in `~/.claude/hooks/claude-code-tools/`:
 - `bash_hook.py` - Bash command safety
 - `env_file_protection_hook.py` - .env protection
 - `file_size_conditional_hook.py` - Large file blocking
@@ -377,9 +379,12 @@ Optional: `~/.config/find-session/config.json`
 ## Updating
 
 ```bash
-cd ~/git/claude-code-tools
-git pull
-uv tool install --force claude-code-tools
+# Update tools from PyPI
+uv tool install --upgrade claude-code-tools
+
+# Update hooks
+cd ~/.claude/marketplace/hal-9000/plugins/claude-code-tools
+./install.sh  # Re-run to update hooks from GitHub
 ```
 
 ## Uninstalling
@@ -391,8 +396,8 @@ uv tool uninstall claude-code-tools
 # Remove hooks from Claude settings
 # Edit ~/.claude/settings.json and remove "hooks" section
 
-# Remove repository
-rm -rf ~/git/claude-code-tools
+# Remove downloaded hooks
+rm -rf ~/.claude/hooks/claude-code-tools
 
 # Remove shell functions from ~/.bashrc or ~/.zshrc
 ```
