@@ -1,0 +1,21 @@
+{
+  "name": "hell-agents",
+  "description": "Curated collection of specialized Claude Code agent configurations and best practices for parallel task execution, code development, and system analysis",
+  "version": "1.0.0",
+  "author": {
+    "name": "Hal Hildebrand",
+    "url": "https://github.com/hal.hildebrand"
+  },
+  "repository": "https://github.com/hal.hildebrand/hal-9000",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/hal.hildebrand/hal-9000",
+  "keywords": [
+    "agents",
+    "parallel-execution",
+    "java-development",
+    "code-review",
+    "debugging",
+    "architecture",
+    "analysis"
+  ]
+}

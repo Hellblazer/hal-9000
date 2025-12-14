@@ -1,0 +1,28 @@
+{
+  "name": "hal-9000",
+  "description": "Hellbound Claude Marketplace - MCP servers and productivity tools for Claude Code",
+  "owner": {
+    "name": "Hal Hildebrand",
+    "url": "https://github.com/hal.hildebrand"
+  },
+  "plugins": [
+    {
+      "name": "hal-9000",
+      "source": "./plugins/hal-9000",
+      "description": "All-in-one MCP server suite: ChromaDB, Memory Bank, and DEVONthink integration",
+      "version": "1.0.0"
+    },
+    {
+      "name": "session-tools",
+      "source": "./plugins/session-tools",
+      "description": "Session management commands for Claude Code workflows",
+      "version": "1.0.0"
+    },
+    {
+      "name": "hell-agents",
+      "source": "./plugins/hell-agents",
+      "description": "Curated collection of specialized Claude Code agent configurations and best practices for parallel task execution",
+      "version": "1.0.0"
+    }
+  ]
+}

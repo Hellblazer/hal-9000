@@ -1,0 +1,34 @@
+**/target
+.idea
+.claude
+**/logs
+logs/
+
+# Prevent root-level detritus (from ART-156 cleanup)
+/execution_state.json
+/Debug*.java
+/*.log
+/archive/
+**/*.iml
+
+# Prevent .txt documentation sprawl (ART-676)
+# Only allow .txt in test resources and archived docs
+/*.txt
+**/*.txt
+!**/src/test/resources/**/*.txt
+!**/docs/archive/**/*.txt
+
+# Prevent Python script sprawl in root (ART-677)
+# Only allow Python in proper locations (scripts/, src/, tests/)
+/*.py
+!scripts/*.py
+
+# Prevent JSON data file sprawl in root (ART-678)
+# Only allow JSON in proper locations (src/, .claude/, docs/archive/)
+/*.json
+!/.claude/*.json
+/node_modules/**
+
+# Working documents - temporary/ephemeral files for agent work
+/working-documents/
+2

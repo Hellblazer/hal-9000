@@ -1,0 +1,67 @@
+{
+  "name": "hal-9000",
+  "description": "All-in-one MCP server suite providing ChromaDB vector database, Memory Bank persistent storage, and DEVONthink document research integration for Claude Code",
+  "version": "1.0.0",
+  "author": {
+    "name": "Hal Hildebrand",
+    "url": "https://github.com/hal.hildebrand"
+  },
+  "repository": "https://github.com/hal.hildebrand/hal-9000",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/hal.hildebrand/hal-9000",
+  "keywords": [
+    "mcp-server",
+    "chromadb",
+    "vector-database",
+    "memory-bank",
+    "devonthink",
+    "knowledge-management",
+    "document-research"
+  ],
+  "mcpServers": {
+    "chromadb": {
+      "command": "${HOME}/Library/Python/3.10/bin/chroma-mcp",
+      "args": [
+        "--client-type", "cloud",
+        "--tenant", "${CHROMADB_TENANT}",
+        "--database", "${CHROMADB_DATABASE}",
+        "--api-key", "${CHROMADB_API_KEY}"
+      ],
+      "env": {}
+    },
+    "memory-bank": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@allpepper/memory-bank-mcp@latest"
+      ],
+      "env": {
+        "MEMORY_BANK_ROOT": "${HOME}/memory-bank"
+      }
+    },
+    "devonthink": {
+      "command": "node",
+      "args": [
+        "${HOME}/git/dt-mcp/server.js"
+      ],
+      "env": {}
+    }
+  },
+  "install": {
+    "steps": [
+      {
+        "name": "Install ChromaDB MCP",
+        "command": "pip3 install --user chroma-mcp"
+      },
+      {
+        "name": "Install Memory Bank",
+        "command": "npm install -g @allpepper/memory-bank-mcp@latest"
+      },
+      {
+        "name": "Create Memory Bank directory",
+        "command": "mkdir -p ${HOME}/memory-bank"
+      }
+    ],
+    "postInstall": "Please configure environment variables:\n- CHROMADB_TENANT: Your ChromaDB tenant ID\n- CHROMADB_DATABASE: Your database name\n- CHROMADB_API_KEY: Your API key\n\nFor DEVONthink: Ensure dt-mcp is cloned to ~/git/dt-mcp"
+  }
+}

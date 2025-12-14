@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Determine Claude config location based on OS
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    CLAUDE_CONFIG_DIR="$HOME/Library/Application Support/Claude"
+elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    CLAUDE_CONFIG_DIR="$HOME/.config/Claude"
+else
+    echo -e "${RED}Error: Unsupported OS${NC}"
+    exit 1
+fi
+
+CLAUDE_CONFIG_FILE="$CLAUDE_CONFIG_DIR/claude_desktop_config.json"
+CLAUDE_COMMANDS_DIR="$HOME/.claude/commands"
+BACKUP_DIR="$HOME/.hal-9000-backup-$(date +%Y%m%d-%H%M%S)"
+
+echo -e "${BLUE}╔═══════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║                                                   ║${NC}"
+echo -e "${BLUE}║        HAL-9000 Claude Marketplace Installer      ║${NC}"
+echo -e "${BLUE}║                                                   ║${NC}"
+echo -e "${BLUE}╚═══════════════════════════════════════════════════╝${NC}"
+echo ""
+
+# Function to backup files
+backup_files() {
+    echo -e "${YELLOW}Creating backup...${NC}"
+    mkdir -p "$BACKUP_DIR"
+
+    if [ -f "$CLAUDE_CONFIG_FILE" ]; then
+        cp "$CLAUDE_CONFIG_FILE" "$BACKUP_DIR/"
+        echo "  ✓ Backed up Claude config"
+    fi
+
+    if [ -d "$CLAUDE_COMMANDS_DIR" ]; then
+        cp -r "$CLAUDE_COMMANDS_DIR" "$BACKUP_DIR/"
+        echo "  ✓ Backed up slash commands"
+    fi
+
+    echo -e "${GREEN}Backup created at: $BACKUP_DIR${NC}"
+    echo ""
+}
+
+# Function to install MCP server
+install_mcp_server() {
+    local server_name=$1
+    local server_dir="mcp-servers/$server_name"
+
+    if [ ! -d "$server_dir" ]; then
+        echo -e "${RED}Error: Server directory not found: $server_dir${NC}"
+        return 1
+    fi
+
+    echo -e "${YELLOW}Installing $server_name...${NC}"
+
+    # Run the install script
+    if [ -f "$server_dir/install.sh" ]; then
+        cd "$server_dir"
+        ./install.sh
+        cd - > /dev/null
+    else
+        echo -e "${RED}No install.sh found for $server_name${NC}"
+        return 1
+    fi
+
+    # Merge config (manual for now)
+    echo -e "${YELLOW}  Note: You'll need to manually merge config.json into Claude's config${NC}"
+    echo ""
+}
+
+# Function to install slash commands
+install_slash_commands() {
+    echo -e "${YELLOW}Installing slash commands...${NC}"
+
+    mkdir -p "$CLAUDE_COMMANDS_DIR"
+
+    # Copy all .md files except README
+    for cmd in slash-commands/*.md; do
+        if [[ "$(basename "$cmd")" != "README.md" ]]; then
+            cp "$cmd" "$CLAUDE_COMMANDS_DIR/"
+            echo "  ✓ Installed $(basename "$cmd")"
+        fi
+    done
+
+    echo -e "${GREEN}Slash commands installed!${NC}"
+    echo ""
+}
+
+# Interactive menu
+show_menu() {
+    echo "What would you like to install?"
+    echo ""
+    echo "  1) All MCP servers"
+    echo "  2) ChromaDB MCP server"
+    echo "  3) Memory Bank MCP server"
+    echo "  4) DEVONthink MCP server"
+    echo "  5) Slash commands"
+    echo "  6) Everything (MCP servers + slash commands)"
+    echo "  0) Exit"
+    echo ""
+    read -p "Enter your choice [0-6]: " choice
+    echo ""
+}
+
+# Main installation logic
+main() {
+    # Check prerequisites
+    echo -e "${YELLOW}Checking prerequisites...${NC}"
+
+    if [ ! -d "$CLAUDE_CONFIG_DIR" ]; then
+        echo -e "${RED}Error: Claude config directory not found at $CLAUDE_CONFIG_DIR${NC}"
+        echo "Is Claude Code/Desktop installed?"
+        exit 1
+    fi
+
+    echo -e "${GREEN}✓ Claude config directory found${NC}"
+    echo ""
+
+    # Backup existing config
+    backup_files
+
+    # Show menu
+    show_menu
+
+    case $choice in
+        1)
+            echo -e "${BLUE}Installing all MCP servers...${NC}"
+            echo ""
+            install_mcp_server "chromadb"
+            install_mcp_server "memory-bank"
+            install_mcp_server "devonthink"
+            ;;
+        2)
+            install_mcp_server "chromadb"
+            ;;
+        3)
+            install_mcp_server "memory-bank"
+            ;;
+        4)
+            install_mcp_server "devonthink"
+            ;;
+        5)
+            install_slash_commands
+            ;;
+        6)
+            echo -e "${BLUE}Installing everything...${NC}"
+            echo ""
+            install_mcp_server "chromadb"
+            install_mcp_server "memory-bank"
+            install_mcp_server "devonthink"
+            install_slash_commands
+            ;;
+        0)
+            echo "Installation cancelled."
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Invalid choice${NC}"
+            exit 1
+            ;;
+    esac
+
+    # Post-installation instructions
+    echo -e "${GREEN}╔═══════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║                                                   ║${NC}"
+    echo -e "${GREEN}║             Installation Complete!                ║${NC}"
+    echo -e "${GREEN}║                                                   ║${NC}"
+    echo -e "${GREEN}╚═══════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${YELLOW}Next steps:${NC}"
+    echo ""
+    echo "1. ${BLUE}Merge MCP server configs${NC}"
+    echo "   For each installed MCP server, merge its config.json into:"
+    echo "   $CLAUDE_CONFIG_FILE"
+    echo ""
+    echo "2. ${BLUE}Restart Claude${NC}"
+    echo "   Restart Claude Code or Claude Desktop to load new configurations"
+    echo ""
+    echo "3. ${BLUE}Test slash commands${NC}"
+    echo "   In Claude Code, type /help to see your new commands"
+    echo ""
+    echo "4. ${BLUE}Backup location${NC}"
+    echo "   Your original config was backed up to:"
+    echo "   $BACKUP_DIR"
+    echo ""
+    echo -e "${GREEN}Enjoy your enhanced Claude Code experience!${NC}"
+}
+
+# Run main
+main
