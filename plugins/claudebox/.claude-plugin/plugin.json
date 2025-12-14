@@ -1,0 +1,28 @@
+{
+  "name": "claudebox",
+  "description": "Docker-based development environment for Claude Code with pre-configured profiles, multi-instance support, and squad mode",
+  "version": "1.0.0",
+  "author": {
+    "name": "Hal Hildebrand",
+    "url": "https://github.com/Hellblazer"
+  },
+  "repository": "https://github.com/Hellblazer/claudebox",
+  "license": "MIT",
+  "homepage": "https://github.com/Hellblazer/claudebox",
+  "keywords": [
+    "docker",
+    "container",
+    "development",
+    "claude-code",
+    "isolation",
+    "profiles",
+    "squad-mode",
+    "multi-instance"
+  ],
+  "installSteps": [
+    "Run ./install.sh from the plugin directory",
+    "Follow prompts to choose installation method",
+    "Install dependencies (Docker, tmux) if needed",
+    "Launch with 'claudebox run'"
+  ]
+}

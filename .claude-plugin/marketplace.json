@@ -29,6 +29,12 @@
       "source": "./plugins/claude-code-tools",
       "description": "Comprehensive toolkit: tmux-cli terminal automation, session search, vault for .env backup, safety hooks, and developer productivity tools",
       "version": "1.0.0"
+    },
+    {
+      "name": "claudebox",
+      "source": "./plugins/claudebox",
+      "description": "Docker-based development environment for Claude Code with containerized isolation, pre-configured profiles, and multi-instance squad mode",
+      "version": "1.0.0"
     }
   ]
 }

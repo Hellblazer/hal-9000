@@ -114,6 +114,32 @@ Comprehensive toolkit for enhancing Claude Code:
 
 [Full Documentation](plugins/claude-code-tools/README.md)
 
+### 🐳 claudebox Plugin
+
+Docker-based development environment for Claude Code:
+
+**Containerized Isolation**
+- Each project in separate Docker container
+- Pre-configured language profiles (Python, Rust, Go, C/C++, Node, Java)
+- Persistent auth, history, and configs
+
+**Multi-Instance Support**
+- Work on multiple projects simultaneously
+- Project-specific firewall allowlists
+- Automatic dependency resolution
+
+**Squad Mode** - Multi-agent workflows
+- Launch multiple Claude instances in parallel
+- Tmux-based session management
+- Configuration-driven agent definitions
+
+**Developer Tools**
+- GitHub CLI, Delta, fzf, oh-my-zsh
+- Python venv auto-creation
+- Tmux socket mounting
+
+[Full Documentation](plugins/claudebox/README.md)
+
 ## Requirements
 
 ### hal-9000 Plugin
@@ -128,6 +154,10 @@ Comprehensive toolkit for enhancing Claude Code:
 ### claude-code-tools Plugin
 - **Required**: Python 3.11+, uv, tmux
 - **Optional**: SOPS (for vault), jq (for auto-config), Rust/Cargo (for lmsh)
+
+### claudebox Plugin
+- **Required**: Docker, bash
+- **Optional**: tmux (for squad mode), gh (GitHub CLI)
 
 ## Configuration
 
