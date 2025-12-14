@@ -3,13 +3,13 @@
   "description": "Hellbound Claude Marketplace - MCP servers and productivity tools for Claude Code",
   "owner": {
     "name": "Hal Hildebrand",
-    "url": "https://github.com/hal.hildebrand"
+    "url": "https://github.com/Hellblazer"
   },
   "plugins": [
     {
       "name": "hal-9000",
       "source": "./plugins/hal-9000",
-      "description": "Complete productivity suite: MCP servers (ChromaDB, Memory Bank, Sequential Thinking, DEVONthink), 12 custom agents, session management, terminal automation (tmux-cli), safety hooks, Docker environments (ClaudeBox), and multi-agent orchestration (Claude Squad). Everything you need in one plugin!",
+      "description": "Complete productivity suite: MCP servers (ChromaDB, Memory Bank, Sequential Thinking, DEVONthink), 12 custom agents, session management, terminal automation (tmux-cli), safety hooks, Docker environments (ClaudeBox), multi-agent orchestration (Claude Squad), and multi-branch parallel development (ClaudeBox Squad). Everything you need in one plugin!",
       "version": "1.0.0"
     }
   ]

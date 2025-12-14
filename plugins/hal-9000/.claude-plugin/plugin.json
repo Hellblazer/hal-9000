@@ -1,14 +1,14 @@
 {
   "name": "hal-9000",
-  "description": "Complete Claude Code productivity suite: MCP servers (ChromaDB, Memory Bank, Sequential Thinking, DEVONthink), 12 custom agents, session management, terminal automation (tmux-cli), safety hooks, Docker environments (ClaudeBox), and multi-agent orchestration (Claude Squad)",
+  "description": "Complete Claude Code productivity suite: MCP servers (ChromaDB, Memory Bank, Sequential Thinking, DEVONthink), 12 custom agents, session management, terminal automation (tmux-cli), safety hooks, Docker environments (ClaudeBox), multi-agent orchestration (Claude Squad), and multi-branch parallel development (ClaudeBox Squad)",
   "version": "1.0.0",
   "author": {
     "name": "Hal Hildebrand",
-    "url": "https://github.com/hal.hildebrand"
+    "url": "https://github.com/Hellblazer"
   },
-  "repository": "https://github.com/hal.hildebrand/hal-9000",
+  "repository": "https://github.com/Hellblazer/hal-9000",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/hal.hildebrand/hal-9000",
+  "homepage": "https://github.com/Hellblazer/hal-9000",
   "keywords": [
     "mcp-server",
     "chromadb",
@@ -33,10 +33,11 @@
   ],
   "mcpServers": {
     "chromadb": {
-      "command": "${HOME}/Library/Python/3.10/bin/chroma-mcp",
+      "comment": "This is a sample configuration. Users should configure via Claude UI after installation, or edit this file to use 'chroma-mcp' (relies on PATH) instead of absolute path.",
+      "command": "chroma-mcp",
       "args": [
         "--client-type", "cloud",
-        "--tenant", "${CHROMADB_TENANT}",
+        "--tenant": "${CHROMADB_TENANT}",
         "--database", "${CHROMADB_DATABASE}",
         "--api-key", "${CHROMADB_API_KEY}"
       ],
@@ -75,6 +76,6 @@
   },
   "install": {
     "script": "./install.sh",
-    "postInstall": "Installation complete! Please restart Claude Code to load all components.\n\nInstalled:\n• MCP Servers: ChromaDB, Memory Bank, Sequential Thinking, DEVONthink\n• Custom Agents: 12 specialized agents (java-developer, code-review-expert, etc.)\n• Session Commands: /check, /load, /sessions, /session-delete\n• Terminal Tools: tmux-cli, find-session, vault, env-safe\n• Safety Hooks: Git, file, and environment protection\n• ClaudeBox: Docker development environments\n• Claude Squad (cs): Multi-agent orchestration\n\nNext steps:\n1. Configure ChromaDB environment variables (if using cloud mode)\n2. Try: tmux-cli --help, vault --help, cs\n3. Test: /sessions, claudebox run\n4. See AGENTS.md for agent documentation"
+    "postInstall": "Installation complete! Please restart Claude Code to load all components.\n\nInstalled:\n• MCP Servers: ChromaDB, Memory Bank, Sequential Thinking, DEVONthink\n• Custom Agents: 12 specialized agents (java-developer, code-review-expert, etc.)\n• Session Commands: /check, /load, /sessions, /session-delete\n• Terminal Tools: tmux-cli, find-session, vault, env-safe\n• Safety Hooks: Git, file, and environment protection\n• ClaudeBox: Docker development environments\n• Claude Squad: Multi-agent orchestration\n• ClaudeBox Squad: Multi-branch parallel development\n\nNext steps:\n1. Configure ChromaDB environment variables (if using cloud mode)\n2. Try: claudebox-squad --help, cs-list, tmux-cli --help\n3. Test: /sessions, claudebox run\n4. See AGENTS.md for agent documentation"
   }
 }

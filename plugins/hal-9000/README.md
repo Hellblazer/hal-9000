@@ -48,7 +48,8 @@ Productivity tools for Claude Code including MCP servers, custom agents, termina
 ### Development Environments
 
 - **ClaudeBox** - Docker-based containerized development
-- **Claude Squad** - Multi-agent terminal UI with git worktree isolation
+- **Claude Squad** - Multi-agent terminal UI
+- **ClaudeBox Squad** - Multi-branch parallel development with git worktrees and isolated containers
 
 ## Installation
 
@@ -136,11 +137,30 @@ cs                # Launch with Claude Code
 cs -p "aider"     # Launch with Aider
 ```
 
+### ClaudeBox Squad
+
+```bash
+# Create configuration for multiple branches
+cat > squad.conf <<EOF
+feature/auth:python:Add authentication
+feature/api:node:Build REST API
+EOF
+
+# Launch all sessions
+claudebox-squad squad.conf
+
+# Manage sessions
+cs-list           # List active sessions
+cs-attach squad-feature-auth  # Attach to session
+cs-cleanup        # Stop all sessions
+```
+
 ## Documentation
 
 - MCP Servers: `mcp-servers/*/README.md`
 - Agents: `AGENTS.md`
 - Commands: `commands/*.md`
+- ClaudeBox Squad: `claudebox-squad/README.md`
 
 ## Troubleshooting
 

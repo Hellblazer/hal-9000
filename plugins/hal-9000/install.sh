@@ -235,11 +235,62 @@ if [[ "$SKIP_HOST_ORCHESTRATION" == "false" ]]; then
             BREW_PREFIX=$(brew --prefix)
             ln -sf "$BREW_PREFIX/bin/claude-squad" "$BREW_PREFIX/bin/cs" 2>/dev/null || true
         else
-            curl -fsSL https://raw.githubusercontent.com/smtg-ai/claude-squad/main/install.sh | bash
+            echo "Downloading Claude Squad installer..."
+            SQUAD_INSTALLER=$(mktemp)
+            if curl -fsSL https://raw.githubusercontent.com/smtg-ai/claude-squad/main/install.sh -o "$SQUAD_INSTALLER"; then
+                bash "$SQUAD_INSTALLER"
+                rm -f "$SQUAD_INSTALLER"
+            else
+                echo -e "${RED}Failed to download Claude Squad installer${NC}"
+                rm -f "$SQUAD_INSTALLER"
+                exit 1
+            fi
         fi
     else
-        curl -fsSL https://raw.githubusercontent.com/smtg-ai/claude-squad/main/install.sh | bash
+        echo "Installing Claude Squad from GitHub..."
+        SQUAD_INSTALLER=$(mktemp)
+        if curl -fsSL https://raw.githubusercontent.com/smtg-ai/claude-squad/main/install.sh -o "$SQUAD_INSTALLER"; then
+            bash "$SQUAD_INSTALLER"
+            rm -f "$SQUAD_INSTALLER"
+        else
+            echo -e "${RED}Failed to download Claude Squad installer${NC}"
+            rm -f "$SQUAD_INSTALLER"
+            exit 1
+        fi
     fi
+
+    # Install ClaudeBox Squad scripts
+    echo ""
+    echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
+    echo -e "${BLUE}  Installing ClaudeBox Squad${NC}"
+    echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
+    echo ""
+
+    # Determine install location
+    if command -v brew &> /dev/null; then
+        INSTALL_BIN="$(brew --prefix)/bin"
+    else
+        INSTALL_BIN="$HOME/.local/bin"
+        mkdir -p "$INSTALL_BIN"
+    fi
+
+    # Copy scripts
+    echo "Installing ClaudeBox Squad scripts to $INSTALL_BIN..."
+    cp "$SCRIPT_DIR/claudebox-squad/claudebox-squad.sh" "$INSTALL_BIN/claudebox-squad"
+    cp "$SCRIPT_DIR/claudebox-squad/cs-list.sh" "$INSTALL_BIN/cs-list"
+    cp "$SCRIPT_DIR/claudebox-squad/cs-attach.sh" "$INSTALL_BIN/cs-attach"
+    cp "$SCRIPT_DIR/claudebox-squad/cs-stop.sh" "$INSTALL_BIN/cs-stop"
+    cp "$SCRIPT_DIR/claudebox-squad/cs-cleanup.sh" "$INSTALL_BIN/cs-cleanup"
+    chmod +x "$INSTALL_BIN"/claudebox-squad "$INSTALL_BIN"/cs-*
+
+    # Copy example config to user's home
+    if [ ! -f "$HOME/squad.conf" ]; then
+        cp "$SCRIPT_DIR/claudebox-squad/squad.conf.example" "$HOME/squad.conf.example"
+        echo "Example configuration copied to: $HOME/squad.conf.example"
+    fi
+
+    echo -e "${GREEN}ClaudeBox Squad installed successfully${NC}"
+    echo "Commands: claudebox-squad, cs-list, cs-attach, cs-stop, cs-cleanup"
 fi
 # End of SKIP_HOST_ORCHESTRATION block
 
@@ -341,6 +392,12 @@ EOF
     mkdir -p "$CLAUDEBOX_SHARED_DIR/agents"
     cp "$SCRIPT_DIR/agents"/*.md "$CLAUDEBOX_SHARED_DIR/agents/" 2>/dev/null || true
 
+    # Copy ClaudeBox Squad scripts to shared location
+    echo "Copying ClaudeBox Squad scripts..."
+    mkdir -p "$CLAUDEBOX_SHARED_DIR/claudebox-squad"
+    cp "$SCRIPT_DIR/claudebox-squad"/*.sh "$SCRIPT_DIR/claudebox-squad"/squad.conf.example "$CLAUDEBOX_SHARED_DIR/claudebox-squad/"
+    chmod +x "$CLAUDEBOX_SHARED_DIR/claudebox-squad"/*.sh
+
     # Create setup script for ClaudeBox containers
     cat > "$CLAUDEBOX_SHARED_DIR/setup.sh" << 'EOF'
 #!/usr/bin/env bash
@@ -357,6 +414,14 @@ ln -sf /hal-9000/commands/* ~/.claude/commands/ 2>/dev/null || true
 # Link custom agents
 mkdir -p ~/.claude/agents
 ln -sf /hal-9000/agents/* ~/.claude/agents/ 2>/dev/null || true
+
+# Link ClaudeBox Squad scripts to user bin
+mkdir -p ~/.local/bin
+ln -sf /hal-9000/claudebox-squad/claudebox-squad.sh ~/.local/bin/claudebox-squad 2>/dev/null || true
+ln -sf /hal-9000/claudebox-squad/cs-list.sh ~/.local/bin/cs-list 2>/dev/null || true
+ln -sf /hal-9000/claudebox-squad/cs-attach.sh ~/.local/bin/cs-attach 2>/dev/null || true
+ln -sf /hal-9000/claudebox-squad/cs-stop.sh ~/.local/bin/cs-stop 2>/dev/null || true
+ln -sf /hal-9000/claudebox-squad/cs-cleanup.sh ~/.local/bin/cs-cleanup 2>/dev/null || true
 
 # Install claude-code-tools if not already installed
 if ! command -v tmux-cli &> /dev/null; then

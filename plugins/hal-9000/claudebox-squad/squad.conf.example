@@ -1,0 +1,40 @@
+# ClaudeBox Squad Configuration File
+#
+# Format: branch:profile:description
+# 
+# - branch: Git branch name (will be created if it doesn't exist)
+# - profile: ClaudeBox profile(s) to use (comma-separated, optional)
+# - description: Human-readable task description (optional)
+#
+# Lines starting with # are comments
+# Empty lines are ignored
+#
+# Example configurations:
+
+# Feature development with different profiles
+feature/auth:python:Add OAuth2 authentication
+feature/api:node:Build REST API endpoints
+feature/ui:node:Create React frontend components
+
+# Bug fixes
+bugfix/validation:python:Fix input validation errors
+bugfix/performance:python,node:Optimize database queries
+
+# Multiple tasks on same codebase
+refactor/models:python:Refactor database models
+refactor/tests:python:Update test suite
+
+# Experimental features
+experiment/ml-integration:python:Integrate machine learning model
+experiment/graphql:node:Add GraphQL support
+
+# Documentation work
+docs/api-reference::Update API documentation
+docs/user-guide::Write user guide
+
+# Simple examples (no profile specified, uses default)
+feature/simple-fix::Quick bug fix
+feature/another-task::Another task
+
+# Advanced: Multiple profiles
+feature/fullstack:python,node,rust:Full-stack feature with multiple languages
