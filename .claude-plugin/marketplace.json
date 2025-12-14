@@ -35,6 +35,12 @@
       "source": "./plugins/claudebox",
       "description": "Docker-based development environment for Claude Code with containerized isolation, pre-configured profiles, and multi-instance squad mode",
       "version": "1.0.0"
+    },
+    {
+      "name": "claude-squad",
+      "source": "./plugins/claude-squad",
+      "description": "Terminal UI for managing multiple Claude Code instances in parallel with isolated git worktrees, background task completion, and auto-accept mode",
+      "version": "1.0.0"
     }
   ]
 }

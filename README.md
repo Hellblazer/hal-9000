@@ -140,6 +140,36 @@ Docker-based development environment for Claude Code:
 
 [Full Documentation](plugins/claudebox/README.md)
 
+### 🎮 claude-squad Plugin
+
+Terminal UI for multi-agent workflows:
+
+**Multi-Instance Management**
+- Run multiple Claude Code/Codex/Gemini/Aider instances in parallel
+- Each task in isolated git worktree
+- Background task completion
+- Auto-accept mode for autonomous execution
+
+**Workflow Features**
+- TUI keyboard-driven interface
+- Review changes before applying
+- Commit and push directly from UI
+- Session persistence and resume
+
+**Integration**
+- Works with Claude Code, Codex, Gemini, Aider
+- tmux-based session isolation
+- Git worktrees prevent conflicts
+- GitHub CLI integration
+
+**Use Cases**
+- Parallel feature development
+- Code review workflows
+- Multi-framework projects
+- Background task queues
+
+[Full Documentation](plugins/claude-squad/README.md)
+
 ## Requirements
 
 ### hal-9000 Plugin
@@ -158,6 +188,10 @@ Docker-based development environment for Claude Code:
 ### claudebox Plugin
 - **Required**: Docker, bash
 - **Optional**: tmux (for squad mode), gh (GitHub CLI)
+
+### claude-squad Plugin
+- **Required**: tmux, gh (GitHub CLI), git
+- **Optional**: Claude Code, Codex, Gemini, or Aider (at least one AI assistant)
 
 ## Configuration
 
