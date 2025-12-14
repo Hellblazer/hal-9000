@@ -1,6 +1,6 @@
 # HAL-9000 Plugin
 
-Productivity tools for Claude Code including MCP servers, custom agents, terminal automation, and development environments.
+Productivity tools for Claude Code: aod multi-branch development, MCP servers, custom agents, terminal automation, and safety tools.
 
 ## Components
 
@@ -40,16 +40,17 @@ Productivity tools for Claude Code including MCP servers, custom agents, termina
 ### Terminal Tools
 
 - **tmux-cli** - Terminal automation for interactive CLIs
+- **ccstatusline** - Customizable Claude Code status line with real-time metrics
 - **vault** - Encrypted .env backup with SOPS
 - **env-safe** - Safe .env inspection
 - **find-session** - Search across agent sessions
 - **Safety hooks** - Git, file, and environment protection
 
-### Development Environments
+### Multi-Branch Development
 
-- **ClaudeBox** - Docker-based containerized development
-- **Claude Squad** - Multi-agent terminal UI
-- **ClaudeBox Squad** - Multi-branch parallel development with git worktrees and isolated containers
+- aod (Army of Darkness) - Multi-branch parallel development with git worktrees and isolated containers
+
+aod uses ClaudeBox for containerization. Inspired by claude-squad's multi-session workflow.
 
 ## Installation
 
@@ -123,44 +124,42 @@ vault backup .env
 find-session "auth implementation"
 ```
 
-### ClaudeBox
-
-```bash
-claudebox run
-claudebox run --profile python
-```
-
-### Claude Squad
-
-```bash
-cs                # Launch with Claude Code
-cs -p "aider"     # Launch with Aider
-```
-
-### ClaudeBox Squad
+### aod (Army of Darkness)
 
 ```bash
 # Create configuration for multiple branches
-cat > squad.conf <<EOF
+cat > aod.conf <<EOF
 feature/auth:python:Add authentication
 feature/api:node:Build REST API
 EOF
 
 # Launch all sessions
-claudebox-squad squad.conf
+aod aod.conf
 
 # Manage sessions
-cs-list           # List active sessions
-cs-attach squad-feature-auth  # Attach to session
-cs-cleanup        # Stop all sessions
+aod-list                         # List active sessions
+aod-attach aod-feature-auth      # Attach to session
+aod-send aod-feature-auth "cmd"  # Send command without attaching
+aod-broadcast "cmd"              # Send to all sessions
+aod-cleanup                      # Stop all sessions
+```
+
+### Foundation Tools
+
+ClaudeBox is available for standalone use:
+
+```bash
+# ClaudeBox - Containerized development
+claudebox run --profile python
 ```
 
 ## Documentation
 
+- **[Cheat Sheet](CHEATSHEET.md)** - Quick reference for aod, tmux, tmux-cli, and terminal tools
 - MCP Servers: `mcp-servers/*/README.md`
 - Agents: `AGENTS.md`
 - Commands: `commands/*.md`
-- ClaudeBox Squad: `claudebox-squad/README.md`
+- aod (Army of Darkness): `aod/README.md`
 
 ## Troubleshooting
 

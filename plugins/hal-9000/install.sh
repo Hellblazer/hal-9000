@@ -19,7 +19,7 @@ echo "Choose installation mode:"
 echo ""
 echo "1. Complete Installation (recommended)"
 echo "   - Host: MCP servers, session commands, tmux-cli,"
-echo "     ClaudeBox, Claude Squad, safety hooks"
+echo "     aod, ClaudeBox, safety hooks"
 echo "   - ClaudeBox Shared: MCP servers and tools at ~/.claudebox/hal-9000"
 echo "     (inherited by all ClaudeBox containers)"
 echo ""
@@ -80,7 +80,7 @@ if [[ "$INSTALL_HOST" == "true" ]]; then
     echo "  • Claude Code Tools (tmux-cli, vault, env-safe, hooks)"
     if [[ "$SKIP_HOST_ORCHESTRATION" == "false" ]]; then
         echo "  • ClaudeBox (Docker development environments)"
-        echo "  • Claude Squad (multi-agent orchestration)"
+        echo "  • aod (multi-branch parallel development)"
     fi
     echo ""
 fi
@@ -135,6 +135,41 @@ if [[ "$INSTALL_HOST" == "true" ]]; then
 
     echo "Installing claude-code-tools from PyPI..."
     uv tool install --force claude-code-tools
+
+    # Configure ccstatusline in Claude Code settings
+    echo ""
+    echo "Configuring ccstatusline for Claude Code..."
+    CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+
+    # Create settings file if it doesn't exist
+    if [[ ! -f "$CLAUDE_SETTINGS" ]]; then
+        echo '{}' > "$CLAUDE_SETTINGS"
+    fi
+
+    # Add or update statusLine setting using jq
+    if command -v jq &> /dev/null; then
+        # Use bunx if available (faster), otherwise npx
+        if command -v bun &> /dev/null; then
+            STATUS_CMD="bunx -y ccstatusline@latest"
+        else
+            STATUS_CMD="npx ccstatusline@latest"
+        fi
+
+        # Update settings.json with statusLine (object format)
+        tmp_file=$(mktemp)
+        jq --arg cmd "$STATUS_CMD" \
+           '.statusLine = {type: "command", command: $cmd, padding: 0}' \
+           "$CLAUDE_SETTINGS" > "$tmp_file"
+        mv "$tmp_file" "$CLAUDE_SETTINGS"
+
+        echo -e "${GREEN}✓ Configured ccstatusline in Claude Code settings${NC}"
+        echo -e "  Using: ${CYAN}$STATUS_CMD${NC}"
+        echo -e "  Run ${CYAN}bunx ccstatusline@latest${NC} to configure widgets interactively"
+    else
+        echo -e "${YELLOW}⚠ jq not found - skipping ccstatusline configuration${NC}"
+        echo -e "  Manually add to $CLAUDE_SETTINGS:"
+        echo -e '  {"statusLine": {"type": "command", "command": "bunx -y ccstatusline@latest", "padding": 0}}'
+    fi
 
     # Download hooks
     HOOKS_DIR="$HOME/.claude/hooks/claude-code-tools"
@@ -197,7 +232,7 @@ if [[ "$INSTALL_HOST" == "true" ]]; then
     AGENT_COUNT=$(ls -1 "$SCRIPT_DIR/agents"/*.md 2>/dev/null | wc -l | xargs)
     echo -e "${GREEN}Installed $AGENT_COUNT custom agents to ~/.claude/agents/${NC}"
 
-# Install ClaudeBox and Claude Squad (host only, skip if orchestration disabled)
+# Install ClaudeBox (host only, skip if orchestration disabled)
 if [[ "$SKIP_HOST_ORCHESTRATION" == "false" ]]; then
     echo ""
     echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
@@ -222,47 +257,10 @@ if [[ "$SKIP_HOST_ORCHESTRATION" == "false" ]]; then
         /tmp/claudebox.run
         rm /tmp/claudebox.run
     fi
-    # Install Claude Squad
+    # Install aod (Army of Darkness) scripts
     echo ""
     echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
-    echo -e "${BLUE}  Installing Claude Squad${NC}"
-    echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
-    echo ""
-
-    if command -v brew &> /dev/null; then
-        if brew search claude-squad | grep -q "claude-squad"; then
-            brew install claude-squad
-            BREW_PREFIX=$(brew --prefix)
-            ln -sf "$BREW_PREFIX/bin/claude-squad" "$BREW_PREFIX/bin/cs" 2>/dev/null || true
-        else
-            echo "Downloading Claude Squad installer..."
-            SQUAD_INSTALLER=$(mktemp)
-            if curl -fsSL https://raw.githubusercontent.com/smtg-ai/claude-squad/main/install.sh -o "$SQUAD_INSTALLER"; then
-                bash "$SQUAD_INSTALLER"
-                rm -f "$SQUAD_INSTALLER"
-            else
-                echo -e "${RED}Failed to download Claude Squad installer${NC}"
-                rm -f "$SQUAD_INSTALLER"
-                exit 1
-            fi
-        fi
-    else
-        echo "Installing Claude Squad from GitHub..."
-        SQUAD_INSTALLER=$(mktemp)
-        if curl -fsSL https://raw.githubusercontent.com/smtg-ai/claude-squad/main/install.sh -o "$SQUAD_INSTALLER"; then
-            bash "$SQUAD_INSTALLER"
-            rm -f "$SQUAD_INSTALLER"
-        else
-            echo -e "${RED}Failed to download Claude Squad installer${NC}"
-            rm -f "$SQUAD_INSTALLER"
-            exit 1
-        fi
-    fi
-
-    # Install ClaudeBox Squad scripts
-    echo ""
-    echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
-    echo -e "${BLUE}  Installing ClaudeBox Squad${NC}"
+    echo -e "${BLUE}  Installing aod (Army of Darkness)${NC}"
     echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
     echo ""
 
@@ -275,22 +273,24 @@ if [[ "$SKIP_HOST_ORCHESTRATION" == "false" ]]; then
     fi
 
     # Copy scripts
-    echo "Installing ClaudeBox Squad scripts to $INSTALL_BIN..."
-    cp "$SCRIPT_DIR/claudebox-squad/claudebox-squad.sh" "$INSTALL_BIN/claudebox-squad"
-    cp "$SCRIPT_DIR/claudebox-squad/cs-list.sh" "$INSTALL_BIN/cs-list"
-    cp "$SCRIPT_DIR/claudebox-squad/cs-attach.sh" "$INSTALL_BIN/cs-attach"
-    cp "$SCRIPT_DIR/claudebox-squad/cs-stop.sh" "$INSTALL_BIN/cs-stop"
-    cp "$SCRIPT_DIR/claudebox-squad/cs-cleanup.sh" "$INSTALL_BIN/cs-cleanup"
-    chmod +x "$INSTALL_BIN"/claudebox-squad "$INSTALL_BIN"/cs-*
+    echo "Installing aod (Army of Darkness) scripts to $INSTALL_BIN..."
+    cp "$SCRIPT_DIR/aod/aod.sh" "$INSTALL_BIN/aod"
+    cp "$SCRIPT_DIR/aod/aod-list.sh" "$INSTALL_BIN/aod-list"
+    cp "$SCRIPT_DIR/aod/aod-attach.sh" "$INSTALL_BIN/aod-attach"
+    cp "$SCRIPT_DIR/aod/aod-stop.sh" "$INSTALL_BIN/aod-stop"
+    cp "$SCRIPT_DIR/aod/aod-cleanup.sh" "$INSTALL_BIN/aod-cleanup"
+    cp "$SCRIPT_DIR/aod/aod-send.sh" "$INSTALL_BIN/aod-send"
+    cp "$SCRIPT_DIR/aod/aod-broadcast.sh" "$INSTALL_BIN/aod-broadcast"
+    chmod +x "$INSTALL_BIN"/aod "$INSTALL_BIN"/aod-*
 
     # Copy example config to user's home
-    if [ ! -f "$HOME/squad.conf" ]; then
-        cp "$SCRIPT_DIR/claudebox-squad/squad.conf.example" "$HOME/squad.conf.example"
-        echo "Example configuration copied to: $HOME/squad.conf.example"
+    if [ ! -f "$HOME/aod.conf" ]; then
+        cp "$SCRIPT_DIR/aod/aod.conf.example" "$HOME/aod.conf.example"
+        echo "Example configuration copied to: $HOME/aod.conf.example"
     fi
 
-    echo -e "${GREEN}ClaudeBox Squad installed successfully${NC}"
-    echo "Commands: claudebox-squad, cs-list, cs-attach, cs-stop, cs-cleanup"
+    echo -e "${GREEN}aod (Army of Darkness) installed successfully${NC}"
+    echo "Commands: aod, aod-list, aod-attach, aod-stop, aod-cleanup, aod-send, aod-broadcast"
 fi
 # End of SKIP_HOST_ORCHESTRATION block
 
@@ -392,11 +392,17 @@ EOF
     mkdir -p "$CLAUDEBOX_SHARED_DIR/agents"
     cp "$SCRIPT_DIR/agents"/*.md "$CLAUDEBOX_SHARED_DIR/agents/" 2>/dev/null || true
 
-    # Copy ClaudeBox Squad scripts to shared location
-    echo "Copying ClaudeBox Squad scripts..."
-    mkdir -p "$CLAUDEBOX_SHARED_DIR/claudebox-squad"
-    cp "$SCRIPT_DIR/claudebox-squad"/*.sh "$SCRIPT_DIR/claudebox-squad"/squad.conf.example "$CLAUDEBOX_SHARED_DIR/claudebox-squad/"
-    chmod +x "$CLAUDEBOX_SHARED_DIR/claudebox-squad"/*.sh
+    # Copy aod (Army of Darkness) scripts to shared location
+    echo "Copying aod (Army of Darkness) scripts..."
+    mkdir -p "$CLAUDEBOX_SHARED_DIR/aod"
+    cp "$SCRIPT_DIR/aod"/*.sh "$SCRIPT_DIR/aod"/aod.conf.example "$CLAUDEBOX_SHARED_DIR/aod/"
+    chmod +x "$CLAUDEBOX_SHARED_DIR/aod"/*.sh
+
+    # Copy hal-9000 utility scripts to shared location
+    echo "Copying hal-9000 utility scripts..."
+    mkdir -p "$CLAUDEBOX_SHARED_DIR/scripts"
+    cp "$SCRIPT_DIR/scripts"/*.sh "$CLAUDEBOX_SHARED_DIR/scripts/"
+    chmod +x "$CLAUDEBOX_SHARED_DIR/scripts"/*.sh
 
     # Create setup script for ClaudeBox containers
     cat > "$CLAUDEBOX_SHARED_DIR/setup.sh" << 'EOF'
@@ -415,13 +421,16 @@ ln -sf /hal-9000/commands/* ~/.claude/commands/ 2>/dev/null || true
 mkdir -p ~/.claude/agents
 ln -sf /hal-9000/agents/* ~/.claude/agents/ 2>/dev/null || true
 
-# Link ClaudeBox Squad scripts to user bin
+# Link aod (Army of Darkness) scripts to user bin
 mkdir -p ~/.local/bin
-ln -sf /hal-9000/claudebox-squad/claudebox-squad.sh ~/.local/bin/claudebox-squad 2>/dev/null || true
-ln -sf /hal-9000/claudebox-squad/cs-list.sh ~/.local/bin/cs-list 2>/dev/null || true
-ln -sf /hal-9000/claudebox-squad/cs-attach.sh ~/.local/bin/cs-attach 2>/dev/null || true
-ln -sf /hal-9000/claudebox-squad/cs-stop.sh ~/.local/bin/cs-stop 2>/dev/null || true
-ln -sf /hal-9000/claudebox-squad/cs-cleanup.sh ~/.local/bin/cs-cleanup 2>/dev/null || true
+ln -sf /hal-9000/aod/aod.sh ~/.local/bin/aod 2>/dev/null || true
+ln -sf /hal-9000/aod/aod-list.sh ~/.local/bin/aod-list 2>/dev/null || true
+ln -sf /hal-9000/aod/aod-attach.sh ~/.local/bin/aod-attach 2>/dev/null || true
+ln -sf /hal-9000/aod/aod-stop.sh ~/.local/bin/aod-stop 2>/dev/null || true
+ln -sf /hal-9000/aod/aod-cleanup.sh ~/.local/bin/aod-cleanup 2>/dev/null || true
+ln -sf /hal-9000/aod/aod-send.sh ~/.local/bin/aod-send 2>/dev/null || true
+ln -sf /hal-9000/aod/aod-broadcast.sh ~/.local/bin/aod-broadcast 2>/dev/null || true
+
 
 # Install claude-code-tools if not already installed
 if ! command -v tmux-cli &> /dev/null; then
@@ -490,7 +499,7 @@ if [[ "$INSTALL_HOST" == "true" ]]; then
     if [[ "$SKIP_HOST_ORCHESTRATION" == "false" ]]; then
         echo "Development Environments:"
         echo "  • claudebox - Docker-based environments"
-        echo "  • claude-squad (cs) - Multi-agent orchestration"
+        echo "  • aod - Multi-branch parallel development"
         echo ""
     fi
 fi
