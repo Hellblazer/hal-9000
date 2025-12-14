@@ -61,9 +61,10 @@
       ]
     },
     "devonthink": {
-      "command": "node",
+      "comment": "Python-based minimal MCP server. Installed locally in mcp-servers/devonthink/",
+      "command": "python3",
       "args": [
-        "${HOME}/git/dt-mcp/server.js"
+        "${HOME}/.claude/plugins/hal-9000/mcp-servers/devonthink/server.py"
       ],
       "env": {}
     }

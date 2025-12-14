@@ -17,17 +17,12 @@ HAL-9000 is a single plugin that bundles:
 
 ### Add Marketplace
 
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/Hellblazer/hal-9000.git
-   ```
-
-2. Add to Claude Code:
+1. Add to Claude Code:
    - Open Claude Code settings
    - Navigate to Marketplaces
-   - Add local marketplace: `/path/to/hal-9000`
+   - Add marketplace URL: `https://github.com/Hellblazer/hal-9000.git`
 
-3. Install the plugin:
+2. Install the plugin:
    - Browse hal-9000 marketplace in Claude Code
    - Install "hal-9000" plugin
    - Run the installation script when prompted
@@ -77,8 +72,8 @@ MCP server installers check for existing configurations using `claude mcp list`.
 - Hypothesis verification
 
 **DEVONthink** (macOS only)
-- Document research integration
-- Knowledge graph construction
+- Document search and import (arXiv, PubMed, DOI)
+- Minimal Python implementation (~800 tokens)
 - Requires DEVONthink Pro/Server
 
 ### Custom Agents
@@ -209,14 +204,9 @@ Override with `MEMORY_BANK_ROOT` environment variable.
 
 ### DEVONthink
 
-Requires dt-mcp repository:
-```bash
-git clone https://github.com/yourusername/dt-mcp.git ~/git/dt-mcp
-cd ~/git/dt-mcp
-npm install
-```
+Python-based MCP server included in hal-9000. No external repository needed.
 
-The installer can handle this if needed.
+Requires Python 3.8+ (pre-installed on macOS) and `pip3 install mcp`.
 
 ## Usage
 
@@ -303,7 +293,7 @@ cs-cleanup           # Stop all sessions
 - [ChromaDB MCP](plugins/hal-9000/mcp-servers/chromadb/README.md)
 - [Memory Bank MCP](plugins/hal-9000/mcp-servers/memory-bank/README.md)
 - [Sequential Thinking MCP](plugins/hal-9000/mcp-servers/sequential-thinking/)
-- [DEVONthink MCP](plugins/hal-9000/mcp-servers/devonthink/README.md)
+- [DEVONthink MCP](plugins/hal-9000/mcp-servers/devonthink/README.md) - Python-based minimal server
 
 ## Troubleshooting
 
