@@ -1,0 +1,165 @@
+name: Test HAL-9000 Installation
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'plugins/hal-9000/**'
+      - '.github/workflows/test-installation.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'plugins/hal-9000/**'
+  workflow_dispatch:
+
+jobs:
+  test-pep668-detection:
+    name: Test PEP 668 Detection
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        container:
+          - debian:bookworm-slim
+          - ubuntu:24.04
+          - python:3.11-slim
+
+    container:
+      image: ${{ matrix.container }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install prerequisites
+        run: |
+          if command -v apt-get &> /dev/null; then
+            apt-get update -qq
+            apt-get install -y -qq python3 python3-pip > /dev/null 2>&1
+          fi
+
+      - name: Test PEP 668 Detection
+        run: |
+          cd plugins/hal-9000/mcp-servers
+          source common.sh
+
+          echo "Testing PEP 668 detection..."
+          if has_pep668_protection; then
+            echo "✓ PEP 668 detected"
+          else
+            echo "✗ PEP 668 not detected (may be expected on some systems)"
+          fi
+
+      - name: Test safe_pip_install
+        run: |
+          cd plugins/hal-9000/mcp-servers
+          source common.sh
+
+          echo "Testing safe_pip_install function..."
+          if safe_pip_install setuptools; then
+            echo "✓ safe_pip_install works"
+          else
+            echo "✗ safe_pip_install failed"
+            exit 1
+          fi
+
+  validate-scripts:
+    name: Validate Installation Scripts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check script syntax
+        run: |
+          echo "Validating bash scripts..."
+          for script in $(find plugins/hal-9000 -name "*.sh" -type f); do
+            echo "Checking $script"
+            bash -n "$script" || exit 1
+          done
+          echo "✓ All scripts have valid syntax"
+
+      - name: Check for common issues
+        run: |
+          echo "Checking for common issues..."
+
+          # Check for unquoted variables in critical sections
+          if grep -r '\$[A-Z_]*[^"]' plugins/hal-9000/mcp-servers/*.sh | grep -v "^#" | grep -v "pip3 install"; then
+            echo "Warning: Found potentially unquoted variables"
+          fi
+
+          # Check that safe_pip_install is exported
+          if ! grep -q "export -f safe_pip_install" plugins/hal-9000/mcp-servers/common.sh; then
+            echo "✗ safe_pip_install not exported in common.sh"
+            exit 1
+          fi
+
+          echo "✓ Basic validation passed"
+
+  test-manual-installation:
+    name: Manual Installation Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Test manual MCP installation
+        run: |
+          cd plugins/hal-9000/mcp-servers
+          source common.sh
+
+          echo "Installing chroma-mcp manually..."
+          if safe_pip_install chroma-mcp; then
+            echo "✓ chroma-mcp installed successfully"
+          else
+            echo "✗ chroma-mcp installation failed"
+            exit 1
+          fi
+
+          # Verify installation
+          export PATH="$HOME/.local/bin:$PATH"
+          if command -v chroma-mcp &> /dev/null; then
+            echo "✓ chroma-mcp command found"
+            chroma-mcp --help || true
+          else
+            echo "✗ chroma-mcp command not found"
+            exit 1
+          fi
+
+  documentation-check:
+    name: Check Documentation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verify documentation files exist
+        run: |
+          echo "Checking for required documentation..."
+
+          files=(
+            "plugins/hal-9000/README.md"
+            "plugins/hal-9000/TROUBLESHOOTING.md"
+            "plugins/hal-9000/test-installation.sh"
+          )
+
+          for file in "${files[@]}"; do
+            if [ -f "$file" ]; then
+              echo "✓ $file exists"
+            else
+              echo "✗ $file missing"
+              exit 1
+            fi
+          done
+
+      - name: Check for PEP 668 documentation
+        run: |
+          if grep -q "PEP 668" plugins/hal-9000/TROUBLESHOOTING.md; then
+            echo "✓ PEP 668 documented in TROUBLESHOOTING.md"
+          else
+            echo "✗ PEP 668 not found in TROUBLESHOOTING.md"
+            exit 1
+          fi

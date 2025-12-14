@@ -1,7 +1,7 @@
 {
   "name": "hal-9000",
   "description": "Complete Claude Code productivity suite: aod (Army of Darkness) multi-branch development, MCP servers (ChromaDB, Memory Bank, Sequential Thinking, DEVONthink), 12 custom agents, session management, terminal automation (tmux-cli), and safety hooks",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": {
     "name": "Hal Hildebrand",
     "url": "https://github.com/Hellblazer"

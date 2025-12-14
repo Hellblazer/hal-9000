@@ -148,6 +148,21 @@ Both templates backup existing files before installation.
 - tmux (auto-installed if missing)
 - git
 
+## Troubleshooting
+
+**Installation Issues?** See the [Troubleshooting Guide](plugins/hal-9000/TROUBLESHOOTING.md) for:
+- PEP 668 errors on modern Linux distributions
+- Python package installation problems
+- PATH configuration issues
+- Platform-specific solutions (macOS, Linux, Docker)
+
+**Common Issues:**
+- **Debian/Ubuntu PEP 668 Error**: Automatically handled by installer (v1.1.0+)
+- **Command not found after install**: Add `~/.local/bin` to your PATH
+- **SSL Certificate errors**: Update certificates or use trusted hosts
+
+[Full troubleshooting guide →](plugins/hal-9000/TROUBLESHOOTING.md)
+
 **Optional:**
 - macOS + DEVONthink Pro/Server (for DEVONthink MCP)
 - SOPS (for vault encryption)

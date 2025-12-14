@@ -43,7 +43,7 @@ fi
 
 # Install Python dependencies
 echo "Installing Python dependencies..."
-if pip3 install -r "$SCRIPT_DIR/requirements.txt" --user --quiet; then
+if safe_pip_install --quiet -r "$SCRIPT_DIR/requirements.txt"; then
     echo -e "${GREEN}✓ Dependencies installed${NC}"
 else
     echo -e "${RED}Error: Failed to install dependencies${NC}"

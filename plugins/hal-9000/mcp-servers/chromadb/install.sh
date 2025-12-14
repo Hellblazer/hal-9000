@@ -37,7 +37,7 @@ fi
 
 # Install chroma-mcp
 echo "Installing chroma-mcp via pip..."
-if ! pip3 install --user chroma-mcp; then
+if ! safe_pip_install chroma-mcp; then
     echo -e "${RED}Error: Failed to install chroma-mcp${NC}"
     exit 1
 fi

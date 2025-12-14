@@ -208,6 +208,67 @@ is_claudebox_container() {
     [[ -f /.dockerenv ]] || [[ -f /hal-9000/setup.sh ]]
 }
 
+# Check if system has PEP 668 externally-managed-environment protection
+has_pep668_protection() {
+    if ! command -v python3 &> /dev/null; then
+        return 1
+    fi
+
+    # Check for EXTERNALLY-MANAGED marker file
+    # The file is located at <prefix>/lib/python<version>/EXTERNALLY-MANAGED
+    local marker_file
+    marker_file=$(python3 -c 'import sys; import os; print(os.path.join(sys.prefix, "lib", f"python{sys.version_info.major}.{sys.version_info.minor}", "EXTERNALLY-MANAGED"))' 2>/dev/null)
+
+    if [[ -f "$marker_file" ]]; then
+        return 0
+    fi
+
+    # Fallback: Test with a dummy install attempt
+    if pip3 install --dry-run --user pip 2>&1 | grep -q "externally-managed-environment"; then
+        return 0
+    fi
+
+    return 1
+}
+
+# Safe pip install that handles PEP 668 protection
+# Usage: safe_pip_install [pip_flags...] package1 [package2 ...]
+# Examples:
+#   safe_pip_install package1 package2
+#   safe_pip_install -r requirements.txt
+#   safe_pip_install --quiet package1
+safe_pip_install() {
+    local args=("$@")
+
+    if [[ ${#args[@]} -eq 0 ]]; then
+        echo -e "${RED}Error: No packages specified for installation${NC}" >&2
+        return 1
+    fi
+
+    # Check if pip3 exists
+    if ! command -v pip3 &> /dev/null; then
+        echo -e "${RED}Error: pip3 is required but not installed.${NC}" >&2
+        return 1
+    fi
+
+    local base_flags="--user"
+
+    # Detect and handle PEP 668 protection
+    if has_pep668_protection; then
+        echo -e "${YELLOW}Detected PEP 668 protected environment${NC}"
+        echo -e "${BLUE}Using --break-system-packages flag for installation${NC}"
+        base_flags="--user --break-system-packages"
+    fi
+
+    # Install packages with all provided arguments
+    if pip3 install $base_flags "${args[@]}"; then
+        return 0
+    else
+        echo -e "${RED}Error: Failed to install packages${NC}" >&2
+        return 1
+    fi
+}
+
 # Export functions for sourcing
 export -f get_claude_config_path
 export -f backup_config
@@ -220,3 +281,5 @@ export -f get_python_bin_dir
 export -f check_command
 export -f secure_download
 export -f is_claudebox_container
+export -f has_pep668_protection
+export -f safe_pip_install
