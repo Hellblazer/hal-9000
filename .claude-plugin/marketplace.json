@@ -23,6 +23,12 @@
       "source": "./plugins/hell-agents",
       "description": "Curated collection of specialized Claude Code agent configurations and best practices for parallel task execution",
       "version": "1.0.0"
+    },
+    {
+      "name": "claude-code-tools",
+      "source": "./plugins/claude-code-tools",
+      "description": "Comprehensive toolkit: tmux-cli terminal automation, session search, vault for .env backup, safety hooks, and developer productivity tools",
+      "version": "1.0.0"
     }
   ]
 }

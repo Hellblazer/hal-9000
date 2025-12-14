@@ -1,0 +1,89 @@
+{
+  "name": "claude-code-tools",
+  "description": "Comprehensive toolkit for Claude Code: tmux-cli terminal automation, session search, vault for .env backup, safety hooks, and more",
+  "version": "1.0.0",
+  "author": {
+    "name": "Hal Hildebrand",
+    "url": "https://github.com/hal.hildebrand"
+  },
+  "repository": "https://github.com/pchalasani/claude-code-tools",
+  "license": "MIT",
+  "homepage": "https://github.com/pchalasani/claude-code-tools",
+  "keywords": [
+    "tmux",
+    "automation",
+    "terminal",
+    "session-management",
+    "security",
+    "hooks",
+    "vault",
+    "dotenv"
+  ],
+  "installSteps": [
+    "Run ./install.sh from the plugin directory",
+    "Follow prompts to install dependencies and tools",
+    "Add shell functions to ~/.bashrc or ~/.zshrc (optional)",
+    "Restart Claude Code to load hooks"
+  ],
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_CODE_TOOLS_DIR}/hooks/notification_hook.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_CODE_TOOLS_DIR}/hooks/bash_hook.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_CODE_TOOLS_DIR}/hooks/file_size_conditional_hook.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_CODE_TOOLS_DIR}/hooks/pretask_subtask_flag.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_CODE_TOOLS_DIR}/hooks/grep_block_hook.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_CODE_TOOLS_DIR}/hooks/posttask_subtask_flag.py"
+          }
+        ]
+      }
+    ]
+  }
+}

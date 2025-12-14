@@ -90,6 +90,30 @@ Specialized Claude Code agent configurations and workflows:
 
 [Full Documentation](plugins/hell-agents/README.md)
 
+### 🛠️ claude-code-tools Plugin
+
+Comprehensive toolkit for enhancing Claude Code:
+
+**tmux-cli** - Terminal automation ("Playwright for terminals")
+- Control interactive CLI applications
+- Debug with pdb/gdb
+- Launch multiple Claude instances
+- Test interactive scripts
+
+**Session Search**
+- find-session: Unified search across all agents
+- find-claude-session: Claude-specific search
+- Cross-project session discovery
+
+**Security & Safety**
+- vault: Encrypted .env backup with SOPS
+- env-safe: Safe .env inspection
+- Safety hooks: Git, file, and environment protection
+
+**Optional: lmsh** - Natural language shell (requires Rust)
+
+[Full Documentation](plugins/claude-code-tools/README.md)
+
 ## Requirements
 
 ### hal-9000 Plugin
@@ -100,6 +124,10 @@ Specialized Claude Code agent configurations and workflows:
 ### session-tools Plugin
 - Bash shell
 - Git (optional, for git status)
+
+### claude-code-tools Plugin
+- **Required**: Python 3.11+, uv, tmux
+- **Optional**: SOPS (for vault), jq (for auto-config), Rust/Cargo (for lmsh)
 
 ## Configuration
 
