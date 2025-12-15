@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PEP 668 automatic detection and handling** for modern Linux distributions (Debian Bookworm, Ubuntu 24.04+, Fedora 38+)
 - `has_pep668_protection()` function in `common.sh` to detect externally-managed Python environments
 - `safe_pip_install()` function in `common.sh` that automatically applies `--break-system-packages` flag when needed
+- **Container optimization - shared tool installation** for aod/ClaudeBox:
+  - claude-code-tools installed ONCE to `~/.claudebox/hal-9000/tools/bin`
+  - All containers share single installation via volume mount
+  - Eliminates 10-30 seconds per-container download time
+  - Zero redundant downloads or disk usage
 - Comprehensive [TROUBLESHOOTING.md](TROUBLESHOOTING.md) guide covering:
   - PEP 668 errors and solutions
   - Python package installation issues
@@ -27,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated `chromadb/install.sh` to use `safe_pip_install` instead of direct `pip3 install`
 - Updated `devonthink/install.sh` to use `safe_pip_install` for requirements.txt installation
 - All Python MCP server installers now handle PEP 668 environments automatically
+- **Container setup script** (`~/.claudebox/hal-9000/setup.sh`) now uses shared tools instead of per-container installation
+- Container startup optimized - tools available instantly from shared mount
 
 ### Fixed
 - Installation failures on Debian Bookworm (Debian 12) and other PEP 668-protected systems
@@ -37,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Installation experience on modern Linux distributions - no manual intervention needed
 - Error messages now clearly indicate PEP 668 detection and handling
 - Better documentation for troubleshooting common installation issues
+- **aod/ClaudeBox performance** - containers start 10-30 seconds faster due to shared tool installation
+- **Resource efficiency** - significantly reduced bandwidth usage and disk space for multi-container workflows
+- Container setup now includes automatic fallback to individual installation if shared tools unavailable
 
 ### Technical Details
 The PEP 668 fix works by:

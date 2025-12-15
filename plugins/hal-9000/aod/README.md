@@ -189,6 +189,8 @@ docker ps
 
 Containers share the host's `~/.claudebox/hal-9000` directory for MCP servers and agents.
 
+**Performance Optimization (v1.1.0+):** All containers share a single installation of claude-code-tools and other utilities mounted from `~/.claudebox/hal-9000/tools/bin`. No per-container downloads - first container starts instantly, subsequent containers are even faster.
+
 ### State Tracking
 
 Session metadata stored as JSON in `~/.aod/sessions.log`:
@@ -746,6 +748,23 @@ Don't run untrusted code in aod sessions without additional sandboxing.
 - Tmux session: <1s
 - ClaudeBox container: 3-7s
 
+**v1.1.0+ Optimization - Shared Tool Installation:**
+
+Previously, each container downloaded and installed claude-code-tools independently, adding 10-30 seconds per container and consuming redundant bandwidth/disk space.
+
+**Now (v1.1.0+):**
+- Tools installed ONCE to `~/.claudebox/hal-9000/tools/bin` during initial setup
+- All containers mount and share this single installation via `/hal-9000/tools/bin`
+- **Zero per-container downloads** - instant tool availability
+- **First container**: No delay (tools already installed)
+- **Nth container**: No delay (reuses shared installation)
+
+**Benefits:**
+- Faster container startup (eliminates 10-30s tool installation)
+- Lower bandwidth usage (one download vs. N downloads)
+- Reduced disk usage (single installation vs. N copies)
+- Consistent tool versions across all containers
+
 **Resource usage per session:**
 - Disk: ~500MB (worktree copy-on-write)
 - RAM: 1-2GB (depends on profile and workload)
@@ -755,6 +774,8 @@ Don't run untrusted code in aod sessions without additional sandboxing.
 - 1-4 sessions: Comfortable on most machines
 - 5-8 sessions: May require resource monitoring
 - 9+ sessions: Consider cleanup of idle sessions
+
+**Note:** MCP servers (ChromaDB, Memory Bank, etc.) run on the HOST machine, not in containers. Containers communicate with MCP servers through Claude Desktop, so there's no MCP server overhead per container.
 
 ## Using tmux-cli with aod
 

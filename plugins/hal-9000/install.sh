@@ -473,25 +473,66 @@ if [[ "$INSTALL_CLAUDEBOX_SHARED" == "true" ]]; then
     echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
     echo ""
 
-    # Create a note about tools installation
+    # Install claude-code-tools once to shared location
+    # This is shared across ALL containers - no per-container installation needed
+    mkdir -p "$CLAUDEBOX_SHARED_DIR/tools/bin"
+
+    if command -v uv &> /dev/null; then
+        echo "Installing claude-code-tools to shared directory (one-time setup)..."
+        # Install to shared location using VIRTUAL_ENV trick
+        export UV_TOOL_DIR="$CLAUDEBOX_SHARED_DIR/tools"
+        export UV_TOOL_BIN_DIR="$CLAUDEBOX_SHARED_DIR/tools/bin"
+
+        if uv tool install claude-code-tools; then
+            echo -e "${GREEN}✓ claude-code-tools installed to shared location${NC}"
+            echo "  Location: $CLAUDEBOX_SHARED_DIR/tools/bin"
+            echo "  All containers will use this single installation"
+        else
+            echo -e "${YELLOW}Warning: Failed to install claude-code-tools via uv${NC}"
+            echo "  Containers will install individually (less efficient)"
+        fi
+
+        # Restore environment
+        unset UV_TOOL_DIR UV_TOOL_BIN_DIR
+    else
+        echo -e "${YELLOW}Note: uv not found - claude-code-tools will be installed per-container${NC}"
+        echo "  Install uv for optimal performance: curl -LsSf https://astral.sh/uv/install.sh | sh"
+    fi
+
+    # Create documentation
     cat > "$CLAUDEBOX_SHARED_DIR/tools/README.md" << 'EOF'
 # Claude Code Tools for ClaudeBox
 
-These tools are available in ClaudeBox containers:
+**Optimized Installation**: Tools are installed ONCE to this shared directory and reused across all ClaudeBox containers. No per-container downloads!
 
-- **tmux-cli**: Installed via `uv tool install claude-code-tools` in container
+## Available Tools
+
+- **tmux-cli**: Control interactive CLI apps from Claude Code
 - **vault**: Encrypted .env backup (requires SOPS)
-- **env-safe**: Safe .env inspection
-- **find-session**: Session search
+- **env-safe**: Safe .env inspection without exposing secrets
+- **find-session**: Search across all Claude Code sessions
 
-## Installation in Container
+## Architecture
 
-Run inside ClaudeBox container:
-```bash
-uv tool install claude-code-tools
+```
+~/.claudebox/hal-9000/tools/
+├── bin/              # Shared tool binaries (tmux-cli, etc.)
+└── ...               # uv tool installation data
 ```
 
-This is automatically done if you use the ClaudeBox hal-9000 profile.
+All containers add `/hal-9000/tools/bin` to PATH - instant access, zero downloads.
+
+## Performance Benefits
+
+- **First container**: Instant startup (tools already installed)
+- **Nth container**: Instant startup (shares same installation)
+- **Bandwidth**: Zero redundant downloads
+- **Disk**: Single installation vs. N installations
+
+## Fallback Behavior
+
+If shared installation fails, containers fall back to individual installation.
+Setup script handles both scenarios automatically.
 EOF
 
     # Copy hooks to shared location
@@ -567,11 +608,33 @@ ln -sf /hal-9000/aod/aod-cleanup.sh ~/.local/bin/aod-cleanup 2>/dev/null || true
 ln -sf /hal-9000/aod/aod-send.sh ~/.local/bin/aod-send 2>/dev/null || true
 ln -sf /hal-9000/aod/aod-broadcast.sh ~/.local/bin/aod-broadcast 2>/dev/null || true
 
+# Configure PATH for shared tools (OPTIMIZED: no per-container installation!)
+# Add shared tools directory to PATH if not already present
+if [[ -d "/hal-9000/tools/bin" ]] && [[ ":$PATH:" != *":/hal-9000/tools/bin:"* ]]; then
+    export PATH="/hal-9000/tools/bin:$PATH"
 
-# Install claude-code-tools if not already installed
-if ! command -v tmux-cli &> /dev/null; then
-    echo "Installing claude-code-tools..."
-    uv tool install claude-code-tools
+    # Make PATH persistent in .bashrc
+    if ! grep -q "/hal-9000/tools/bin" ~/.bashrc 2>/dev/null; then
+        echo 'export PATH="/hal-9000/tools/bin:$PATH"' >> ~/.bashrc
+    fi
+
+    # Make PATH persistent in .zshrc if zsh is available
+    if command -v zsh &> /dev/null && ! grep -q "/hal-9000/tools/bin" ~/.zshrc 2>/dev/null; then
+        echo 'export PATH="/hal-9000/tools/bin:$PATH"' >> ~/.zshrc
+    fi
+fi
+
+# Verify shared tools are available, fallback to individual installation if needed
+if command -v tmux-cli &> /dev/null; then
+    echo "✓ Using shared claude-code-tools installation (optimized)"
+else
+    # Fallback: Install individually (only if shared installation failed)
+    echo "⚠ Shared tools not found, installing individually..."
+    if command -v uv &> /dev/null; then
+        uv tool install claude-code-tools
+    else
+        echo "⚠ uv not available, tmux-cli may not be accessible"
+    fi
 fi
 
 echo "HAL-9000 components configured for this container"

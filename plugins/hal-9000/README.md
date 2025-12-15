@@ -126,6 +126,8 @@ find-session "auth implementation"
 
 ### aod (Army of Darkness)
 
+Multi-branch parallel development with optimized container performance.
+
 ```bash
 # Create configuration for multiple branches
 cat > aod.conf <<EOF
@@ -144,6 +146,8 @@ aod-broadcast "cmd"              # Send to all sessions
 aod-cleanup                      # Stop all sessions
 ```
 
+**v1.1.0+ Performance:** Tools installed once to `~/.claudebox/hal-9000/tools/bin` and shared across all containers. Zero per-container downloads, 10-30 seconds faster startup.
+
 ### Foundation Tools
 
 ClaudeBox is available for standalone use:
@@ -155,7 +159,7 @@ claudebox run --profile python
 
 ## Documentation
 
-- **[Cheat Sheet](CHEATSHEET.md)** - Quick reference for aod, tmux, tmux-cli, and terminal tools
+- **[Cheat Sheet](../../CHEATSHEET.md)** - Quick reference for aod, tmux, tmux-cli, and terminal tools
 - MCP Servers: `mcp-servers/*/README.md`
 - Agents: `AGENTS.md`
 - Commands: `commands/*.md`

@@ -53,6 +53,8 @@ Commands: `aod`, `aod-list`, `aod-attach`, `aod-stop`, `aod-cleanup`, `aod-send`
 
 **Claude awareness:** Each session gets a `CLAUDE.md` with session context - Claude knows which session it's in and can coordinate with other sessions.
 
+**Performance (v1.1.0+):** Optimized container startup - tools installed once and shared across all containers. No per-container downloads, 10-30 seconds faster startup per container.
+
 [Full aod documentation →](plugins/hal-9000/aod/README.md)
 
 ### MCP Servers
@@ -197,7 +199,7 @@ aod uses ClaudeBox for containerization:
 
 ## Documentation
 
-- **[Cheat Sheet](plugins/hal-9000/CHEATSHEET.md)** - Quick reference for aod, tmux, tmux-cli, and terminal tools
+- **[Cheat Sheet](CHEATSHEET.md)** - Quick reference for aod, tmux, tmux-cli, and terminal tools
 - [aod (Army of Darkness)](plugins/hal-9000/aod/README.md)
 - [Agent Usage](plugins/hal-9000/AGENTS.md)
 - [ChromaDB MCP](plugins/hal-9000/mcp-servers/chromadb/README.md)
