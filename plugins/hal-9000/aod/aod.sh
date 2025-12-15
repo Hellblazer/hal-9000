@@ -298,8 +298,8 @@ launch_session() {
         claudebox_cmd="$SCRIPT_DIR/claudebox.sh"
     fi
 
-    # Build claudebox command
-    local cmd="cd '$worktree_dir' && $claudebox_cmd run --slot $slot"
+    # Build claudebox command with optimized image
+    local cmd="cd '$worktree_dir' && $claudebox_cmd run --image ghcr.io/hellblazer/hal-9000:latest --slot $slot"
     if [[ -n "$profile" ]]; then
         cmd="$cmd --profile $profile"
     fi
