@@ -1,5 +1,5 @@
-# HAL-9000 Optimized ClaudeBox Image
-# Pre-installs all tools for instant container startup
+# HAL-9000 Base Image with Claude CLI
+# Pre-installs Claude CLI + claude-code-tools + MCP servers for instant container startup
 #
 # Build: docker build -f docker/Dockerfile.hal9000 -t ghcr.io/hellblazer/hal-9000:latest .
 # Publish: docker push ghcr.io/hellblazer/hal-9000:latest
@@ -8,39 +8,65 @@
 FROM debian:bookworm-slim
 
 LABEL maintainer="hal-9000"
-LABEL description="Optimized ClaudeBox image with pre-installed claude-code-tools"
-LABEL version="1.1.0"
+LABEL description="HAL-9000 base image with Claude CLI, MCP servers, and claude-code-tools"
+LABEL version="1.2.0"
 
-# Install system dependencies
+# Install system dependencies including Python 3 (for chroma-mcp)
 RUN apt-get update && apt-get install -y \
     curl \
     git \
     tmux \
+    build-essential \
+    ca-certificates \
     python3 \
     python3-pip \
     python3-venv \
-    build-essential \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 20 LTS (required for Claude CLI and MCP servers)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Claude CLI globally
+RUN npm install -g @anthropic-ai/claude-code
+
+# Pre-install MCP server npm packages globally (no npx download needed at runtime)
+RUN npm install -g \
+    @anthropic-ai/claude-code \
+    @allpepper/memory-bank-mcp \
+    @modelcontextprotocol/server-sequential-thinking
 
 # Install uv (fast Python package installer)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Add uv to PATH
+# Add uv and claude-code-tools to PATH
 ENV PATH="/root/.local/bin:${PATH}"
 
-# Pre-install claude-code-tools (this is the optimization!)
-# This layer is cached - subsequent builds/containers reuse it
+# Pre-install claude-code-tools (tmux-cli, vault, env-safe, aichat)
 RUN uv tool install claude-code-tools
 
-# Install common development tools based on profile
-# These can be extended for specific language profiles
+# Pre-install chroma-mcp (ChromaDB MCP server)
+RUN uv tool install chroma-mcp
 
-# Create workspace directory
-RUN mkdir -p /workspace
+# Create workspace and hal-9000 mount point
+RUN mkdir -p /workspace /hal-9000 /root/memory-bank
+
+# Set environment variables for MCP servers
+ENV MEMORY_BANK_ROOT="/root/memory-bank"
+
 WORKDIR /workspace
 
-# Verify installation
-RUN tmux-cli --help > /dev/null 2>&1 && echo "✓ claude-code-tools installed" || echo "✗ Installation failed"
+# Verify installations
+RUN echo "Verifying installations..." \
+    && claude --version \
+    && node --version \
+    && npm --version \
+    && tmux-cli --help > /dev/null 2>&1 \
+    && which mcp-server-memory-bank \
+    && which mcp-server-sequential-thinking \
+    && which chroma-mcp \
+    && echo "✓ All tools and MCP servers installed successfully"
 
-# Default command
-CMD ["/bin/bash"]
+# Default command runs setup script then starts bash
+CMD ["bash", "-c", "source /hal-9000/setup.sh 2>/dev/null || true; exec bash"]

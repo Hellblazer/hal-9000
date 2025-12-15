@@ -1,10 +1,10 @@
 # HAL-9000 Claude Marketplace
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Container Registry](https://img.shields.io/badge/ghcr.io-hellblazer%2Fhal--9000-blue?logo=docker)](https://github.com/Hellblazer/hal-9000/pkgs/container/hal-9000)
 
-Claude Code productivity suite: multi-branch development, MCP servers, and custom agents.
+Claude Code productivity suite: containerized Claude, multi-branch development, MCP servers, and custom agents.
 
 ## Quick Start
 
@@ -20,9 +20,40 @@ Browse marketplace → Install "hal-9000" → Run installer (choose mode when pr
 
 ## What's Included
 
+### hal9000 (Containerized Claude)
+
+Launch isolated Claude containers with the full hal-9000 stack:
+
+```bash
+# Single container in current directory
+hal9000 run
+hal9000 run --profile python
+
+# Multiple sessions for parallel work
+hal9000 squad --sessions 3
+hal9000 squad tasks.conf
+
+# Session management
+hal9000-list                      # List active sessions
+hal9000-attach hal9000-1          # Attach to session
+hal9000-send hal9000-1 "cmd"      # Send command
+hal9000-broadcast "npm install"   # Send to all
+hal9000-cleanup                   # Stop all
+```
+
+**Features:**
+- ✅ **Claude CLI in containers** - Isolated Claude instance per session
+- ✅ **MCP servers pre-installed** - Memory Bank, ChromaDB, Sequential Thinking ready to use
+- ✅ **Shared Memory Bank** - Host's `~/memory-bank` mounted for cross-container access
+- ✅ **Auto-configured** - MCP servers automatically configured on container startup
+- ✅ **Custom agents & commands** - All 12 agents available in every container
+- ✅ **Language profiles** - Python, Node.js, Java variants available
+
+[Full hal9000 documentation →](plugins/hal-9000/hal9000/README.md)
+
 ### aod (Army of Darkness)
 
-Multi-branch parallel development using ClaudeBox containers with git worktrees and tmux sessions
+Multi-branch parallel development using hal9000 containers with git worktrees:
 
 ```bash
 # Generate config template (YAML or simple format)
@@ -68,26 +99,26 @@ Commands: `aod-init`, `aod`, `aod-list`, `aod-attach`, `aod-stop`, `aod-cleanup`
 
 **Claude awareness:** Each session gets a `CLAUDE.md` with session context - Claude knows which session it's in and can coordinate with other sessions.
 
-**Performance (v1.1.0+):** Optimized container startup - tools installed once and shared across all containers. No per-container downloads, 10-30 seconds faster startup per container.
+**vs hal9000:** Use aod for multi-branch development with git worktree isolation. Use hal9000 for general containerized work on current directory.
 
 [Full aod documentation →](plugins/hal-9000/aod/README.md)
 
 ### MCP Servers
 
-**ChromaDB** - Vector database for semantic search
-Usage: `Store this document in ChromaDB`, `Search ChromaDB for "authentication patterns"`
+**ChromaDB** - Vector database for semantic search<br>
+Usage: `Store this document in ChromaDB`, `Search ChromaDB for "authentication patterns"`<br>
 [Details →](plugins/hal-9000/mcp-servers/chromadb/README.md)
 
-**Memory Bank** - Persistent memory across sessions
-Usage: `Save this decision to memory bank`, `What did we decide about the schema?`
+**Memory Bank** - Persistent memory across sessions<br>
+Usage: `Save this decision to memory bank`, `What did we decide about the schema?`<br>
 [Details →](plugins/hal-9000/mcp-servers/memory-bank/README.md)
 
-**Sequential Thinking** - Step-by-step reasoning
-Usage: `Debug this issue using sequential thinking`
+**Sequential Thinking** - Step-by-step reasoning<br>
+Usage: `Debug this issue using sequential thinking`<br>
 [Details →](plugins/hal-9000/mcp-servers/sequential-thinking/)
 
-**DEVONthink** (macOS) - Document search and import
-Usage: `Search my DEVONthink for ML papers`, `Import arXiv paper 2312.03032`
+**DEVONthink** (macOS) - Document search and import<br>
+Usage: `Search my DEVONthink for ML papers`, `Import arXiv paper 2312.03032`<br>
 [Details →](plugins/hal-9000/mcp-servers/devonthink/README.md)
 
 ### Custom Agents
@@ -160,25 +191,10 @@ Both templates backup existing files before installation.
 - Node.js 16+ (for Memory Bank, Sequential Thinking)
 - Bash, curl, git
 
-**For aod:**
+**For hal9000/aod:**
 - Docker
 - tmux (auto-installed if missing)
-- git
-
-## Troubleshooting
-
-**Installation Issues?** See the [Troubleshooting Guide](plugins/hal-9000/TROUBLESHOOTING.md) for:
-- PEP 668 errors on modern Linux distributions
-- Python package installation problems
-- PATH configuration issues
-- Platform-specific solutions (macOS, Linux, Docker)
-
-**Common Issues:**
-- **Debian/Ubuntu PEP 668 Error**: Automatically handled by installer (v1.1.0+)
-- **Command not found after install**: Add `~/.local/bin` to your PATH
-- **SSL Certificate errors**: Update certificates or use trusted hosts
-
-[Full troubleshooting guide →](plugins/hal-9000/TROUBLESHOOTING.md)
+- git (aod only - for worktrees)
 
 **Optional:**
 - macOS + DEVONthink Pro/Server (for DEVONthink MCP)
@@ -186,35 +202,22 @@ Both templates backup existing files before installation.
 
 ## Troubleshooting
 
-**MCP servers not appearing:**
-- Restart Claude Code completely (⌘Q)
-- Check config: `cat ~/Library/Application\ Support/Claude/claude_desktop_config.json`
+**Installation Issues:**
+- **PEP 668 errors**: Automatically handled by installer (v1.1.0+)
+- **Command not found after install**: Add `~/.local/bin` to your PATH
+- **SSL Certificate errors**: Update certificates or use trusted hosts
 
-**aod sessions not starting:**
-- Verify Docker is running: `docker ps`
-- Check tmux is installed: `which tmux`
-- Try: `aod-cleanup` then retry
+**Runtime Issues:**
+- **MCP servers not appearing**: Restart Claude Code completely (⌘Q)
+- **hal9000/aod sessions not starting**: Verify Docker is running (`docker ps`), check tmux (`which tmux`), try `hal9000-cleanup` or `aod-cleanup` then retry
+- **Python/Node commands not found**: `export PATH="$HOME/.local/bin:$PATH"`, restart shell
 
-**Python/Node commands not found:**
-- Add to PATH: `export PATH="$HOME/.local/bin:$PATH"`
-- Restart shell or `source ~/.bashrc`
-
-**Installation fails:**
-- Check prerequisites: `python3 --version`, `node --version`
-- Re-run installer (prompts before overwriting)
-- Check logs for specific errors
-
-[Complete troubleshooting guide →](docs/TROUBLESHOOTING.md)
-
-## Foundation Tools
-
-aod uses ClaudeBox for containerization:
-
-**ClaudeBox** - Containerized development: `claudebox run --profile python`
+[Full troubleshooting guide →](plugins/hal-9000/TROUBLESHOOTING.md)
 
 ## Documentation
 
-- **[Cheat Sheet](CHEATSHEET.md)** - Quick reference for aod, tmux, tmux-cli, and terminal tools
+- **[Cheat Sheet](CHEATSHEET.md)** - Quick reference for hal9000, aod, tmux, tmux-cli, and terminal tools
+- [hal9000 (Containerized Claude)](plugins/hal-9000/hal9000/README.md)
 - [aod (Army of Darkness)](plugins/hal-9000/aod/README.md)
 - [Agent Usage](plugins/hal-9000/AGENTS.md)
 - [ChromaDB MCP](plugins/hal-9000/mcp-servers/chromadb/README.md)

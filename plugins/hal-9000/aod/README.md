@@ -1,12 +1,14 @@
 # aod (Army of Darkness)
 
-Multi-branch parallel development using ClaudeBox containers with git worktrees and tmux sessions.
+Multi-branch parallel development using Docker containers with git worktrees and tmux sessions.
 
 ## Overview
 
-aod (Army of Darkness) orchestrates multiple isolated development environments simultaneously. Each environment consists of a git worktree, tmux session, and ClaudeBox container. This enables working on different branches in parallel without switching contexts or losing state.
+aod (Army of Darkness) orchestrates multiple isolated development environments simultaneously. Each environment consists of a git worktree, tmux session, and Docker container running the hal-9000 image. This enables working on different branches in parallel without switching contexts or losing state.
 
-Inspired by claude-squad's multi-session workflow concept, aod is an independent implementation using bash scripting, tmux, and ClaudeBox containers instead of Go. Each branch runs in complete isolation with its own container, filesystem state, and terminal session.
+Inspired by claude-squad's multi-session workflow concept, aod is an independent implementation using bash scripting, tmux, and Docker containers. Each branch runs in complete isolation with its own container, filesystem state, and terminal session.
+
+**v1.2.0:** Containers now include pre-installed MCP servers (Memory Bank, ChromaDB, Sequential Thinking) with automatic configuration. Zero manual setup required.
 
 ## Architecture
 
@@ -14,33 +16,54 @@ Inspired by claude-squad's multi-session workflow concept, aod is an independent
 aod (Orchestrator)
     │
     ├── Branch: feature/auth
-    │   └── Worktree → tmux session → ClaudeBox (Python, Slot 1)
+    │   └── Worktree → tmux session → hal-9000 container (Slot 1)
+    │       └── Claude CLI + MCP servers (Memory Bank, ChromaDB, Sequential Thinking)
     │
     ├── Branch: feature/api
-    │   └── Worktree → tmux session → ClaudeBox (Node, Slot 2)
+    │   └── Worktree → tmux session → hal-9000 container (Slot 2)
+    │       └── Claude CLI + MCP servers
     │
-    ├── Branch: bugfix/validation
-    │   └── Worktree → tmux session → ClaudeBox (Python, Slot 3)
-    │
-    └── Branch: feature/frontend
-        └── Worktree → tmux session → ClaudeBox (Node, Slot 4)
+    └── Branch: bugfix/validation
+        └── Worktree → tmux session → hal-9000 container (Slot 3)
+            └── Claude CLI + MCP servers
 ```
 
 **Components:**
 - **Git Worktrees** - Independent checkouts sharing one .git directory
 - **Tmux Sessions** - Persistent terminals that survive disconnections
-- **ClaudeBox Containers** - Isolated Docker environments with language profiles
+- **hal-9000 Containers** - Docker containers with Claude CLI and pre-installed MCP servers
 - **Slot System** - Auto-assigned unique identifiers preventing port conflicts
 - **Session Context** - Auto-generated `CLAUDE.md` in each worktree with session info
+- **Shared Memory Bank** - Host's `~/memory-bank` mounted for cross-container data sharing
+
+**v1.2.0 Container Architecture:**
+```
+┌─────────────────────────────────────────────────────────┐
+│ hal-9000 Container (ghcr.io/hellblazer/hal-9000:latest) │
+├─────────────────────────────────────────────────────────┤
+│ Claude CLI 2.0.69                                       │
+│ MCP Servers (pre-installed, auto-configured):           │
+│   ├── mcp-server-memory-bank                            │
+│   ├── mcp-server-sequential-thinking                    │
+│   └── chroma-mcp (ephemeral or cloud mode)              │
+│ Tools: tmux-cli, vault, env-safe                        │
+│ Agents: 12 custom agents linked from /hal-9000          │
+├─────────────────────────────────────────────────────────┤
+│ Mounts:                                                 │
+│   /workspace     ← git worktree                         │
+│   /root/.claude  ← writable config (per-container)      │
+│   /hal-9000      ← agents, tools, commands (read-only)  │
+│   /root/memory-bank ← shared with host ~/memory-bank    │
+└─────────────────────────────────────────────────────────┘
+```
 
 ## Prerequisites
 
-- ClaudeBox installed and working (`claudebox run` succeeds)
 - git (version control)
 - tmux (terminal multiplexer)
-- docker (container runtime)
+- docker (container runtime, must be running)
 
-The hal-9000 installer adds aod (Army of Darkness) scripts to PATH automatically.
+The hal-9000 installer adds aod scripts to PATH automatically.
 
 ## Quick Start
 
@@ -69,7 +92,7 @@ aod aod.conf
 This creates:
 - Git worktrees in `~/.aod/worktrees/`
 - Tmux sessions named `aod-{branch}`
-- ClaudeBox containers with unique slot numbers
+- hal-9000 containers with unique slot numbers
 - Session metadata in `~/.aod/sessions.log`
 
 ### 3. Work with Sessions
@@ -119,7 +142,7 @@ branch:profile:description
 | Field | Required | Description |
 |-------|----------|-------------|
 | `branch` | Yes | Git branch name (created from HEAD if missing) |
-| `profile` | No | ClaudeBox profile(s), comma-separated |
+| `profile` | No | Language profile(s), comma-separated (python, node, java) |
 | `description` | No | Task description for reference |
 
 ### Examples
@@ -172,24 +195,30 @@ tmux list-sessions
 
 Sessions persist across terminal disconnections. Attach and detach freely without losing state.
 
-### ClaudeBox Containers
+### hal-9000 Containers
 
-Each session runs a ClaudeBox container with:
+Each session runs a hal-9000 container with:
 - Auto-assigned slot number (prevents port conflicts)
+- Pre-installed Claude CLI and MCP servers
 - Specified language profile (python, node, etc.)
 - Isolated filesystem and network
 - Unique container name
+- Auto-configured MCP servers (Memory Bank, ChromaDB, Sequential Thinking)
 
 ```bash
 docker ps
-# claudebox-myproject-abc123-slot1  # feature/auth
-# claudebox-myproject-def456-slot2  # feature/api
-# claudebox-myproject-ghi789-slot3  # bugfix/validation
+# aod-myproject-abc123-slot1  # feature/auth
+# aod-myproject-def456-slot2  # feature/api
+# aod-myproject-ghi789-slot3  # bugfix/validation
 ```
 
-Containers share the host's `~/.claudebox/hal-9000` directory for MCP servers and agents.
+Containers mount the host's `~/.claudebox/hal-9000` directory for agents and tools, plus `~/memory-bank` for shared Memory Bank access across containers.
 
-**Performance Optimization (v1.1.0+):** All containers share a single installation of claude-code-tools and other utilities mounted from `~/.claudebox/hal-9000/tools/bin`. No per-container downloads - first container starts instantly, subsequent containers are even faster.
+**v1.2.0 Features:**
+- MCP servers pre-installed in Docker image (no download delay)
+- Auto-configured on container startup
+- Shared Memory Bank for cross-container coordination
+- ChromaDB supports ephemeral or cloud mode (auto-detected from env vars)
 
 ### State Tracking
 
@@ -697,15 +726,16 @@ aod-cleanup
 
 ## Integration Points
 
-### With ClaudeBox
+### Container Architecture
 
-aod (Army of Darkness) uses ClaudeBox's slot system for isolation. Each session gets unique slot preventing port conflicts.
-
-Containers mount `~/.claudebox/hal-9000` for MCP servers and agents. All sessions share these components.
+aod uses the hal-9000 Docker image for containerized Claude instances. Each session gets:
+- Unique slot number preventing port conflicts
+- Pre-installed Claude CLI, MCP servers, and tools
+- Shared mount points for agents and Memory Bank
 
 ### Inspiration
 
-aod implements a parallel multi-session workflow inspired by claude-squad, using bash and tmux instead of Go. Uses ClaudeBox containers for isolation rather than bare Claude Code instances.
+aod implements a parallel multi-session workflow inspired by claude-squad, using bash and tmux instead of Go. Uses Docker containers for isolation rather than bare Claude Code instances.
 
 ### With Git
 
@@ -746,24 +776,23 @@ Don't run untrusted code in aod sessions without additional sandboxing.
 **Startup time:** 5-10 seconds per session
 - Git worktree creation: 1-2s
 - Tmux session: <1s
-- ClaudeBox container: 3-7s
+- hal-9000 container: 3-7s
 
-**v1.1.0+ Optimization - Shared Tool Installation:**
+**v1.2.0 Architecture - Pre-installed MCP Servers:**
 
-Previously, each container downloaded and installed claude-code-tools independently, adding 10-30 seconds per container and consuming redundant bandwidth/disk space.
+All tools and MCP servers are pre-installed in the Docker image:
+- Claude CLI, claude-code-tools, Memory Bank, ChromaDB, Sequential Thinking
+- Zero per-container downloads - instant availability
+- MCP servers auto-configured on container startup
+- First container: ~5 seconds (image pull once, then instant)
+- Nth container: ~5 seconds (reuses cached image)
 
-**Now (v1.1.0+):**
-- Tools installed ONCE to `~/.claudebox/hal-9000/tools/bin` during initial setup
-- All containers mount and share this single installation via `/hal-9000/tools/bin`
-- **Zero per-container downloads** - instant tool availability
-- **First container**: No delay (tools already installed)
-- **Nth container**: No delay (reuses shared installation)
-
-**Benefits:**
-- Faster container startup (eliminates 10-30s tool installation)
-- Lower bandwidth usage (one download vs. N downloads)
-- Reduced disk usage (single installation vs. N copies)
-- Consistent tool versions across all containers
+**v1.2.0 MCP Server Architecture:**
+- MCP servers run INSIDE each container (not on host)
+- Each container has independent MCP server instances
+- Memory Bank shared via host mount (`~/memory-bank`)
+- ChromaDB ephemeral by default, or cloud mode with env vars
+- No host-side MCP server setup required
 
 **Resource usage per session:**
 - Disk: ~500MB (worktree copy-on-write)
@@ -774,8 +803,6 @@ Previously, each container downloaded and installed claude-code-tools independen
 - 1-4 sessions: Comfortable on most machines
 - 5-8 sessions: May require resource monitoring
 - 9+ sessions: Consider cleanup of idle sessions
-
-**Note:** MCP servers (ChromaDB, Memory Bank, etc.) run on the HOST machine, not in containers. Containers communicate with MCP servers through Claude Desktop, so there's no MCP server overhead per container.
 
 ## Using tmux-cli with aod
 

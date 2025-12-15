@@ -52,23 +52,23 @@ die() {
 # Check prerequisites
 check_prerequisites() {
     local missing=()
-    
+
     command -v git >/dev/null || missing+=("git")
     command -v tmux >/dev/null || missing+=("tmux")
     command -v docker >/dev/null || missing+=("docker")
-    
-    # Check if claudebox is available
-    if ! command -v claudebox >/dev/null && [[ ! -x "$SCRIPT_DIR/claudebox.sh" ]]; then
-        missing+=("claudebox")
-    fi
-    
+
     if [[ ${#missing[@]} -gt 0 ]]; then
         die "Missing required tools: ${missing[*]}"
     fi
-    
+
     # Check if we're in a git repository
     if ! git rev-parse --git-dir >/dev/null 2>&1; then
         die "Not in a git repository"
+    fi
+
+    # Verify Docker is running
+    if ! docker ps >/dev/null 2>&1; then
+        die "Docker is not running. Please start Docker and try again."
     fi
 }
 
@@ -310,14 +310,89 @@ EOF
     info "Created CLAUDE.md in worktree"
 }
 
-# Launch ClaudeBox in tmux session
+# Inject MCP server configuration into settings.json
+inject_mcp_config() {
+    local settings_file="$1"
+
+    # Create settings.json if it doesn't exist
+    if [[ ! -f "$settings_file" ]]; then
+        echo '{}' > "$settings_file"
+    fi
+
+    # Determine ChromaDB client type based on environment variables
+    local chromadb_client_type="ephemeral"
+    local chromadb_args='["--client-type", "ephemeral"]'
+    if [[ -n "${CHROMADB_TENANT:-}" ]] && [[ -n "${CHROMADB_API_KEY:-}" ]]; then
+        chromadb_client_type="cloud"
+        chromadb_args='["--client-type", "cloud"]'
+        info "ChromaDB configured for cloud mode"
+    fi
+
+    # MCP server configuration for container
+    # Uses globally installed npm packages (no npx download needed)
+    local mcp_config
+    mcp_config=$(cat <<MCPEOF
+{
+  "mcpServers": {
+    "memory-bank": {
+      "command": "mcp-server-memory-bank",
+      "args": [],
+      "env": {
+        "MEMORY_BANK_ROOT": "/root/memory-bank"
+      }
+    },
+    "sequential-thinking": {
+      "command": "mcp-server-sequential-thinking",
+      "args": []
+    },
+    "chromadb": {
+      "command": "chroma-mcp",
+      "args": $chromadb_args,
+      "env": {}
+    }
+  }
+}
+MCPEOF
+)
+
+    # Merge MCP config into existing settings using Python (available in container)
+    # For now, just ensure mcpServers key exists - Python in container will handle full merge
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c "
+import json
+import sys
+
+settings_file = '$settings_file'
+mcp_config = $mcp_config
+
+try:
+    with open(settings_file, 'r') as f:
+        settings = json.load(f)
+except (json.JSONDecodeError, FileNotFoundError):
+    settings = {}
+
+# Merge mcpServers (don't overwrite existing)
+if 'mcpServers' not in settings:
+    settings['mcpServers'] = {}
+settings['mcpServers'].update(mcp_config.get('mcpServers', {}))
+
+with open(settings_file, 'w') as f:
+    json.dump(settings, f, indent=2)
+" 2>/dev/null || warn "Could not inject MCP config (Python not available)"
+    else
+        warn "Python not available for MCP config injection"
+    fi
+}
+
+# Launch Docker container in tmux session
 launch_session() {
     local session_name="$1"
     local worktree_dir="$2"
     local slot="$3"
     local profile="$4"
+    local branch="$5"
 
-    info "Launching ClaudeBox session: $session_name (slot $slot)"
+    info "Launching aod session: $session_name (slot $slot)"
 
     # Check if session already exists
     if tmux has-session -t "$session_name" 2>/dev/null; then
@@ -335,22 +410,64 @@ launch_session() {
         docker rm -f "$existing_container" >/dev/null 2>&1 || true
     fi
 
-    # Determine claudebox command
-    local claudebox_cmd
-    if command -v claudebox >/dev/null; then
-        claudebox_cmd="claudebox"
-    else
-        claudebox_cmd="$SCRIPT_DIR/claudebox.sh"
-    fi
+    # Build Docker command with Claude CLI + MCP server access
+    # MCP servers run inside container (pre-installed in image)
+    local container_name="aod-${session_name}-slot${slot}"
+    local image="ghcr.io/hellblazer/hal-9000:latest"
 
-    # Build claudebox command with optimized image
-    local cmd="cd '$worktree_dir' && $claudebox_cmd run --image ghcr.io/hellblazer/hal-9000:latest --slot $slot"
+    # Select image based on profile (if profile-specific images exist)
     if [[ -n "$profile" ]]; then
-        cmd="$cmd --profile $profile"
+        # Try profile-specific image first, fall back to base
+        if docker image inspect "ghcr.io/hellblazer/hal-9000:${profile}" >/dev/null 2>&1; then
+            image="ghcr.io/hellblazer/hal-9000:${profile}"
+        fi
     fi
 
-    # Create tmux session
-    tmux new-session -d -s "$session_name" -c "$worktree_dir" "$cmd"
+    # Create container-specific .claude directory for writable state
+    local container_claude_dir="$HOME/.aod/claude/$session_name"
+    mkdir -p "$container_claude_dir"
+
+    # Copy host Claude config (for auth/settings) but allow container to write
+    if [[ -d ~/.claude ]]; then
+        # Copy config files but not session-specific state
+        [[ -f ~/.claude/config.json ]] && cp ~/.claude/config.json "$container_claude_dir/" 2>/dev/null || true
+        [[ -f ~/.claude/settings.json ]] && cp ~/.claude/settings.json "$container_claude_dir/" 2>/dev/null || true
+    fi
+
+    # Inject MCP server configuration into container's settings.json
+    inject_mcp_config "$container_claude_dir/settings.json"
+
+    # Build docker run command with full hal-9000 integration
+    # Pass through ChromaDB environment variables if set (for cloud mode)
+    local chromadb_env=""
+    [[ -n "${CHROMADB_TENANT:-}" ]] && chromadb_env="$chromadb_env -e CHROMADB_TENANT"
+    [[ -n "${CHROMADB_DATABASE:-}" ]] && chromadb_env="$chromadb_env -e CHROMADB_DATABASE"
+    [[ -n "${CHROMADB_API_KEY:-}" ]] && chromadb_env="$chromadb_env -e CHROMADB_API_KEY"
+
+    # Mount host's memory bank for shared access across containers
+    local memory_bank_mount=""
+    if [[ -d "$HOME/memory-bank" ]]; then
+        memory_bank_mount="-v $HOME/memory-bank:/root/memory-bank"
+    fi
+
+    local docker_cmd="docker run -it --rm \
+        --name '$container_name' \
+        --network host \
+        -v '$worktree_dir:/workspace' \
+        -v '$container_claude_dir:/root/.claude' \
+        -v ~/.claudebox/hal-9000:/hal-9000:ro \
+        $memory_bank_mount \
+        -w /workspace \
+        -e AOD_SESSION='$session_name' \
+        -e AOD_BRANCH='$branch' \
+        -e AOD_SLOT='$slot' \
+        -e ANTHROPIC_API_KEY \
+        $chromadb_env \
+        $image"
+
+    # Create tmux session and launch container
+    # Container CMD will run setup.sh then start bash (or claude if configured)
+    tmux new-session -d -s "$session_name" -c "$worktree_dir" "$docker_cmd"
 
     success "Session launched: $session_name"
     info "  Worktree: $worktree_dir"
@@ -452,7 +569,7 @@ main() {
             create_session_claudemd "$session_name" "$branch" "$worktree_dir" "$profile"
 
             # Launch session
-            if launch_session "$session_name" "$worktree_dir" "$slot_num" "$profile"; then
+            if launch_session "$session_name" "$worktree_dir" "$slot_num" "$profile" "$branch"; then
                 # Update state
                 update_state "$session_name" "$branch" "$worktree_dir" "$slot_num" "$profile"
 

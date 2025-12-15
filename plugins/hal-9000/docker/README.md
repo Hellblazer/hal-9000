@@ -1,21 +1,31 @@
 # HAL-9000 Docker Images
 
-Pre-built Docker images for optimized ClaudeBox/aod usage.
+Pre-built Docker images for aod multi-branch development with Claude CLI and MCP servers.
 
-## ghcr.io/hellblazer/hal-9000
+## ghcr.io/hellblazer/hal-9000 Profile Images
 
-Optimized base image with pre-installed tools for instant container startup.
+Optimized container images with pre-installed Claude CLI, MCP servers, and tools for instant startup. Available in multiple language profiles.
 
-**Published to GitHub Container Registry:** `ghcr.io/hellblazer/hal-9000:latest`
+**Published to GitHub Container Registry**
 
-### Features
+### Available Images
 
+| Image | Profile | Includes |
+|-------|---------|----------|
+| `ghcr.io/hellblazer/hal-9000:latest` | **Base** | Claude CLI, MCP servers, claude-code-tools, git, tmux, uv |
+| `ghcr.io/hellblazer/hal-9000:python` | **Python** | Base + Python 3.11, pip, venv |
+| `ghcr.io/hellblazer/hal-9000:node` | **Node.js** | Base + Node 20 LTS, npm, yarn, pnpm |
+| `ghcr.io/hellblazer/hal-9000:java` | **Java** | Base + Java 21 LTS, Maven, Gradle |
+
+### Features (v1.2.0)
+
+- ✅ **Claude CLI pre-installed** - No per-container Claude installation
+- ✅ **MCP servers included** - Memory Bank, ChromaDB, Sequential Thinking
+- ✅ **Auto-configured** - MCP servers auto-configured on container startup
 - ✅ **Zero download time** - All tools pre-installed
-- ✅ **Fast startup** - No per-container installation (~30s faster)
+- ✅ **Language profiles** - Python, Node.js, Java ready to use
 - ✅ **Docker layer caching** - Efficient builds
-- ✅ **claude-code-tools** - tmux-cli, vault, env-safe, aichat
-- ✅ **uv** - Fast Python package manager
-- ✅ **Common dev tools** - git, tmux, Python 3
+- ✅ **claude-code-tools** - tmux-cli, vault, env-safe, aichat (all images)
 - ✅ **Public & free** - No rate limits, no authentication required
 
 ### Quick Start
@@ -27,11 +37,27 @@ docker pull ghcr.io/hellblazer/hal-9000:latest
 
 aod automatically uses this image - no configuration needed.
 
-### Build (Optional)
+### Build Profiles (Optional)
 
+**Build all profiles:**
 ```bash
-cd /path/to/hal-9000/plugins/hal-9000
-docker build -f docker/Dockerfile.hal9000 -t ghcr.io/hellblazer/hal-9000:latest .
+cd /path/to/hal-9000/plugins/hal-9000/docker
+./build-profiles.sh
+```
+
+**Build specific profiles:**
+```bash
+./build-profiles.sh python node  # Only Python and Node.js
+```
+
+**Build and push to registry:**
+```bash
+./build-profiles.sh --push
+```
+
+**Build single profile manually:**
+```bash
+docker build -f docker/Dockerfile.python -t ghcr.io/hellblazer/hal-9000:python .
 ```
 
 ### Use with aod
@@ -125,7 +151,7 @@ docker build -f docker/Dockerfile.hal9000 -t ghcr.io/hellblazer/hal-9000:latest 
 
 **Status:** Published to GitHub Container Registry
 - `ghcr.io/hellblazer/hal-9000:latest`
-- `ghcr.io/hellblazer/hal-9000:1.1.0`
+- `ghcr.io/hellblazer/hal-9000:1.2.0`
 
 **Prerequisites:**
 1. Create GitHub Personal Access Token with `write:packages` scope at https://github.com/settings/tokens

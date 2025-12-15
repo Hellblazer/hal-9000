@@ -1,6 +1,6 @@
 # HAL-9000 Cheat Sheet
 
-Quick reference for aod, tmux, tmux-cli, and terminal tools.
+Quick reference for aod, hal9000, tmux, tmux-cli, and terminal tools.
 
 ## aod (Army of Darkness)
 
@@ -77,6 +77,77 @@ aod-list
 # Done for the day
 aod-cleanup
 ```
+
+## hal9000 (Containerized Claude)
+
+### Single Container
+
+```bash
+# Launch in current directory
+hal9000 run
+
+# With Python profile
+hal9000 run --profile python
+
+# Specific directory, custom name
+hal9000 run --name myproject ~/projects/app
+
+# Detached (don't attach)
+hal9000 run --detach
+```
+
+### Multiple Sessions (Squad Mode)
+
+```bash
+# Launch N identical sessions
+hal9000 squad --sessions 3
+hal9000 squad --sessions 4 --profile python
+
+# From config file
+hal9000 squad tasks.conf
+```
+
+Config file format:
+```
+name:profile:description
+api-dev:node:API development
+ml-work:python:ML experiments
+```
+
+### Managing Sessions
+
+```bash
+# List all hal9000 sessions
+hal9000-list
+
+# Attach to session
+hal9000-attach hal9000-1
+
+# Send command to session
+hal9000-send hal9000-1 "npm install"
+
+# Send to all sessions
+hal9000-broadcast "git pull"
+
+# Stop single session
+hal9000-stop hal9000-1
+
+# Stop all sessions
+hal9000-cleanup
+```
+
+### hal9000 vs aod
+
+| Feature | hal9000 | aod |
+|---------|---------|-----|
+| Container launch | ✓ | ✓ |
+| Multi-session | ✓ | ✓ |
+| MCP servers | ✓ | ✓ |
+| Git worktrees | ✗ | ✓ |
+| Branch isolation | ✗ | ✓ |
+
+**Use hal9000** for: General containerized development, parallel tasks on same codebase
+**Use aod** for: Multi-branch development, feature isolation, PR reviews
 
 ## tmux Essentials
 

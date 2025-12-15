@@ -411,6 +411,7 @@ if [[ "$SKIP_HOST_ORCHESTRATION" == "false" ]]; then
     # Copy scripts
     echo "Installing aod (Army of Darkness) scripts to $INSTALL_BIN..."
     cp "$SCRIPT_DIR/aod/aod.sh" "$INSTALL_BIN/aod"
+    cp "$SCRIPT_DIR/aod/aod-init.sh" "$INSTALL_BIN/aod-init"
     cp "$SCRIPT_DIR/aod/aod-list.sh" "$INSTALL_BIN/aod-list"
     cp "$SCRIPT_DIR/aod/aod-attach.sh" "$INSTALL_BIN/aod-attach"
     cp "$SCRIPT_DIR/aod/aod-stop.sh" "$INSTALL_BIN/aod-stop"
@@ -426,7 +427,22 @@ if [[ "$SKIP_HOST_ORCHESTRATION" == "false" ]]; then
     fi
 
     echo -e "${GREEN}aod (Army of Darkness) installed successfully${NC}"
-    echo "Commands: aod, aod-list, aod-attach, aod-stop, aod-cleanup, aod-send, aod-broadcast"
+    echo "Commands: aod, aod-init, aod-list, aod-attach, aod-stop, aod-cleanup, aod-send, aod-broadcast"
+
+    # Install hal9000 scripts (containerized Claude without git worktrees)
+    echo ""
+    echo "Installing hal9000 (containerized Claude) scripts to $INSTALL_BIN..."
+    cp "$SCRIPT_DIR/hal9000/hal9000.sh" "$INSTALL_BIN/hal9000"
+    cp "$SCRIPT_DIR/hal9000/hal9000-list.sh" "$INSTALL_BIN/hal9000-list"
+    cp "$SCRIPT_DIR/hal9000/hal9000-attach.sh" "$INSTALL_BIN/hal9000-attach"
+    cp "$SCRIPT_DIR/hal9000/hal9000-stop.sh" "$INSTALL_BIN/hal9000-stop"
+    cp "$SCRIPT_DIR/hal9000/hal9000-cleanup.sh" "$INSTALL_BIN/hal9000-cleanup"
+    cp "$SCRIPT_DIR/hal9000/hal9000-send.sh" "$INSTALL_BIN/hal9000-send"
+    cp "$SCRIPT_DIR/hal9000/hal9000-broadcast.sh" "$INSTALL_BIN/hal9000-broadcast"
+    chmod +x "$INSTALL_BIN"/hal9000 "$INSTALL_BIN"/hal9000-*
+
+    echo -e "${GREEN}hal9000 installed successfully${NC}"
+    echo "Commands: hal9000 run, hal9000 squad, hal9000-list, hal9000-attach, hal9000-stop, hal9000-cleanup, hal9000-send, hal9000-broadcast"
 fi
 # End of SKIP_HOST_ORCHESTRATION block
 
@@ -575,11 +591,19 @@ EOF
     cp "$SCRIPT_DIR/aod"/*.sh "$SCRIPT_DIR/aod"/aod.conf.example "$CLAUDEBOX_SHARED_DIR/aod/"
     chmod +x "$CLAUDEBOX_SHARED_DIR/aod"/*.sh
 
-    # Copy hal-9000 utility scripts to shared location
-    echo "Copying hal-9000 utility scripts..."
-    mkdir -p "$CLAUDEBOX_SHARED_DIR/scripts"
-    cp "$SCRIPT_DIR/scripts"/*.sh "$CLAUDEBOX_SHARED_DIR/scripts/"
-    chmod +x "$CLAUDEBOX_SHARED_DIR/scripts"/*.sh
+    # Copy hal9000 scripts to shared location
+    echo "Copying hal9000 scripts..."
+    mkdir -p "$CLAUDEBOX_SHARED_DIR/hal9000"
+    cp "$SCRIPT_DIR/hal9000"/*.sh "$CLAUDEBOX_SHARED_DIR/hal9000/"
+    chmod +x "$CLAUDEBOX_SHARED_DIR/hal9000"/*.sh
+
+    # Copy hal-9000 utility scripts to shared location (if any exist)
+    if ls "$SCRIPT_DIR/scripts"/*.sh >/dev/null 2>&1; then
+        echo "Copying hal-9000 utility scripts..."
+        mkdir -p "$CLAUDEBOX_SHARED_DIR/scripts"
+        cp "$SCRIPT_DIR/scripts"/*.sh "$CLAUDEBOX_SHARED_DIR/scripts/"
+        chmod +x "$CLAUDEBOX_SHARED_DIR/scripts"/*.sh
+    fi
 
     # Create setup script for ClaudeBox containers
     cat > "$CLAUDEBOX_SHARED_DIR/setup.sh" << 'EOF'

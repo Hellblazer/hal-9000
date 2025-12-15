@@ -1,0 +1,28 @@
+# HAL-9000 Python Profile
+# Extends base image with Python development tools
+#
+# Build: docker build -f docker/Dockerfile.python -t ghcr.io/hellblazer/hal-9000:python .
+# Publish: docker push ghcr.io/hellblazer/hal-9000:python
+
+FROM ghcr.io/hellblazer/hal-9000:latest
+
+LABEL profile="python"
+LABEL description="Python development with Claude CLI, uv, pip, venv"
+
+# Install Python and development tools
+RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3.11-dev \
+    python3.11-venv \
+    python3-pip \
+    python-is-python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Verify Python installation
+RUN python --version && pip --version
+
+# Set up default venv location
+ENV VIRTUAL_ENV_DIR="/workspace/.venv"
+
+# Inherit CMD from base (runs setup.sh then bash)
+# Or start Claude directly: CMD ["bash", "-c", "source /hal-9000/setup.sh && exec claude"]

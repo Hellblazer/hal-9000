@@ -1,6 +1,6 @@
 # HAL-9000 Plugin
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
 [![Container](https://img.shields.io/badge/docker-optimized-success?logo=docker)](../../docker/README.md)
 [![MCP Servers](https://img.shields.io/badge/MCP-4%20servers-purple)](mcp-servers/)
 [![Custom Agents](https://img.shields.io/badge/agents-12-orange)](AGENTS.md)
@@ -51,11 +51,17 @@ Productivity tools for Claude Code: aod multi-branch development, MCP servers, c
 - **find-session** - Search across agent sessions
 - **Safety hooks** - Git, file, and environment protection
 
-### Multi-Branch Development
+### Development Environments
 
-- aod (Army of Darkness) - Multi-branch parallel development with git worktrees and isolated containers
+**ClaudeBox** - Quick isolated Claude sessions
+- `claudebox run --profile python` - One-off containerized session
+- Good for: testing, experiments, different codebases, clean environments
+- [ClaudeBox documentation →](https://github.com/RchGrav/claudebox)
 
-aod uses ClaudeBox for containerization. Inspired by claude-squad's multi-session workflow concept, but is an independent implementation using bash and tmux.
+**aod (Army of Darkness)** - Multi-branch parallel development
+- Uses git worktrees + tmux + hal-9000 containers with pre-installed MCP servers
+- Good for: working on multiple branches of same repo simultaneously
+- [aod documentation →](aod/README.md)
 
 ## Installation
 
@@ -151,7 +157,7 @@ aod-broadcast "cmd"              # Send to all sessions
 aod-cleanup                      # Stop all sessions
 ```
 
-**v1.1.0+ Performance:** Tools installed once to `~/.claudebox/hal-9000/tools/bin` and shared across all containers. Zero per-container downloads, 10-30 seconds faster startup.
+**v1.2.0 Architecture:** MCP servers (Memory Bank, ChromaDB, Sequential Thinking) pre-installed in Docker image and auto-configured on container startup. Shared Memory Bank via host mount for cross-container coordination.
 
 ### Foundation Tools
 

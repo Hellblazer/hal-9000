@@ -31,8 +31,11 @@ if ! command -v tmux-cli &> /dev/null; then
     exit 1
 fi
 
-# Get all aod sessions
-mapfile -t sessions < <(tmux list-sessions 2>/dev/null | grep "^aod-" | cut -d':' -f1 || true)
+# Get all aod sessions (portable - no mapfile for macOS bash 3.2)
+sessions=()
+while IFS= read -r session; do
+    [[ -n "$session" ]] && sessions+=("$session")
+done < <(tmux list-sessions 2>/dev/null | grep "^aod-" | cut -d':' -f1 || true)
 
 if [[ ${#sessions[@]} -eq 0 ]]; then
     printf "${YELLOW}⚠${NC} No aod sessions running\n"

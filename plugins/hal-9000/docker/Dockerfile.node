@@ -1,0 +1,24 @@
+# HAL-9000 Node.js Profile
+# Extends base image with additional Node.js package managers
+#
+# Build: docker build -f docker/Dockerfile.node -t ghcr.io/hellblazer/hal-9000:node .
+# Publish: docker push ghcr.io/hellblazer/hal-9000:node
+
+FROM ghcr.io/hellblazer/hal-9000:latest
+
+LABEL profile="node"
+LABEL description="Node.js development with Claude CLI, npm, yarn, pnpm"
+
+# Note: Node.js 20 LTS already installed in base image
+
+# Install additional package managers
+RUN npm install -g yarn pnpm
+
+# Verify installation
+RUN echo "Node.js tools:" \
+    && node --version \
+    && npm --version \
+    && yarn --version \
+    && pnpm --version
+
+# Inherit CMD from base (runs setup.sh then bash)

@@ -1,7 +1,7 @@
 {
   "name": "hal-9000",
-  "description": "Complete Claude Code productivity suite: aod (Army of Darkness) multi-branch development, MCP servers (ChromaDB, Memory Bank, Sequential Thinking, DEVONthink), 12 custom agents, session management, terminal automation (tmux-cli), and safety hooks",
-  "version": "1.1.0",
+  "description": "Complete Claude Code productivity suite: aod (Army of Darkness) multi-branch development, hal9000 containerized Claude, MCP servers (ChromaDB, Memory Bank, Sequential Thinking, DEVONthink), 12 custom agents, session management, terminal automation (tmux-cli), and safety hooks",
+  "version": "1.2.0",
   "author": {
     "name": "Hal Hildebrand",
     "url": "https://github.com/Hellblazer"
@@ -26,7 +26,7 @@
     "agents",
     "custom-agents",
     "java-development",
-    "claudebox",
+    "hal9000",
     "aod",
     "multi-branch",
     "docker"
@@ -37,7 +37,7 @@
       "command": "chroma-mcp",
       "args": [
         "--client-type", "cloud",
-        "--tenant": "${CHROMADB_TENANT}",
+        "--tenant", "${CHROMADB_TENANT}",
         "--database", "${CHROMADB_DATABASE}",
         "--api-key", "${CHROMADB_API_KEY}"
       ],
@@ -77,6 +77,6 @@
   },
   "install": {
     "script": "./install.sh",
-    "postInstall": "Installation complete! Please restart Claude Code to load all components.\n\nInstalled:\n• MCP Servers: ChromaDB, Memory Bank, Sequential Thinking, DEVONthink\n• Custom Agents: 12 specialized agents (java-developer, code-review-expert, etc.)\n• Session Commands: /check, /load, /sessions, /session-delete\n• Terminal Tools: tmux-cli, find-session, vault, env-safe\n• Safety Hooks: Git, file, and environment protection\n• aod (Army of Darkness): Multi-branch parallel development\n\nNext steps:\n1. Configure ChromaDB environment variables (if using cloud mode)\n2. Try: aod --help, aod-list, tmux-cli --help\n3. Test: /sessions, claudebox run\n4. See AGENTS.md for agent documentation"
+    "postInstall": "Installation complete! Please restart Claude Code to load all components.\n\nInstalled:\n• MCP Servers: ChromaDB, Memory Bank, Sequential Thinking, DEVONthink\n• Custom Agents: 12 specialized agents (java-developer, code-review-expert, etc.)\n• Session Commands: /check, /load, /sessions, /session-delete\n• Terminal Tools: tmux-cli, find-session, vault, env-safe\n• Safety Hooks: Git, file, and environment protection\n• aod (Army of Darkness): Multi-branch parallel development with git worktrees\n• hal9000: Containerized Claude for isolated sessions\n\nNext steps:\n1. Configure ChromaDB environment variables (if using cloud mode)\n2. Try: aod --help, hal9000 --help, tmux-cli --help\n3. Test: /sessions, hal9000 run, aod-list\n4. See AGENTS.md for agent documentation"
   }
 }

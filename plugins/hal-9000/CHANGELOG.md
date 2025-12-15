@@ -5,6 +5,47 @@ All notable changes to hal-9000 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2025-12-15
+
+### Added
+- **Pre-installed MCP servers in Docker image**:
+  - `mcp-server-memory-bank` (npm global)
+  - `mcp-server-sequential-thinking` (npm global)
+  - `chroma-mcp` (uv tool)
+- **Auto-configured MCP servers**: `inject_mcp_config()` function in aod.sh automatically configures MCP servers in container's settings.json
+- **Shared Memory Bank**: Host's `~/memory-bank` mounted to `/root/memory-bank` for bidirectional read/write access across containers
+- **ChromaDB cloud mode support**: Automatic detection and passthrough of `CHROMADB_TENANT`, `CHROMADB_DATABASE`, `CHROMADB_API_KEY` environment variables
+- Python 3 pre-installed in base image for chroma-mcp
+
+### Changed
+- **Container architecture**: MCP servers now run INSIDE containers (previously required host setup)
+- Dockerfile.hal9000 updated to v1.2.0 with all MCP server dependencies
+- aod.sh now creates per-container writable `.claude` directories at `~/.aod/claude/$session_name`
+- Settings.json automatically populated with mcpServers configuration block
+- Memory Bank defaults to ephemeral in-container storage unless host's `~/memory-bank` exists
+
+### Fixed
+- **EROFS error**: Claude CLI can now write debug logs and session state (writable .claude directory)
+- MCP servers now accessible from inside containers without additional configuration
+- Agents directory properly synced to `~/.claudebox/hal-9000/agents/`
+
+### Architecture
+```
+Container (v1.2.0):
+├── Claude CLI 2.0.69
+├── MCP Servers (pre-installed, auto-configured)
+│   ├── mcp-server-memory-bank → /root/memory-bank (shared with host)
+│   ├── mcp-server-sequential-thinking
+│   └── chroma-mcp (ephemeral or cloud mode)
+├── /root/.claude (writable, per-container)
+└── /hal-9000 (agents, tools, commands - read-only mount)
+```
+
+### Validated
+- Memory Bank: bidirectional host/container read/write
+- ChromaDB: collection creation, document add/query, semantic search
+- Sequential Thinking: full MCP protocol initialization and tool execution
+
 ## [1.1.0] - 2024-12-14
 
 ### Added
