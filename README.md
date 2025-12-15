@@ -1,5 +1,9 @@
 # HAL-9000 Claude Marketplace
 
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
+[![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
+[![Container Registry](https://img.shields.io/badge/ghcr.io-hellblazer%2Fhal--9000-blue?logo=docker)](https://github.com/Hellblazer/hal-9000/pkgs/container/hal-9000)
+
 Claude Code productivity suite: multi-branch development, MCP servers, and custom agents.
 
 ## Quick Start

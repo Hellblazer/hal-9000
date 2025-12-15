@@ -1,5 +1,10 @@
 # HAL-9000 Plugin
 
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
+[![Container](https://img.shields.io/badge/docker-optimized-success?logo=docker)](../../docker/README.md)
+[![MCP Servers](https://img.shields.io/badge/MCP-4%20servers-purple)](mcp-servers/)
+[![Custom Agents](https://img.shields.io/badge/agents-12-orange)](AGENTS.md)
+
 Productivity tools for Claude Code: aod multi-branch development, MCP servers, custom agents, terminal automation, and safety tools.
 
 ## Components
