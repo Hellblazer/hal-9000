@@ -23,33 +23,19 @@ env:
   IMAGE_NAME: hellblazer/hal-9000
 
 jobs:
-  build-and-push:
+  # Build base image first (profiles depend on it)
+  build-base:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
 
-    strategy:
-      matrix:
-        include:
-          - profile: base
-            dockerfile: Dockerfile.hal9000
-            tags: |
-              latest
-              base
-          - profile: python
-            dockerfile: Dockerfile.python
-            tags: python
-          - profile: node
-            dockerfile: Dockerfile.node
-            tags: node
-          - profile: java
-            dockerfile: Dockerfile.java
-            tags: java
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -67,17 +53,62 @@ jobs:
           VERSION=$(jq -r '.version' plugins/hal-9000/.claude-plugin/plugin.json)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Generate Docker tags
-        id: tags
+      - name: Build and push base image
+        uses: docker/build-push-action@v5
+        with:
+          context: plugins/hal-9000
+          file: plugins/hal-9000/docker/Dockerfile.hal9000
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:base
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:base-${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          no-cache: ${{ github.event.inputs.force_rebuild == 'true' }}
+          platforms: linux/amd64,linux/arm64
+
+  # Build profile images (depend on base)
+  build-profiles:
+    needs: build-base
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        include:
+          - profile: python
+            dockerfile: Dockerfile.python
+          - profile: node
+            dockerfile: Dockerfile.node
+          - profile: java
+            dockerfile: Dockerfile.java
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from plugin.json
+        id: version
         run: |
-          TAGS=""
-          for tag in ${{ matrix.tags }}; do
-            TAGS="${TAGS}${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag},"
-            TAGS="${TAGS}${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}-${{ steps.version.outputs.version }},"
-          done
-          # Remove trailing comma
-          TAGS="${TAGS%,}"
-          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+          VERSION=$(jq -r '.version' plugins/hal-9000/.claude-plugin/plugin.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Build and push ${{ matrix.profile }}
         uses: docker/build-push-action@v5
@@ -85,7 +116,9 @@ jobs:
           context: plugins/hal-9000
           file: plugins/hal-9000/docker/${{ matrix.dockerfile }}
           push: true
-          tags: ${{ steps.tags.outputs.tags }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.profile }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.profile }}-${{ steps.version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           no-cache: ${{ github.event.inputs.force_rebuild == 'true' }}
@@ -94,4 +127,4 @@ jobs:
       - name: Summary
         run: |
           echo "### Built ${{ matrix.profile }} profile" >> $GITHUB_STEP_SUMMARY
-          echo "Tags: ${{ steps.tags.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "Tags: ${{ matrix.profile }}, ${{ matrix.profile }}-${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY

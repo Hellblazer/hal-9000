@@ -10,32 +10,19 @@ env:
   IMAGE_NAME: hellblazer/hal-9000
 
 jobs:
-  # Build and push all Docker images for release
-  docker:
+  # Build base image first (profiles depend on it)
+  build-base:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
 
-    strategy:
-      matrix:
-        include:
-          - profile: base
-            dockerfile: Dockerfile.hal9000
-            is_latest: true
-          - profile: python
-            dockerfile: Dockerfile.python
-            is_latest: false
-          - profile: node
-            dockerfile: Dockerfile.node
-            is_latest: false
-          - profile: java
-            dockerfile: Dockerfile.java
-            is_latest: false
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -53,23 +40,61 @@ jobs:
           VERSION="${GITHUB_REF#refs/tags/v}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Generate Docker tags
-        id: tags
+      - name: Build and push base image
+        uses: docker/build-push-action@v5
+        with:
+          context: plugins/hal-9000
+          file: plugins/hal-9000/docker/Dockerfile.hal9000
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:base
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:base-${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+  # Build profile images (depend on base)
+  build-profiles:
+    needs: build-base
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        include:
+          - profile: python
+            dockerfile: Dockerfile.python
+          - profile: node
+            dockerfile: Dockerfile.node
+          - profile: java
+            dockerfile: Dockerfile.java
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from tag
+        id: version
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          PROFILE="${{ matrix.profile }}"
-
-          if [[ "${{ matrix.is_latest }}" == "true" ]]; then
-            TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}"
-            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:base"
-            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:base-${VERSION}"
-          else
-            TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${PROFILE}"
-            TAGS="${TAGS},${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${PROFILE}-${VERSION}"
-          fi
-
-          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Build and push ${{ matrix.profile }}
         uses: docker/build-push-action@v5
@@ -77,14 +102,16 @@ jobs:
           context: plugins/hal-9000
           file: plugins/hal-9000/docker/${{ matrix.dockerfile }}
           push: true
-          tags: ${{ steps.tags.outputs.tags }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.profile }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.profile }}-${{ steps.version.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
 
   # Create GitHub Release
-  release:
-    needs: docker
+  create-release:
+    needs: build-profiles
     runs-on: ubuntu-latest
     permissions:
       contents: write
