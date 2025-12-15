@@ -601,6 +601,7 @@ ln -sf /hal-9000/agents/* ~/.claude/agents/ 2>/dev/null || true
 # Link aod (Army of Darkness) scripts to user bin
 mkdir -p ~/.local/bin
 ln -sf /hal-9000/aod/aod.sh ~/.local/bin/aod 2>/dev/null || true
+ln -sf /hal-9000/aod/aod-init.sh ~/.local/bin/aod-init 2>/dev/null || true
 ln -sf /hal-9000/aod/aod-list.sh ~/.local/bin/aod-list 2>/dev/null || true
 ln -sf /hal-9000/aod/aod-attach.sh ~/.local/bin/aod-attach 2>/dev/null || true
 ln -sf /hal-9000/aod/aod-stop.sh ~/.local/bin/aod-stop 2>/dev/null || true

@@ -100,25 +100,70 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-# Parse configuration file
+# Parse configuration file (supports YAML and simple formats)
 parse_config() {
     local config_file="$1"
-    
+
     if [[ ! -f "$config_file" ]]; then
         die "Configuration file not found: $config_file"
     fi
-    
-    # Simple key=value parser (Bash 3.2 compatible)
+
+    # Check if YAML format (by extension or content)
+    if [[ "$config_file" =~ \.(yml|yaml)$ ]] || grep -q "^tasks:" "$config_file" 2>/dev/null; then
+        parse_yaml_config "$config_file"
+    else
+        parse_simple_config "$config_file"
+    fi
+}
+
+# Parse YAML format configuration
+parse_yaml_config() {
+    local config_file="$1"
+
+    # Check if yq is available
+    if ! command -v yq >/dev/null 2>&1; then
+        warn "YAML config detected but 'yq' not found. Install with: brew install yq"
+        die "Cannot parse YAML config without 'yq'. Use simple format or install yq."
+    fi
+
+    # Parse YAML and convert to simple format
+    local tasks=()
+    local count
+    count=$(yq eval '.tasks | length' "$config_file" 2>/dev/null || echo "0")
+
+    if [[ "$count" -eq 0 ]]; then
+        die "No tasks found in YAML config"
+    fi
+
+    for ((i=0; i<count; i++)); do
+        local branch profile description
+        branch=$(yq eval ".tasks[$i].branch" "$config_file" 2>/dev/null || echo "")
+        profile=$(yq eval ".tasks[$i].profile" "$config_file" 2>/dev/null || echo "")
+        description=$(yq eval ".tasks[$i].description" "$config_file" 2>/dev/null || echo "")
+
+        if [[ -n "$branch" ]]; then
+            # Convert to simple format: branch:profile:description
+            tasks+=("${branch}:${profile}:${description}")
+        fi
+    done
+
+    printf '%s\n' "${tasks[@]}"
+}
+
+# Parse simple colon-separated format
+parse_simple_config() {
+    local config_file="$1"
+
     # Format: branch:profile:description
     local tasks=()
     while IFS= read -r line; do
         # Skip comments and empty lines
         [[ "$line" =~ ^[[:space:]]*# ]] && continue
         [[ -z "${line// /}" ]] && continue
-        
+
         tasks+=("$line")
     done < "$config_file"
-    
+
     printf '%s\n' "${tasks[@]}"
 }
 

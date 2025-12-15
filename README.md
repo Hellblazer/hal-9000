@@ -25,24 +25,35 @@ Browse marketplace → Install "hal-9000" → Run installer (choose mode when pr
 Multi-branch parallel development using ClaudeBox containers with git worktrees and tmux sessions
 
 ```bash
-# Create task configuration
-cat > aod.conf <<EOF
-feature/auth:python:Add OAuth2 authentication
-feature/api:node:Build REST API endpoints
-bugfix/validation:python:Fix input validation
+# Generate config template (YAML or simple format)
+aod-init
+
+# Or create YAML config manually
+cat > aod.yml <<EOF
+tasks:
+  - branch: feature/auth
+    profile: python
+    description: Add OAuth2 authentication
+
+  - branch: feature/api
+    profile: node
+    description: Build REST API endpoints
 EOF
 
 # Launch all sessions
-aod aod.conf
+aod aod.yml
 
-# List active sessions
-aod-list
+# Manage sessions
+aod-list                         # List active sessions
+aod-attach aod-feature-auth      # Attach to session
+aod-cleanup                      # Stop all sessions
+```
 
-# Attach to a session
-aod-attach aod-feature-auth
-
-# Stop all sessions
-aod-cleanup
+**Simple format** (still supported):
+```bash
+# Format: branch:profile:description
+feature/auth:python:Add OAuth2 authentication
+feature/api:node:Build REST API endpoints
 ```
 
 **Use cases:**
@@ -51,7 +62,7 @@ aod-cleanup
 - Bug triage across different branches
 - Experiment with different approaches
 
-Commands: `aod`, `aod-list`, `aod-attach`, `aod-stop`, `aod-cleanup`, `aod-send`, `aod-broadcast`
+Commands: `aod-init`, `aod`, `aod-list`, `aod-attach`, `aod-stop`, `aod-cleanup`, `aod-send`, `aod-broadcast`
 
 **Quick control:** Use `aod-send SESSION "command"` to execute in specific session, or `aod-broadcast "command"` to run in all sessions without switching.
 
