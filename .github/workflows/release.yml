@@ -1,9 +1,13 @@
 name: Release
 
+# DISABLED: Multi-arch QEMU builds are too slow in CI
+# Use ./release.sh locally then ./build-profiles.sh --push
 on:
-  push:
-    tags:
-      - 'v*'
+  # push:
+  #   tags:
+  #     - 'v*'
+  # Manual trigger only
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io

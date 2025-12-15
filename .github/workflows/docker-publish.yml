@@ -1,15 +1,17 @@
 name: Build and Publish Docker Images
 
+# DISABLED: Multi-arch QEMU builds are too slow in CI
+# Use ./build-profiles.sh --push locally instead
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'plugins/hal-9000/docker/**'
-      - 'plugins/hal-9000/install.sh'
-      - 'plugins/hal-9000/aod/**'
-      - 'plugins/hal-9000/hal9000/**'
-      - '.github/workflows/docker-publish.yml'
-  # Allow manual trigger
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'plugins/hal-9000/docker/**'
+  #     - 'plugins/hal-9000/install.sh'
+  #     - 'plugins/hal-9000/aod/**'
+  #     - 'plugins/hal-9000/hal9000/**'
+  #     - '.github/workflows/docker-publish.yml'
+  # Manual trigger only
   workflow_dispatch:
     inputs:
       force_rebuild:
