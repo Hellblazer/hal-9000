@@ -1,0 +1,97 @@
+name: Build and Publish Docker Images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/hal-9000/docker/**'
+      - 'plugins/hal-9000/install.sh'
+      - 'plugins/hal-9000/aod/**'
+      - 'plugins/hal-9000/hal9000/**'
+      - '.github/workflows/docker-publish.yml'
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force rebuild without cache'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: hellblazer/hal-9000
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        include:
+          - profile: base
+            dockerfile: Dockerfile.hal9000
+            tags: |
+              latest
+              base
+          - profile: python
+            dockerfile: Dockerfile.python
+            tags: python
+          - profile: node
+            dockerfile: Dockerfile.node
+            tags: node
+          - profile: java
+            dockerfile: Dockerfile.java
+            tags: java
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from plugin.json
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' plugins/hal-9000/.claude-plugin/plugin.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Generate Docker tags
+        id: tags
+        run: |
+          TAGS=""
+          for tag in ${{ matrix.tags }}; do
+            TAGS="${TAGS}${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag},"
+            TAGS="${TAGS}${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${tag}-${{ steps.version.outputs.version }},"
+          done
+          # Remove trailing comma
+          TAGS="${TAGS%,}"
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+
+      - name: Build and push ${{ matrix.profile }}
+        uses: docker/build-push-action@v5
+        with:
+          context: plugins/hal-9000
+          file: plugins/hal-9000/docker/${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          no-cache: ${{ github.event.inputs.force_rebuild == 'true' }}
+          platforms: linux/amd64,linux/arm64
+
+      - name: Summary
+        run: |
+          echo "### Built ${{ matrix.profile }} profile" >> $GITHUB_STEP_SUMMARY
+          echo "Tags: ${{ steps.tags.outputs.tags }}" >> $GITHUB_STEP_SUMMARY

@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# release.sh - Methodical release process for hal-9000
+# release.sh - Create a new release for hal-9000
+#
+# This script updates version numbers and creates a git tag.
+# GitHub Actions automatically builds and pushes Docker images on tag push.
 #
 # Usage:
 #   ./release.sh <version>           # Dry run - show what would change
@@ -8,6 +11,14 @@
 # Example:
 #   ./release.sh 1.3.0               # Preview changes for 1.3.0
 #   ./release.sh 1.3.0 --execute     # Release 1.3.0
+#
+# What happens:
+#   1. Updates version in all relevant files
+#   2. Updates CHANGELOG.md with release date
+#   3. Commits changes and creates git tag
+#   4. Pushes to GitHub (triggers GitHub Actions)
+#   5. GitHub Actions builds and pushes all Docker images
+#   6. GitHub Actions creates a GitHub Release
 
 set -Eeuo pipefail
 
@@ -47,9 +58,13 @@ ${GREEN}Steps performed:${NC}
   2. Update version in all files
   3. Update CHANGELOG.md with release date
   4. Commit changes with release message
-  5. Create git tag
-  6. Build and push all Docker images (base, python, node, java)
-  7. Push git commits and tags to GitHub
+  5. Create git tag v<version>
+  6. Push to GitHub (triggers GitHub Actions)
+
+${GREEN}GitHub Actions then:${NC}
+  - Builds Docker images (base, python, node, java) for amd64 + arm64
+  - Pushes to ghcr.io/hellblazer/hal-9000
+  - Creates GitHub Release with changelog
 
 ${GREEN}Files updated:${NC}
 EOF
@@ -58,15 +73,9 @@ EOF
     done
     cat <<EOF
 
-${GREEN}Docker images built:${NC}
-  - ghcr.io/hellblazer/hal-9000:latest
-  - ghcr.io/hellblazer/hal-9000:base-<version>
-  - ghcr.io/hellblazer/hal-9000:python[-<version>]
-  - ghcr.io/hellblazer/hal-9000:node[-<version>]
-  - ghcr.io/hellblazer/hal-9000:java[-<version>]
-
 ${GREEN}Example:${NC}
-  ./release.sh 1.3.0 --execute
+  ./release.sh 1.3.0           # Preview
+  ./release.sh 1.3.0 --execute # Release
 
 EOF
 }
@@ -185,29 +194,6 @@ git_commit_and_tag() {
     fi
 }
 
-build_and_push_docker_images() {
-    local dry_run="$1"
-
-    local profiles="base python node java"
-
-    if [[ "$dry_run" == "true" ]]; then
-        echo -e "\n${CYAN}Would build and push Docker images:${NC}"
-        echo -e "  cd docker && ./build-profiles.sh --push $profiles"
-        echo -e "\n${CYAN}Images that would be created:${NC}"
-        echo -e "  ghcr.io/hellblazer/hal-9000:latest (base)"
-        echo -e "  ghcr.io/hellblazer/hal-9000:base-<version>"
-        echo -e "  ghcr.io/hellblazer/hal-9000:python + :python-<version>"
-        echo -e "  ghcr.io/hellblazer/hal-9000:node + :node-<version>"
-        echo -e "  ghcr.io/hellblazer/hal-9000:java + :java-<version>"
-    else
-        echo -e "\n${BLUE}Building and pushing Docker images...${NC}"
-        echo -e "Profiles: $profiles\n"
-        cd "$SCRIPT_DIR/docker"
-        ./build-profiles.sh --push $profiles
-        echo -e "\n${GREEN}✓ Built and pushed all Docker images${NC}"
-    fi
-}
-
 push_git() {
     local version="$1"
     local dry_run="$2"
@@ -266,11 +252,18 @@ main() {
     # Step 3: Git commit and tag
     git_commit_and_tag "$new_version" "$dry_run"
 
-    # Step 4: Build and push Docker images (all profiles)
-    build_and_push_docker_images "$dry_run"
-
-    # Step 5: Push git
+    # Step 4: Push git (triggers GitHub Actions for Docker build)
     push_git "$new_version" "$dry_run"
+
+    # Note about GitHub Actions
+    if [[ "$dry_run" == "false" ]]; then
+        echo -e "\n${CYAN}GitHub Actions will now:${NC}"
+        echo -e "  • Build Docker images (base, python, node, java)"
+        echo -e "  • Push to ghcr.io/hellblazer/hal-9000"
+        echo -e "  • Create GitHub Release"
+        echo -e "\n${CYAN}Monitor progress:${NC}"
+        echo -e "  https://github.com/Hellblazer/hal-9000/actions"
+    fi
 
     echo -e "\n${BLUE}════════════════════════════════════════════════════${NC}"
     if [[ "$dry_run" == "true" ]]; then
