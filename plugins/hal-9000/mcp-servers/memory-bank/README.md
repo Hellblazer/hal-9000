@@ -39,6 +39,59 @@ The `config.json` uses the default memory bank location. Customize the path by s
 - `memory_bank_write` - Create a memory file
 - `memory_bank_update` - Update a memory file
 
+## Usage Examples
+
+### Starting a New Project
+
+```
+Create a memory bank project for "my-api-project" with initial architecture decisions
+```
+
+Claude will create the project directory and store your decisions:
+```json
+{
+  "projectName": "my-api-project",
+  "fileName": "architecture.md",
+  "content": "# Architecture Decisions\n\n## Database\n- PostgreSQL for persistence..."
+}
+```
+
+### Tracking Ongoing Work
+
+```
+Update the memory bank: I finished the authentication module and started on rate limiting
+```
+
+Claude updates your project's ongoing work file with current status.
+
+### Resuming Work Across Sessions
+
+```
+What was I working on in the my-api-project?
+```
+
+Claude reads your memory bank to restore context:
+- Recent decisions
+- Work in progress
+- Outstanding issues
+
+### Coordinating Parallel Agents
+
+When using multiple Claude sessions (aod/hal9000 squad):
+```
+Check the memory bank for what other sessions have documented about the API design
+```
+
+Memory bank provides shared context across parallel agents.
+
+### Example Workflow
+
+1. **Start session**: "Initialize memory for project-alpha"
+2. **Record decisions**: "Store decision: using GraphQL instead of REST because..."
+3. **Track progress**: "Update: completed user schema, starting auth"
+4. **End session**: "Summarize today's progress to memory bank"
+5. **Next session**: "What's the current state of project-alpha?"
+
 ## Memory Structure
 
 ```

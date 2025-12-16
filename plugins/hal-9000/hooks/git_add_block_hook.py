@@ -7,14 +7,16 @@ from pathlib import Path
 def check_git_add_command(command):
     """
     Check if a git add command contains dangerous patterns.
-    Returns tuple: (decision, reason) where decision is bool or "ask"/"block"/"allow"
+    Returns tuple: (decision: str, reason: str or None)
+
+    decision is one of: "allow", "ask", "block"
     """
     # Normalize the command - handle multiple spaces, tabs, etc.
     normalized_cmd = ' '.join(command.strip().split())
 
     # Always allow --dry-run (used internally to detect what would be staged)
     if '--dry-run' in normalized_cmd or '-n' in normalized_cmd.split():
-        return False, None
+        return "allow", None
 
     # Pattern to match git add with problematic flags and dangerous patterns
     # Check for wildcards or dangerous patterns anywhere in the arguments
@@ -28,7 +30,7 @@ Instead, use:
 - 'git ls-files -m "*.py" | xargs git add' if you really need pattern matching
 
 This restriction prevents accidentally staging unwanted files."""
-        return True, reason
+        return "block", reason
     
     # Hard block patterns: -A, --all, -a, ., ../, etc.
     dangerous_pattern = re.compile(
@@ -55,7 +57,7 @@ Instead, use:
 - 'git add -u' to stage all modified/deleted files (but not untracked)
 
 This restriction prevents accidentally staging unwanted files."""
-        return True, reason
+        return "block", reason
     
     # Check for git add with a directory
     # Match: git add <dirname>/ or git add <path/to/dir>/
@@ -88,7 +90,7 @@ This restriction prevents accidentally staging unwanted files."""
 
                 if not files:
                     # No files to stage
-                    return False, None
+                    return "allow", None
 
                 # Check which files are modified vs new
                 modified_files = []
@@ -108,7 +110,7 @@ This restriction prevents accidentally staging unwanted files."""
 
                 # If only new files, allow without permission
                 if not modified_files:
-                    return False, None
+                    return "allow", None
 
                 # Modified files present - ask for permission
                 file_list = ", ".join(modified_files[:5])
@@ -129,7 +131,7 @@ This restriction prevents accidentally staging unwanted files."""
         has_m_flag = re.search(r'-[a-zA-Z]*m[a-zA-Z]*', normalized_cmd)
         if has_a_flag and not has_m_flag:
             reason = """Avoid 'git commit -a' without a message flag. Use 'gcam "message"' instead, which is an alias for 'git commit -a -m'."""
-            return True, reason
+            return "ask", reason
 
     # Check if staging modified files (not new/untracked) - requires permission
     # This check runs after all blocking patterns pass
@@ -142,7 +144,7 @@ This restriction prevents accidentally staging unwanted files."""
             reason = f"Staging modified files: {file_list}"
             return "ask", reason
 
-    return False, None
+    return "allow", None
 
 
 def get_modified_files_being_staged(command):
@@ -200,11 +202,11 @@ if __name__ == "__main__":
     # Get the command being executed
     command = data.get("tool_input", {}).get("command", "")
     
-    should_block, reason = check_git_add_command(command)
-    
-    if should_block:
+    decision, reason = check_git_add_command(command)
+
+    if decision in ("block", "ask"):
         print(json.dumps({
-            "decision": "block",
+            "decision": decision,
             "reason": reason
         }))
     else:

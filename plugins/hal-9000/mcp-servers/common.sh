@@ -196,8 +196,8 @@ secure_download() {
     return 0
 }
 
-# Check if running in ClaudeBox container
-is_claudebox_container() {
+# Check if running in hal9000 container
+is_hal9000_container() {
     [[ -f /.dockerenv ]] || [[ -f /hal-9000/setup.sh ]]
 }
 
@@ -273,6 +273,6 @@ export -f update_path_if_needed
 export -f get_python_bin_dir
 export -f check_command
 export -f secure_download
-export -f is_claudebox_container
+export -f is_hal9000_container
 export -f has_pep668_protection
 export -f safe_pip_install

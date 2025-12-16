@@ -31,4 +31,12 @@ logs/
 
 # Working documents - temporary/ephemeral files for agent work
 /working-documents/
-2
+
+# Python cache directories
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Node modules (already covered but explicit)
+node_modules/

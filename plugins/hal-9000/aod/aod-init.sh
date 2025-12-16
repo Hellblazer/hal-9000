@@ -57,7 +57,7 @@ generate_yaml() {
 #
 # Each task creates:
 #   - Git worktree for the branch
-#   - Isolated ClaudeBox container
+#   - Isolated hal9000 container
 #   - Dedicated tmux session
 #
 # Available profiles: python, node, java, go, rust, ruby, php, default
@@ -101,7 +101,7 @@ generate_simple() {
 #
 # Each task creates:
 #   - Git worktree for the branch
-#   - Isolated ClaudeBox container
+#   - Isolated hal9000 container
 #   - Dedicated tmux session
 #
 # Available profiles: python, node, java, go, rust, ruby, php, default

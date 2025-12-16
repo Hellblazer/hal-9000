@@ -20,41 +20,13 @@ readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly HAL9000_DIR="$HOME/.hal9000"
 readonly LOCKFILE="$HAL9000_DIR/hal9000.lock"
 
-# Colors for output
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly CYAN='\033[0;36m'
-readonly NC='\033[0m'
+# Source shared library for common functions
+# shellcheck source=../lib/container-common.sh
+source "${SCRIPT_DIR}/../lib/container-common.sh"
 
-# Logging functions
-info() { printf "${CYAN}ℹ${NC} %s\n" "$1" >&2; }
-success() { printf "${GREEN}✓${NC} %s\n" "$1" >&2; }
-warn() { printf "${YELLOW}⚠${NC} %s\n" "$1" >&2; }
-error() { printf "${RED}✗${NC} %s\n" "$1" >&2; }
-die() { error "$1"; exit 1; }
-
-# Locking functions to prevent race conditions
-acquire_lock() {
-    local max_wait=30
-    local waited=0
-    while ! mkdir "$LOCKFILE" 2>/dev/null; do
-        if [[ $waited -ge $max_wait ]]; then
-            die "Could not acquire lock after ${max_wait}s. Another hal9000 instance may be stuck. Remove $LOCKFILE to force."
-        fi
-        sleep 1
-        ((waited++))
-    done
-}
-
-release_lock() {
-    rmdir "$LOCKFILE" 2>/dev/null || true
-}
-
-# Cleanup lock on exit
+# Cleanup lock on exit (uses release_lock from container-common.sh)
 cleanup_on_exit() {
-    release_lock
+    release_lock "$LOCKFILE"
 }
 trap cleanup_on_exit EXIT INT TERM
 
@@ -97,19 +69,9 @@ EOF
     exit 0
 }
 
-# Check prerequisites
+# Check prerequisites (uses common function)
 check_prerequisites() {
-    local missing=()
-    command -v tmux >/dev/null || missing+=("tmux")
-    command -v docker >/dev/null || missing+=("docker")
-
-    if [[ ${#missing[@]} -gt 0 ]]; then
-        die "Missing required tools: ${missing[*]}"
-    fi
-
-    if ! docker ps >/dev/null 2>&1; then
-        die "Docker is not running. Please start Docker and try again."
-    fi
+    check_container_prerequisites tmux docker
 }
 
 # Initialize hal9000 directory
@@ -117,90 +79,12 @@ init_hal9000_dir() {
     mkdir -p "$HAL9000_DIR/claude" "$HAL9000_DIR/sessions"
 }
 
-# Get next available slot number
+# Get next available slot number (wraps common function for hal9000 containers)
 get_next_slot() {
-    local max_slot=0
-    local slot
-
-    while IFS= read -r container; do
-        if [[ "$container" =~ -slot([0-9]+) ]]; then
-            slot="${BASH_REMATCH[1]}"
-            if [[ $slot -gt $max_slot ]]; then
-                max_slot=$slot
-            fi
-        fi
-    done < <(docker ps --filter "name=hal9000" --format "{{.Names}}" 2>/dev/null || true)
-
-    printf '%d\n' "$((max_slot + 1))"
+    get_next_container_slot "hal9000"
 }
 
-# Inject MCP server configuration into settings.json
-inject_mcp_config() {
-    local settings_file="$1"
-
-    # Create settings.json if it doesn't exist
-    if [[ ! -f "$settings_file" ]]; then
-        echo '{}' > "$settings_file"
-    fi
-
-    # Determine ChromaDB client type based on environment variables
-    local chromadb_args='["--client-type", "ephemeral"]'
-    if [[ -n "${CHROMADB_TENANT:-}" ]] && [[ -n "${CHROMADB_API_KEY:-}" ]]; then
-        chromadb_args='["--client-type", "cloud"]'
-        info "ChromaDB configured for cloud mode"
-    fi
-
-    # MCP server configuration
-    local mcp_config
-    mcp_config=$(cat <<MCPEOF
-{
-  "mcpServers": {
-    "memory-bank": {
-      "command": "mcp-server-memory-bank",
-      "args": [],
-      "env": {
-        "MEMORY_BANK_ROOT": "/root/memory-bank"
-      }
-    },
-    "sequential-thinking": {
-      "command": "mcp-server-sequential-thinking",
-      "args": []
-    },
-    "chromadb": {
-      "command": "chroma-mcp",
-      "args": $chromadb_args,
-      "env": {}
-    }
-  }
-}
-MCPEOF
-)
-
-    # Merge MCP config using Python
-    if command -v python3 >/dev/null 2>&1; then
-        python3 -c "
-import json
-
-settings_file = '$settings_file'
-mcp_config = $mcp_config
-
-try:
-    with open(settings_file, 'r') as f:
-        settings = json.load(f)
-except (json.JSONDecodeError, FileNotFoundError):
-    settings = {}
-
-if 'mcpServers' not in settings:
-    settings['mcpServers'] = {}
-settings['mcpServers'].update(mcp_config.get('mcpServers', {}))
-
-with open(settings_file, 'w') as f:
-    json.dump(settings, f, indent=2)
-" 2>/dev/null || warn "Could not inject MCP config (Python error)"
-    else
-        warn "Python not available for MCP config injection"
-    fi
-}
+# inject_mcp_config is provided by container-common.sh
 
 # Create session-specific CLAUDE.md
 create_session_claudemd() {
@@ -369,38 +253,38 @@ launch_session() {
     # Create session CLAUDE.md
     create_session_claudemd "$session_name" "$work_dir" "$profile"
 
-    # Build environment variable passthrough
-    local chromadb_env=""
-    [[ -n "${CHROMADB_TENANT:-}" ]] && chromadb_env="$chromadb_env -e CHROMADB_TENANT"
-    [[ -n "${CHROMADB_DATABASE:-}" ]] && chromadb_env="$chromadb_env -e CHROMADB_DATABASE"
-    [[ -n "${CHROMADB_API_KEY:-}" ]] && chromadb_env="$chromadb_env -e CHROMADB_API_KEY"
+    # Ensure memory-bank directory exists
+    mkdir -p "$HOME/memory-bank"
 
-    # Memory bank mount
-    local memory_bank_mount=""
-    if [[ -d "$HOME/memory-bank" ]]; then
-        memory_bank_mount="-v $HOME/memory-bank:/root/memory-bank"
-    else
-        mkdir -p "$HOME/memory-bank"
-        memory_bank_mount="-v $HOME/memory-bank:/root/memory-bank"
-    fi
-
-    # Build docker command
+    # Build docker command using array for proper quoting
     local container_name="hal9000-${session_name}-slot${slot}"
-    local docker_cmd="docker run -it --rm \
-        --name '$container_name' \
-        --network host \
-        -v '$work_dir:/workspace' \
-        -v '$container_claude_dir:/root/.claude' \
-        $memory_bank_mount \
-        -w /workspace \
-        -e HAL9000_SESSION='$session_name' \
-        -e HAL9000_SLOT='$slot' \
-        -e ANTHROPIC_API_KEY \
-        $chromadb_env \
-        $image"
+    local -a docker_args=(
+        docker run -it --rm
+        --name "$container_name"
+        --network host
+        -v "$work_dir:/workspace"
+        -v "$container_claude_dir:/root/.claude"
+        -v "$HOME/memory-bank:/root/memory-bank"
+        -w /workspace
+        -e "HAL9000_SESSION=$session_name"
+        -e "HAL9000_SLOT=$slot"
+        -e ANTHROPIC_API_KEY
+    )
+
+    # Add ChromaDB environment variables if set
+    [[ -n "${CHROMADB_TENANT:-}" ]] && docker_args+=(-e CHROMADB_TENANT)
+    [[ -n "${CHROMADB_DATABASE:-}" ]] && docker_args+=(-e CHROMADB_DATABASE)
+    [[ -n "${CHROMADB_API_KEY:-}" ]] && docker_args+=(-e CHROMADB_API_KEY)
+
+    # Add image as last argument
+    docker_args+=("$image")
+
+    # Build properly quoted command string for tmux
+    local docker_cmd
+    docker_cmd=$(printf '%q ' "${docker_args[@]}")
 
     # Create tmux session and launch container
-    tmux new-session -d -s "$session_name" -c "$work_dir" "$docker_cmd"
+    tmux new-session -d -s "$session_name" -c "$work_dir" "eval $docker_cmd"
 
     # Save session info
     cat > "$HAL9000_DIR/sessions/${session_name}.json" <<EOF
@@ -487,7 +371,7 @@ cmd_run() {
     work_dir="$(cd "$work_dir" && pwd)"  # Resolve to absolute path
 
     # Acquire lock for slot assignment
-    acquire_lock
+    acquire_lock "$LOCKFILE"
 
     # Get slot if not specified
     if [[ -z "$slot" ]]; then
@@ -499,10 +383,15 @@ cmd_run() {
         name="hal9000-${slot}"
     fi
 
+    # Validate session name to prevent command injection
+    if [[ ! "$name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        die "Session name must contain only alphanumeric characters, underscores, and hyphens"
+    fi
+
     launch_session "$name" "$work_dir" "$slot" "$profile" "$detach"
 
     # Release lock after session is launched
-    release_lock
+    release_lock "$LOCKFILE"
 }
 
 # Run multiple sessions (squad mode)
@@ -540,7 +429,7 @@ cmd_squad() {
     work_dir="$(pwd)"
 
     # Acquire lock for entire squad launch to prevent slot conflicts
-    acquire_lock
+    acquire_lock "$LOCKFILE"
 
     if [[ -n "$num_sessions" ]]; then
         # Launch N identical sessions
@@ -590,7 +479,7 @@ cmd_squad() {
     fi
 
     # Release lock after all sessions are launched
-    release_lock
+    release_lock "$LOCKFILE"
 
     printf "\n${GREEN}╔════════════════════════════════════════╗${NC}\n"
     printf "${GREEN}║     All sessions launched! 🚀          ║${NC}\n"

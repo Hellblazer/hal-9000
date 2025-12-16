@@ -70,6 +70,61 @@ For local-only storage:
 - `list_collections` - View collections
 - `bulk_create_documents` - Batch operations
 
+## Usage Examples
+
+### Storing Research Findings
+
+```
+Store this as a document:
+- ID: "api-design-2024-01"
+- Content: "REST API best practices: use plural nouns, proper HTTP methods..."
+- Metadata: type=research, topic=api-design
+```
+
+Claude will call:
+```json
+{
+  "document_id": "api-design-2024-01",
+  "content": "REST API best practices: use plural nouns...",
+  "metadata": {"type": "research", "topic": "api-design"}
+}
+```
+
+### Semantic Search
+
+```
+Find documents related to "authentication patterns for microservices"
+```
+
+Claude will use `search_similar` to find documents by meaning, not just keywords.
+
+### Building a Knowledge Base
+
+```
+I'm researching React hooks. Store these findings:
+1. useState for local state
+2. useEffect for side effects
+3. useContext for global state
+```
+
+Claude can use `bulk_create_documents` to store multiple related documents at once.
+
+### Finding Related Content
+
+```
+What do I have stored about database optimization?
+```
+
+Claude searches your ChromaDB for semantically related documents and summarizes them.
+
+### Using Collections
+
+```
+Create a collection called "project-alpha-research" for all research related to Project Alpha
+```
+
+Collections help organize documents by project, topic, or any other dimension.
+
 ## Prerequisites
 
 - Python 3.8+

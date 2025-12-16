@@ -69,6 +69,67 @@ The server is pre-configured in hal-9000. No additional setup required.
 - **Problem solving** - Breaking down ambiguous requirements
 - **Research** - Structured exploration of topics
 
+## Detailed Examples
+
+### Debugging a Complex Bug
+
+```
+Use sequential thinking to debug: The app crashes intermittently when
+users submit forms. It only happens under high load.
+```
+
+Claude will:
+1. Form initial hypotheses (race condition, memory leak, connection pool)
+2. Test each hypothesis against available evidence
+3. Request specific diagnostic information
+4. Narrow down to root cause
+5. Propose solution with confidence level
+
+### Architecture Decision
+
+```
+Think through step-by-step: Should we use microservices or monolith
+for our new e-commerce platform? We expect 10K users initially,
+scaling to 1M over 2 years.
+```
+
+Claude systematically evaluates:
+- Current team capabilities
+- Expected scaling patterns
+- Operational complexity
+- Development velocity tradeoffs
+- Migration path options
+
+### Code Review Analysis
+
+```
+Analyze this authentication code systematically for security issues:
+[paste code]
+```
+
+Claude examines:
+- Input validation
+- Token handling
+- Session management
+- Error messages (information leakage)
+- Timing attacks
+- Each finding with severity and remediation
+
+### Design Pattern Selection
+
+```
+Step through the options: I need to implement a notification system
+that supports email, SMS, push, and in-app notifications. New
+channels may be added.
+```
+
+Claude evaluates patterns:
+- Strategy pattern
+- Observer pattern
+- Factory + Strategy combination
+- Event-driven architecture
+With tradeoffs for each approach
+
 ## Comparison with Regular Claude
 
 | Approach | Best For |

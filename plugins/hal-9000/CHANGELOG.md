@@ -5,24 +5,39 @@ All notable changes to hal-9000 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.3.0] - 2025-12-15
+## [1.3.0] - 2025-12-16
 
 ### Added
 - **hal9000 command**: New containerized Claude launcher for single and multi-session development
   - `hal9000 run` - Single container launch
   - `hal9000 squad` - Multiple parallel sessions
   - Session management: hal9000-list, hal9000-attach, hal9000-send, hal9000-broadcast, hal9000-stop, hal9000-cleanup
-- **Documentation consolidation**: Comprehensive review and consistency fixes across all documentation
+- **CONTRIBUTING.md**: Comprehensive contributor guide with instructions for adding agents, hooks, commands
+- **Shell script tests (bats)**: Test suite for container-common.sh shared library
+- **MCP server integration tests**: Python test suite validating server availability and configuration
+- **Enhanced MCP documentation**: Added concrete usage examples to ChromaDB, Memory Bank, and Sequential Thinking READMEs
 
 ### Changed
+- **Refactored shell scripts**: aod.sh and hal9000.sh now use lib/container-common.sh shared library
+  - Eliminates ~200 lines of duplicate code
+  - Shared functions: logging, locking, slot management, MCP config injection
+- Updated ClaudeBox references to hal9000 throughout codebase
+- Renamed `is_claudebox_container()` to `is_hal9000_container()` in common.sh
+- Updated container name patterns in aod scripts from "claudebox-*" to "aod-*"
 - Unified agent documentation - clarified 12 installed agents vs agent invocation patterns
-- Updated all version references from 1.2.0 to 1.3.0
 - Repository structure in CLAUDE.md now reflects actual layout
 
 ### Fixed
 - DEVONthink installation instructions no longer reference non-existent external repository
 - Version badge in plugins/hal-9000/README.md now matches plugin.json
 - Agent selection guide uses correct agent names throughout
+- Removed empty/accidental directories (mcp-servers/memory-bank/y/, scripts/, tools/)
+- Updated .gitignore with Python cache directories (__pycache__/, .pytest_cache/)
+
+### Testing
+- 40 hook tests passing (pytest)
+- 10 MCP integration tests passing (pytest)
+- Shell script tests ready for bats execution
 
 ## [1.2.0] - 2025-12-15
 
@@ -127,7 +142,7 @@ Tested and validated on:
 - Fedora 39 - docker container
 - Python 3.11+ with PEP 668 enabled
 
-## [1.0.0] - 2024-12-XX
+## [1.0.0] - 2024-12-10
 
 ### Initial Release
 - aod (Army of Darkness) multi-branch parallel development

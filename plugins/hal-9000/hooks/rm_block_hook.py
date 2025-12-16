@@ -4,15 +4,17 @@ import re
 def check_rm_command(command):
     """
     Check if a command contains rm that should be blocked.
-    Returns tuple: (should_block: bool, reason: str or None)
+    Returns tuple: (decision: str, reason: str or None)
+
+    decision is one of: "allow", "ask", "block"
     """
     # Normalize the command
     normalized_cmd = ' '.join(command.strip().split())
-    
+
     # Check if it's an rm command
     # This catches: rm, /bin/rm, /usr/bin/rm, etc.
     # Also simpler check: if the command starts with rm or contains rm after common separators
-    if (normalized_cmd.startswith("rm ") or normalized_cmd == "rm" or 
+    if (normalized_cmd.startswith("rm ") or normalized_cmd == "rm" or
         re.search(r'(^|[;&|]\s*)(/\S*/)?rm\b', normalized_cmd)):
         reason_text = (
             "Instead of using 'rm':\n "
@@ -24,9 +26,9 @@ def check_rm_command(command):
             "data/junk.txt - moved to TRASH/ - data file we don't need\n"
             "```"
         )
-        return True, reason_text
-    
-    return False, None
+        return "block", reason_text
+
+    return "allow", None
 
 
 # If run as a standalone script
@@ -45,11 +47,11 @@ if __name__ == "__main__":
     # Get the command being executed
     command = data.get("tool_input", {}).get("command", "")
     
-    should_block, reason = check_rm_command(command)
-    
-    if should_block:
+    decision, reason = check_rm_command(command)
+
+    if decision in ("block", "ask"):
         print(json.dumps({
-            "decision": "block",
+            "decision": decision,
             "reason": reason
         }, ensure_ascii=False))
     else:

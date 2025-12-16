@@ -1,9 +1,9 @@
-# ClaudeBox Squad Configuration File
+# aod Configuration File
 #
 # Format: branch:profile:description
-# 
+#
 # - branch: Git branch name (will be created if it doesn't exist)
-# - profile: ClaudeBox profile(s) to use (comma-separated, optional)
+# - profile: hal9000 profile(s) to use (comma-separated, optional)
 # - description: Human-readable task description (optional)
 #
 # Lines starting with # are comments

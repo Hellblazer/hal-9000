@@ -68,8 +68,8 @@ fi
 
 printf "\n"
 
-# Step 2: Force kill any remaining ClaudeBox containers
-info "Checking for remaining ClaudeBox containers..."
+# Step 2: Force kill any remaining aod containers
+info "Checking for remaining aod containers..."
 
 container_count=0
 while IFS= read -r container; do
@@ -77,10 +77,10 @@ while IFS= read -r container; do
         success "Removed container: $container"
         container_count=$((container_count + 1))
     fi
-done < <(docker ps -a --filter "name=claudebox-.*-slot" --format "{{.Names}}" 2>/dev/null || true)
+done < <(docker ps -a --filter "name=aod-.*-slot" --format "{{.Names}}" 2>/dev/null || true)
 
 if [[ $container_count -eq 0 ]]; then
-    info "No ClaudeBox containers found"
+    info "No aod containers found"
 else
     success "Removed $container_count container(s)"
 fi

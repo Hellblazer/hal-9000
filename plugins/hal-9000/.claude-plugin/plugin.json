@@ -50,7 +50,7 @@
       "command": "npx",
       "args": [
         "-y",
-        "@allpepper/memory-bank-mcp@latest"
+        "@allpepper/memory-bank-mcp@^0.2.1"
       ],
       "env": {
         "MEMORY_BANK_ROOT": "${HOME}/memory-bank"
@@ -60,14 +60,14 @@
       "command": "npx",
       "args": [
         "-y",
-        "@modelcontextprotocol/server-sequential-thinking"
+        "@modelcontextprotocol/server-sequential-thinking@^2025.11.25"
       ]
     },
     "devonthink": {
       "comment": "Python-based minimal MCP server. Installed locally in mcp-servers/devonthink/",
       "command": "python3",
       "args": [
-        "${HOME}/.claude/plugins/hal-9000/mcp-servers/devonthink/server.py"
+        "${CLAUDE_PLUGIN_ROOT}/mcp-servers/devonthink/server.py"
       ],
       "env": {}
     }

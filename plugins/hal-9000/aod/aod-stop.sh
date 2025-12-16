@@ -47,7 +47,7 @@ fi
 
 info "Stopping session: $session_name"
 
-# Kill tmux session (this will also stop the ClaudeBox container due to --rm)
+# Kill tmux session (this will also stop the hal9000 container due to --rm)
 tmux kill-session -t "$session_name"
 
 success "Session stopped: $session_name"

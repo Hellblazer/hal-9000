@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# aod.sh - Manage multiple ClaudeBox instances with git worktrees
-# 
-# Integrates ClaudeBox with claude-aod-style workflow:
+# aod.sh - Manage multiple hal9000 instances with git worktrees
+#
+# Integrates hal9000 containers with aod-style workflow:
 # - Creates git worktrees for different branches
-# - Launches isolated ClaudeBox containers per worktree
+# - Launches isolated hal9000 containers per worktree
 # - Manages tmux sessions for easy switching
 #
 # Usage: ./aod.sh [config_file]
@@ -15,60 +15,18 @@ readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly AOD_DIR="$HOME/.aod"
 readonly LOCKFILE="$AOD_DIR/aod.lock"
 
-# Colors for output
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly CYAN='\033[0;36m'
-readonly NC='\033[0m' # No Color
+# Source shared library for common functions
+# shellcheck source=../lib/container-common.sh
+source "${SCRIPT_DIR}/../lib/container-common.sh"
 
-# Logging functions
-log() {
-    printf '%s [%s] %s\n' "$(date +%FT%T%z)" "$1" "$2" >&2
-}
-
-info() {
-    printf "${CYAN}ℹ${NC} %s\n" "$1" >&2
-}
-
-success() {
-    printf "${GREEN}✓${NC} %s\n" "$1" >&2
-}
-
-warn() {
-    printf "${YELLOW}⚠${NC} %s\n" "$1" >&2
-}
-
-error() {
-    printf "${RED}✗${NC} %s\n" "$1" >&2
-}
-
-die() {
-    error "$1"
-    exit 1
-}
-
-# Check prerequisites
+# Check prerequisites (extends common prerequisites)
 check_prerequisites() {
-    local missing=()
-
-    command -v git >/dev/null || missing+=("git")
-    command -v tmux >/dev/null || missing+=("tmux")
-    command -v docker >/dev/null || missing+=("docker")
-
-    if [[ ${#missing[@]} -gt 0 ]]; then
-        die "Missing required tools: ${missing[*]}"
-    fi
+    # Use common prerequisite check for git, tmux, docker
+    check_container_prerequisites git tmux docker
 
     # Check if we're in a git repository
     if ! git rev-parse --git-dir >/dev/null 2>&1; then
         die "Not in a git repository"
-    fi
-
-    # Verify Docker is running
-    if ! docker ps >/dev/null 2>&1; then
-        die "Docker is not running. Please start Docker and try again."
     fi
 }
 
@@ -80,22 +38,9 @@ init_aod_dir() {
     fi
 }
 
-# Acquire lock or fail
-acquire_lock() {
-    # Use mkdir for atomic lock creation
-    if ! mkdir "$LOCKFILE" 2>/dev/null; then
-        die "Another instance is already running (lockfile: $LOCKFILE)"
-    fi
-}
-
-# Release lock
-release_lock() {
-    rmdir "$LOCKFILE" 2>/dev/null || true
-}
-
-# Cleanup on exit
+# Cleanup on exit (uses release_lock from container-common.sh)
 cleanup() {
-    release_lock
+    release_lock "$LOCKFILE"
 }
 
 trap cleanup EXIT INT TERM
@@ -167,22 +112,9 @@ parse_simple_config() {
     printf '%s\n' "${tasks[@]}"
 }
 
-# Get next available slot number
+# Get next available slot number (wraps common function for aod containers)
 get_next_slot() {
-    local max_slot=0
-    local slot
-    
-    # Check running ClaudeBox containers
-    while IFS= read -r container; do
-        if [[ "$container" =~ -slot([0-9]+) ]]; then
-            slot="${BASH_REMATCH[1]}"
-            if [[ $slot -gt $max_slot ]]; then
-                max_slot=$slot
-            fi
-        fi
-    done < <(docker ps --filter "name=claudebox" --format "{{.Names}}" 2>/dev/null || true)
-    
-    printf '%d\n' "$((max_slot + 1))"
+    get_next_container_slot "aod"
 }
 
 # Create git worktree
@@ -272,7 +204,7 @@ aod-list
 Each aod session is completely isolated:
 - Separate git worktree (independent working directory)
 - Separate tmux session (independent terminal)
-- Separate ClaudeBox container (independent environment)
+- Separate hal9000 container (independent environment)
 
 Changes in this session don't affect other sessions until committed to git.
 
@@ -348,79 +280,7 @@ EOF
     info "Created CLAUDE.md in worktree"
 }
 
-# Inject MCP server configuration into settings.json
-inject_mcp_config() {
-    local settings_file="$1"
-
-    # Create settings.json if it doesn't exist
-    if [[ ! -f "$settings_file" ]]; then
-        echo '{}' > "$settings_file"
-    fi
-
-    # Determine ChromaDB client type based on environment variables
-    local chromadb_client_type="ephemeral"
-    local chromadb_args='["--client-type", "ephemeral"]'
-    if [[ -n "${CHROMADB_TENANT:-}" ]] && [[ -n "${CHROMADB_API_KEY:-}" ]]; then
-        chromadb_client_type="cloud"
-        chromadb_args='["--client-type", "cloud"]'
-        info "ChromaDB configured for cloud mode"
-    fi
-
-    # MCP server configuration for container
-    # Uses globally installed npm packages (no npx download needed)
-    local mcp_config
-    mcp_config=$(cat <<MCPEOF
-{
-  "mcpServers": {
-    "memory-bank": {
-      "command": "mcp-server-memory-bank",
-      "args": [],
-      "env": {
-        "MEMORY_BANK_ROOT": "/root/memory-bank"
-      }
-    },
-    "sequential-thinking": {
-      "command": "mcp-server-sequential-thinking",
-      "args": []
-    },
-    "chromadb": {
-      "command": "chroma-mcp",
-      "args": $chromadb_args,
-      "env": {}
-    }
-  }
-}
-MCPEOF
-)
-
-    # Merge MCP config into existing settings using Python (available in container)
-    # For now, just ensure mcpServers key exists - Python in container will handle full merge
-    if command -v python3 >/dev/null 2>&1; then
-        python3 -c "
-import json
-import sys
-
-settings_file = '$settings_file'
-mcp_config = $mcp_config
-
-try:
-    with open(settings_file, 'r') as f:
-        settings = json.load(f)
-except (json.JSONDecodeError, FileNotFoundError):
-    settings = {}
-
-# Merge mcpServers (don't overwrite existing)
-if 'mcpServers' not in settings:
-    settings['mcpServers'] = {}
-settings['mcpServers'].update(mcp_config.get('mcpServers', {}))
-
-with open(settings_file, 'w') as f:
-    json.dump(settings, f, indent=2)
-" 2>/dev/null || warn "Could not inject MCP config (Python not available)"
-    else
-        warn "Python not available for MCP config injection"
-    fi
-}
+# inject_mcp_config is provided by container-common.sh
 
 # Launch Docker container in tmux session
 launch_session() {
@@ -439,9 +299,9 @@ launch_session() {
     fi
 
     # Check for existing container with same slot and stop it
-    local container_name="claudebox-.*-slot${slot}"
+    local container_pattern="aod-.*-slot${slot}"
     local existing_container
-    existing_container=$(docker ps -a --filter "name=${container_name}" --format "{{.Names}}" 2>/dev/null | head -1 || true)
+    existing_container=$(docker ps -a --filter "name=${container_pattern}" --format "{{.Names}}" 2>/dev/null | head -1 || true)
     if [[ -n "$existing_container" ]]; then
         warn "Found existing container with slot $slot: $existing_container"
         info "Stopping and removing existing container..."
@@ -475,37 +335,40 @@ launch_session() {
     # Inject MCP server configuration into container's settings.json
     inject_mcp_config "$container_claude_dir/settings.json"
 
-    # Build docker run command with full hal-9000 integration
-    # Pass through ChromaDB environment variables if set (for cloud mode)
-    local chromadb_env=""
-    [[ -n "${CHROMADB_TENANT:-}" ]] && chromadb_env="$chromadb_env -e CHROMADB_TENANT"
-    [[ -n "${CHROMADB_DATABASE:-}" ]] && chromadb_env="$chromadb_env -e CHROMADB_DATABASE"
-    [[ -n "${CHROMADB_API_KEY:-}" ]] && chromadb_env="$chromadb_env -e CHROMADB_API_KEY"
+    # Ensure memory-bank directory exists
+    mkdir -p "$HOME/memory-bank"
 
-    # Mount host's memory bank for shared access across containers
-    local memory_bank_mount=""
-    if [[ -d "$HOME/memory-bank" ]]; then
-        memory_bank_mount="-v $HOME/memory-bank:/root/memory-bank"
-    fi
+    # Build docker command using array for proper quoting
+    local -a docker_args=(
+        docker run -it --rm
+        --name "$container_name"
+        --network host
+        -v "$worktree_dir:/workspace"
+        -v "$container_claude_dir:/root/.claude"
+        -v "$HOME/.claudebox/hal-9000:/hal-9000:ro"
+        -v "$HOME/memory-bank:/root/memory-bank"
+        -w /workspace
+        -e "AOD_SESSION=$session_name"
+        -e "AOD_BRANCH=$branch"
+        -e "AOD_SLOT=$slot"
+        -e ANTHROPIC_API_KEY
+    )
 
-    local docker_cmd="docker run -it --rm \
-        --name '$container_name' \
-        --network host \
-        -v '$worktree_dir:/workspace' \
-        -v '$container_claude_dir:/root/.claude' \
-        -v ~/.claudebox/hal-9000:/hal-9000:ro \
-        $memory_bank_mount \
-        -w /workspace \
-        -e AOD_SESSION='$session_name' \
-        -e AOD_BRANCH='$branch' \
-        -e AOD_SLOT='$slot' \
-        -e ANTHROPIC_API_KEY \
-        $chromadb_env \
-        $image"
+    # Add ChromaDB environment variables if set
+    [[ -n "${CHROMADB_TENANT:-}" ]] && docker_args+=(-e CHROMADB_TENANT)
+    [[ -n "${CHROMADB_DATABASE:-}" ]] && docker_args+=(-e CHROMADB_DATABASE)
+    [[ -n "${CHROMADB_API_KEY:-}" ]] && docker_args+=(-e CHROMADB_API_KEY)
+
+    # Add image as last argument
+    docker_args+=("$image")
+
+    # Build properly quoted command string for tmux
+    local docker_cmd
+    docker_cmd=$(printf '%q ' "${docker_args[@]}")
 
     # Create tmux session and launch container
     # Container CMD will run setup.sh then start bash (or claude if configured)
-    tmux new-session -d -s "$session_name" -c "$worktree_dir" "$docker_cmd"
+    tmux new-session -d -s "$session_name" -c "$worktree_dir" "eval $docker_cmd"
 
     success "Session launched: $session_name"
     info "  Worktree: $worktree_dir"
@@ -548,7 +411,7 @@ main() {
 
     check_prerequisites
     init_aod_dir
-    acquire_lock
+    acquire_lock "$LOCKFILE"
     
     # Get repository root
     local repo_root

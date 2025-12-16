@@ -73,6 +73,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
       - name: Check script syntax
         run: |
           echo "Validating bash scripts..."
@@ -81,6 +84,33 @@ jobs:
             bash -n "$script" || exit 1
           done
           echo "✓ All scripts have valid syntax"
+
+      - name: Run shellcheck
+        run: |
+          echo "Running shellcheck on all scripts..."
+          # Find all shell scripts and run shellcheck
+          # Using -x to follow source statements
+          # -S error: Only fail on errors, not warnings
+          failed=0
+          for script in $(find plugins/hal-9000 -name "*.sh" -type f); do
+            echo "Checking: $script"
+            if ! shellcheck -x -S error "$script"; then
+              failed=1
+            fi
+          done
+
+          if [ "$failed" -eq 1 ]; then
+            echo ""
+            echo "Shellcheck found errors. Please fix them before merging."
+            exit 1
+          else
+            echo "✓ All scripts passed shellcheck (errors)"
+          fi
+
+          # Run again with warnings for informational purposes (non-blocking)
+          echo ""
+          echo "Checking for warnings (informational only):"
+          find plugins/hal-9000 -name "*.sh" -type f -exec shellcheck -x -S warning {} \; 2>&1 || true
 
       - name: Check for common issues
         run: |

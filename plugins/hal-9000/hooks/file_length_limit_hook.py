@@ -17,9 +17,10 @@ from pathlib import Path
 # ============================================================================
 
 # Maximum number of lines allowed in a source code file before triggering
-# the refactoring prompt. 1000 lines is a reasonable default that encourages
+# the refactoring prompt. 10000 lines is a reasonable default that encourages
 # modular, maintainable code. Adjust based on your team's standards.
-MAX_FILE_LINES = 10000
+# Can be overridden via HAL9000_MAX_FILE_LINES environment variable.
+MAX_FILE_LINES = int(os.environ.get("HAL9000_MAX_FILE_LINES", "10000"))
 
 # Source code file extensions to check
 SOURCE_CODE_EXTENSIONS = {

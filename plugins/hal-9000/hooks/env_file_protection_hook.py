@@ -8,7 +8,9 @@ import re
 def check_env_file_access(command):
     """
     Check if a command attempts to read, write, or edit .env files.
-    Returns tuple: (should_block: bool, reason: str or None)
+    Returns tuple: (decision: str, reason: str or None)
+
+    decision is one of: "allow", "ask", "block"
     """
     # Normalize the command
     normalized_cmd = ' '.join(command.strip().split())
@@ -58,6 +60,10 @@ def check_env_file_access(command):
         # Other ways to expose .env contents
         r'\becho\s+.*\$\(.*cat\s+.*\.env.*\)',
         r'\bprintf\s+.*\$\(.*cat\s+.*\.env.*\)',
+
+        # Sourcing .env files (would expose secrets to environment)
+        r'\bsource\s+.*\.env\b',
+        r'\.\s+.*\.env\b',
         
         # Also check for patterns without the dot (like "env" file)
         r'\bcat\s+["\']?env["\']?\s*$',
@@ -84,9 +90,9 @@ def check_env_file_access(command):
                 "  • `env-safe --help` - See all options\n\n"
                 "To modify .env files, please edit them manually outside of Claude Code."
             )
-            return True, reason_text
-    
-    return False, None
+            return "block", reason_text
+
+    return "allow", None
 
 
 # If run as a standalone script
@@ -105,11 +111,11 @@ if __name__ == "__main__":
     # Get the command being executed
     command = data.get("tool_input", {}).get("command", "")
     
-    should_block, reason = check_env_file_access(command)
-    
-    if should_block:
+    decision, reason = check_env_file_access(command)
+
+    if decision in ("block", "ask"):
         print(json.dumps({
-            "decision": "block",
+            "decision": decision,
             "reason": reason
         }, ensure_ascii=False))
     else:

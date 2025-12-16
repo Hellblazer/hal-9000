@@ -55,15 +55,15 @@ while IFS= read -r session_line; do
     printf "%-25s %-15s %-10b %s\n" "$session_name" "$created" "$attached" "$windows"
 done <<< "$sessions"
 
-printf "\n${CYAN}ClaudeBox Containers:${NC}\n"
+printf "\n${CYAN}aod Containers:${NC}\n"
 printf "─%.0s" $(seq 1 "$TABLE_WIDTH")
 printf "\n"
 
-# List ClaudeBox containers
-if docker ps --filter "name=claudebox" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null | tail -n +2 | grep -q .; then
-    docker ps --filter "name=claudebox" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | tail -n +2
+# List aod containers
+if docker ps --filter "name=aod-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null | tail -n +2 | grep -q .; then
+    docker ps --filter "name=aod-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | tail -n +2
 else
-    printf "${YELLOW}No ClaudeBox containers running${NC}\n"
+    printf "${YELLOW}No aod containers running${NC}\n"
 fi
 
 printf "\n${CYAN}Commands:${NC}\n"

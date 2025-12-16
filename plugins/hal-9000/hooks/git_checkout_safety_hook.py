@@ -6,15 +6,17 @@ import re
 def check_git_checkout_command(command):
     """
     Check if a git checkout command is safe to execute.
-    Returns tuple: (should_block: bool, reason: str or None)
+    Returns tuple: (decision: str, reason: str or None)
+
+    decision is one of: "allow", "ask", "block"
     """
     # Check if it's a git checkout command
     if not command.strip().startswith("git checkout"):
-        return False, None
-    
+        return "allow", None
+
     # Safe patterns that we should allow without checking
     if "-b" in command or "--help" in command or "-h" in command:
-        return False, None
+        return "allow", None
     
     # ALWAYS block these dangerous patterns
     dangerous_patterns = [
@@ -31,7 +33,7 @@ def check_git_checkout_command(command):
     for pattern, message in dangerous_patterns:
         if re.search(pattern, command):
             reason = f"⚠️  DANGEROUS COMMAND DETECTED!\n\n{message}\n\nThis command will destroy uncommitted work without warning.\n\nSafer alternatives:\n- Use 'git stash' to save changes temporarily\n- Use 'git diff' to see what would be lost\n- Use 'git restore' for clearer syntax"
-            return True, reason
+            return "block", reason
     
     try:
         # First, check if there are any uncommitted changes
@@ -86,15 +88,15 @@ def check_git_checkout_command(command):
             if "checkout ." in command or "checkout -- ." in command:
                 warning += "\n⚠️  DANGER: 'git checkout .' will DISCARD ALL local changes!"
             
-            return True, warning
-        
+            return "block", warning
+
     except Exception as e:
         # If we can't determine status, err on the side of caution
         reason = f"Could not verify repository status: {str(e)}\nPlease manually check 'git status' before proceeding."
-        return True, reason
-    
+        return "block", reason
+
     # No uncommitted changes, safe to proceed
-    return False, None
+    return "allow", None
 
 
 # If run as a standalone script
@@ -113,11 +115,11 @@ if __name__ == "__main__":
     # Get the command being executed
     command = data.get("tool_input", {}).get("command", "")
     
-    should_block, reason = check_git_checkout_command(command)
-    
-    if should_block:
+    decision, reason = check_git_checkout_command(command)
+
+    if decision in ("block", "ask"):
         print(json.dumps({
-            "decision": "block",
+            "decision": decision,
             "reason": reason
         }))
     else:
