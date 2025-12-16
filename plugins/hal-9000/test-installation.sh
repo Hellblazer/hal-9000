@@ -77,7 +77,7 @@ done
 # Validate distro
 if [[ -n "$DISTRO" ]] && [[ ! -v DISTROS[$DISTRO] ]]; then
     echo -e "${RED}Error: Unknown distro '$DISTRO'${NC}"
-    echo "Supported: ${!DISTROS[@]}"
+    echo "Supported: ${!DISTROS[*]}"
     exit 1
 fi
 
