@@ -114,6 +114,37 @@ if [[ "$INSTALL_HOST" == "true" ]]; then
     else
         echo -e "${YELLOW}Skipping DEVONthink (macOS only)${NC}"
     fi
+
+    # Install beads (bd) - AI-optimized issue tracker
+    echo ""
+    echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
+    echo -e "${BLUE}  Installing beads (bd) Issue Tracker${NC}"
+    echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
+    echo ""
+
+    # Install bd CLI via Homebrew
+    if command -v brew &> /dev/null; then
+        if ! command -v bd &> /dev/null; then
+            echo "Installing bd CLI via Homebrew..."
+            brew tap steveyegge/beads
+            brew install bd
+            echo -e "${GREEN}✓ bd CLI installed${NC}"
+        else
+            echo -e "${GREEN}✓ bd CLI already installed ($(bd --version 2>/dev/null || echo 'version unknown'))${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠ Homebrew not found - install bd manually:${NC}"
+        echo "  brew tap steveyegge/beads && brew install bd"
+        echo "  Or: curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash"
+    fi
+
+    echo ""
+    echo "beads quick start:"
+    echo "  1. cd your-project && bd init"
+    echo "  2. bd create \"First task\" -t task"
+    echo "  3. bd ready  # Show ready work"
+    echo "  4. bd onboard  # Get Claude integration instructions"
+
     # Install Claude Code Tools
     echo ""
     echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
@@ -482,6 +513,29 @@ if [[ "$INSTALL_CLAUDEBOX_SHARED" == "true" ]]; then
     # Copy MCP server configurations to shared location
     cp -r "$SCRIPT_DIR/mcp-servers"/* "$CLAUDEBOX_SHARED_DIR/mcp-servers/"
 
+    # Download bd (beads) binary for Linux containers
+    echo ""
+    echo "Downloading bd CLI for Linux containers..."
+    BD_VERSION=$(curl -sL https://api.github.com/repos/steveyegge/beads/releases/latest | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/' || echo "0.30.0")
+
+    # Detect architecture for Linux binary
+    ARCH=$(uname -m)
+    case "$ARCH" in
+        x86_64) BD_ARCH="amd64" ;;
+        aarch64|arm64) BD_ARCH="arm64" ;;
+        *) BD_ARCH="amd64" ;;  # Default to amd64
+    esac
+
+    BD_URL="https://github.com/steveyegge/beads/releases/download/v${BD_VERSION}/beads_${BD_VERSION}_linux_${BD_ARCH}.tar.gz"
+    mkdir -p "$CLAUDEBOX_SHARED_DIR/tools/bin"
+
+    if curl -fsSL "$BD_URL" | tar -xz -C "$CLAUDEBOX_SHARED_DIR/tools/bin" bd 2>/dev/null; then
+        chmod +x "$CLAUDEBOX_SHARED_DIR/tools/bin/bd"
+        echo -e "${GREEN}✓ bd CLI (v$BD_VERSION, linux_$BD_ARCH) downloaded to shared tools${NC}"
+    else
+        echo -e "${YELLOW}⚠ Failed to download bd binary - containers will need to install individually${NC}"
+    fi
+
     # Install claude-code-tools to shared location
     echo ""
     echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
@@ -527,6 +581,7 @@ if [[ "$INSTALL_CLAUDEBOX_SHARED" == "true" ]]; then
 - **vault**: Encrypted .env backup (requires SOPS)
 - **env-safe**: Safe .env inspection without exposing secrets
 - **find-session**: Search across all Claude Code sessions
+- **bd**: Beads CLI - AI-optimized issue tracker
 
 ## Architecture
 
@@ -662,6 +717,14 @@ else
     fi
 fi
 
+# Verify beads is available
+if command -v bd &> /dev/null; then
+    echo "✓ bd (beads) CLI available"
+else
+    echo "⚠ bd not found in shared tools"
+    echo "  Install manually: curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/install.sh | bash"
+fi
+
 echo "HAL-9000 components configured for this container"
 EOF
     chmod +x "$CLAUDEBOX_SHARED_DIR/setup.sh"
@@ -702,6 +765,10 @@ if [[ "$INSTALL_HOST" == "true" ]]; then
         echo "  • DEVONthink - Document research integration"
     fi
     echo ""
+    echo "Issue Tracking:"
+    echo "  • bd (beads) - Dependency-aware issue tracking for AI"
+    echo "  • Run 'bd init' in your project to get started"
+    echo ""
     echo "Session Management:"
     echo "  • /check - Save session context"
     echo "  • /load - Resume session"
@@ -731,7 +798,7 @@ fi
 if [[ "$INSTALL_CLAUDEBOX_SHARED" == "true" ]]; then
     echo "ClaudeBox Shared Installation:"
     echo "  Location: $CLAUDEBOX_SHARED_DIR"
-    echo "  Components: MCP servers, tools, hooks, commands, agents"
+    echo "  Components: MCP servers, tools, hooks, commands, agents, beads"
     echo "  All ClaudeBox containers will inherit these"
     echo ""
 fi

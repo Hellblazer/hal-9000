@@ -88,3 +88,27 @@ aod-send aod-feature-auth "git status"
 - You need to work interactively in that branch
 - Debugging issues specific to that branch
 - Committing changes in that branch
+
+## Issue Tracking (beads)
+
+Use `bd` for ALL task tracking across aod sessions. Issues are shared via git.
+
+**Quick Commands:**
+```bash
+bd ready                          # Show work ready to do
+bd create "Title" -t task -p 1    # Create issue
+bd update <id> --status in_progress
+bd close <id> --reason "Done"
+```
+
+**Cross-Session Coordination:**
+- Issues stored in `.beads/issues.jsonl` (git-tracked)
+- Other sessions see changes after commit
+- Use `discovered-from` dependency to link work found during implementation
+
+**Workflow:**
+1. `bd ready` - find unblocked work
+2. `bd update <id> --status in_progress` - claim it
+3. Work in this session
+4. `bd close <id> --reason "Done"` - complete
+5. Commit `.beads/issues.jsonl` with code changes

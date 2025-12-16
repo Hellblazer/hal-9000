@@ -43,6 +43,51 @@ Use the `cli-controller` skill for guided workflows:
 - Spawning and coordinating Claude Code instances
 - Multi-step interactive testing scenarios
 
+## beads (bd) - Issue Tracking
+
+Use `bd` for ALL task and issue tracking. Do NOT use markdown TODO lists.
+
+### Quick Reference
+```bash
+bd ready                          # Show work ready to do (no blockers)
+bd create "Title" -t type -p prio # Create issue (types: bug/feature/task/epic/chore)
+bd update <id> --status in_progress
+bd close <id> --reason "Done"
+bd list                           # All issues
+bd show <id>                      # Issue details
+bd dep add <id> <blocker-id>      # Add dependency
+bd dep tree <id>                  # View dependency tree
+```
+
+### Issue Types
+- `bug` - Something broken
+- `feature` - New functionality
+- `task` - Work item (tests, docs, refactoring)
+- `epic` - Large feature with subtasks
+- `chore` - Maintenance (dependencies, tooling)
+
+### Priority Levels
+- `0` - Critical (security, data loss, broken builds)
+- `1` - High (major features, important bugs)
+- `2` - Medium (default)
+- `3` - Low (polish, optimization)
+- `4` - Backlog (future ideas)
+
+### AI Workflow
+1. **Check ready work**: `bd ready --json`
+2. **Claim task**: `bd update <id> --status in_progress --json`
+3. **Work on it**: Implement, test, document
+4. **Discover new work?**: `bd create "Found bug" -p 1 --deps discovered-from:<parent-id> --json`
+5. **Complete**: `bd close <id> --reason "Done" --json`
+6. **Commit together**: Always commit `.beads/issues.jsonl` with code changes
+
+### Project Setup
+```bash
+cd your-project
+bd init                           # Initialize beads
+bd onboard                        # Get full integration guide
+```
+
 ## Workflow & Architecture Best Practices
 
 ### Agent Usage
@@ -58,23 +103,49 @@ Use the `cli-controller` skill for guided workflows:
 - **Research**: deep-research-synthesizer, devonthink-researcher
 - **Organization**: knowledge-tidier, pdf-chromadb-processor, project-management-setup
 
-## Knowledge Management
+## MCP Servers
 
 ### ChromaDB
-- Store memories, relate knowledge, track complex concepts for long-running projects
-- ChromaDB metadata: scalars only (str/int/float/bool/None), no arrays/dicts - use comma-separated strings
-- Search reference: "chromadb-metadata-constraints" for detailed constraints
+Vector database for semantic search and long-term memory.
+```
+Store memories, relate knowledge, track complex concepts
+Search: mcp__chromadb__search_similar, mcp__chromadb__hybrid_search
+Create: mcp__chromadb__create_document
+```
+- Metadata: scalars only (str/int/float/bool/None), no arrays/dicts - use comma-separated strings
 
 ### Memory Bank
+Persistent project memory across sessions.
+```
+mcp__allPepper-memory-bank__list_projects
+mcp__allPepper-memory-bank__memory_bank_read
+mcp__allPepper-memory-bank__memory_bank_write
+```
+- Storage: `~/memory-bank/{project-name}/`
 - Coordinate parallel work across agents
-- Persistent storage across sessions in ~/memory-bank
-- Organize by project for easy retrieval
 
-### Session Management
-- Use `/check` to save current session context
-- Use `/load` to resume saved sessions
-- Use `/sessions` to list all available sessions
-- Use `/session-delete` to remove old sessions
+### Sequential Thinking
+Step-by-step reasoning for complex problems.
+```
+mcp__sequential-thinking__sequentialthinking
+```
+- Use for: debugging, analysis, multi-step problem solving
+- Allows revision of previous thoughts, branching, hypothesis verification
+
+### DEVONthink (macOS)
+Document research and import from DEVONthink databases.
+```
+mcp__devonthink__search - Search across databases
+mcp__devonthink__document - Get document content
+mcp__devonthink__research - Research topics
+mcp__devonthink__import - Import from URLs (arXiv, etc.)
+```
+
+## Session Management
+- `/check` - Save current session context
+- `/load` - Resume saved sessions
+- `/sessions` - List all available sessions
+- `/session-delete` - Remove old sessions
 
 ## aod (Army of Darkness)
 
@@ -90,6 +161,56 @@ Each aod session runs in:
 - Isolated git worktree
 - Dedicated tmux session
 - Optional ClaudeBox container
+
+## hal9000 (Containerized Claude)
+
+For isolated Claude sessions in Docker containers:
+```bash
+hal9000 run                       # Single container in current directory
+hal9000 run --profile python      # With language profile
+hal9000 squad --sessions 3        # Multiple parallel sessions
+hal9000-list                      # List active sessions
+hal9000-attach SESSION            # Attach to session
+hal9000-send SESSION "cmd"        # Send command to session
+hal9000-broadcast "cmd"           # Send to all sessions
+hal9000-cleanup                   # Stop all sessions
+```
+
+Each hal9000 session:
+- Runs in isolated Docker container
+- Has full hal-9000 stack (MCP servers, tools, agents)
+- Shares memory-bank with host (`~/memory-bank`)
+
+## Terminal Tools
+
+### vault
+Encrypted .env backup with SOPS:
+```bash
+vault backup .env                 # Encrypt and backup
+vault restore .env                # Restore from backup
+vault list                        # List backups
+```
+
+### env-safe
+Safe .env inspection without exposing secrets:
+```bash
+env-safe .env                     # Show keys only (no values)
+env-safe .env --check             # Validate format
+```
+
+### find-session
+Search across Claude Code sessions:
+```bash
+find-session "search term"        # Search all sessions
+find-session --recent             # Recent sessions
+```
+
+## Safety Hooks
+
+Installed hooks protect against common mistakes:
+- **git hooks**: Block accidental commits of secrets, large files
+- **file hooks**: Protect sensitive files (.env, credentials)
+- **environment hooks**: Warn about production environment access
 
 ---
 

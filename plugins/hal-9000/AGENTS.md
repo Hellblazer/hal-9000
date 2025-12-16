@@ -130,6 +130,32 @@ Use devonthink-researcher to explore "distributed consensus algorithms"
 Use deep-analyst to analyze consensus patterns found
 ```
 
+### beads (bd) Issue Tracking
+
+Agents should use `bd` for all task tracking - do NOT use markdown TODO lists.
+
+**Before starting work:**
+```bash
+bd ready                          # Check for ready work
+bd update <id> --status in_progress  # Claim a task
+```
+
+**When discovering new work:**
+```bash
+bd create "Found bug in auth" -t bug -p 1 --deps discovered-from:<parent-id>
+```
+
+**After completing work:**
+```bash
+bd close <id> --reason "Implemented and tested"
+```
+
+**Best practices:**
+- Always check `bd ready` before asking "what should I work on?"
+- Link discovered issues with `discovered-from` dependency
+- Commit `.beads/issues.jsonl` together with code changes
+- Use `--json` flag for programmatic parsing
+
 ## Common Workflows
 
 ### Feature Implementation

@@ -1,10 +1,10 @@
 # HAL-9000 Claude Marketplace
 
-[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Container Registry](https://img.shields.io/badge/ghcr.io-hellblazer%2Fhal--9000-blue?logo=docker)](https://github.com/Hellblazer/hal-9000/pkgs/container/hal-9000)
 
-Claude Code productivity suite: containerized Claude, multi-branch development, MCP servers, and custom agents.
+Claude Code productivity suite: containerized Claude, multi-branch development, MCP servers, issue tracking (beads), and custom agents.
 
 ## Quick Start
 
@@ -121,6 +121,21 @@ Usage: `Debug this issue using sequential thinking`<br>
 Usage: `Search my DEVONthink for ML papers`, `Import arXiv paper 2312.03032`<br>
 [Details →](plugins/hal-9000/mcp-servers/devonthink/README.md)
 
+### Issue Tracking (beads)
+
+**bd** - AI-optimized issue tracker with dependency support. "Issues chained together like beads."
+
+```bash
+bd init                           # Initialize in project
+bd create "Task" -t feature -p 1  # Create issue
+bd ready                          # Show ready work (no blockers)
+bd update <id> --status in_progress
+bd close <id> --reason "Done"
+bd dep add <id> <blocker-id>      # Add dependency
+```
+
+[Details →](plugins/hal-9000/mcp-servers/beads/README.md)
+
 ### Custom Agents
 
 12 specialized agents installed to `~/.claude/agents/`:
@@ -224,6 +239,7 @@ Both templates backup existing files before installation.
 - [Memory Bank MCP](plugins/hal-9000/mcp-servers/memory-bank/README.md)
 - [Sequential Thinking MCP](plugins/hal-9000/mcp-servers/sequential-thinking/)
 - [DEVONthink MCP](plugins/hal-9000/mcp-servers/devonthink/README.md)
+- [Beads (bd) Issue Tracker](plugins/hal-9000/mcp-servers/beads/README.md)
 
 ## Security
 
@@ -242,3 +258,4 @@ Apache 2.0
 - [Memory Bank](https://github.com/allpepper/memory-bank-mcp)
 - [Claude Code Tools](https://github.com/pchalasani/claude-code-tools)
 - [ClaudeBox](https://github.com/RchGrav/claudebox)
+- [Beads](https://github.com/steveyegge/beads)

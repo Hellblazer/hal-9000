@@ -224,9 +224,19 @@ This is a **hal9000** container session with the full hal-9000 stack.
 
 ## MCP Servers Available
 
-- **memory-bank** - Persistent memory across sessions
-- **sequential-thinking** - Step-by-step reasoning
+- **memory-bank** - Persistent memory in ~/memory-bank (shared with host)
+  - \`mcp__allPepper-memory-bank__list_projects\`
+  - \`mcp__allPepper-memory-bank__memory_bank_read/write\`
+- **sequential-thinking** - Step-by-step reasoning for complex problems
+  - \`mcp__sequential-thinking__sequentialthinking\`
 - **chromadb** - Vector database for semantic search
+  - \`mcp__chromadb__search_similar\`, \`mcp__chromadb__create_document\`
+
+## Custom Agents Available
+
+- **Development**: java-developer, java-architect-planner, java-debugger
+- **Review**: code-review-expert, plan-auditor, deep-analyst
+- **Research**: deep-research-synthesizer, codebase-deep-analyzer
 
 ## Other Active Sessions
 
@@ -271,6 +281,32 @@ hal9000-attach SESSION-NAME
 - Each session is isolated but shares the memory-bank
 - Use `hal9000-send` and `hal9000-broadcast` to coordinate without switching
 - Check current session: `tmux display-message -p '#S'`
+
+## Issue Tracking (beads)
+
+Use `bd` for ALL task tracking. Do NOT use markdown TODO lists.
+
+**Quick Commands:**
+```bash
+bd ready                          # Show work ready to do
+bd create "Title" -t task -p 1    # Create issue
+bd update <id> --status in_progress
+bd close <id> --reason "Done"
+bd list                           # All issues
+```
+
+**Workflow:**
+1. Check `bd ready` for unblocked work
+2. Claim: `bd update <id> --status in_progress`
+3. Work on it
+4. Complete: `bd close <id> --reason "Done"`
+5. Commit `.beads/issues.jsonl` with your changes
+
+**Initialize in project:**
+```bash
+bd init                           # First time setup
+bd onboard                        # Full integration guide
+```
 EOF
 }
 

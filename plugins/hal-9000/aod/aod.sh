@@ -276,6 +276,18 @@ Each aod session is completely isolated:
 
 Changes in this session don't affect other sessions until committed to git.
 
+## MCP Servers Available
+
+- **memory-bank** - Persistent memory in ~/memory-bank (shared across sessions)
+- **sequential-thinking** - Step-by-step reasoning for complex problems
+- **chromadb** - Vector database for semantic search
+
+## Custom Agents Available
+
+- **Development**: java-developer, java-architect-planner, java-debugger
+- **Review**: code-review-expert, plan-auditor, deep-analyst
+- **Research**: deep-research-synthesizer, codebase-deep-analyzer
+
 ## Common Workflows
 
 **Check status in another branch:**
@@ -305,6 +317,32 @@ aod-broadcast "git fetch origin"
 - Each session shares the same git repository (.git) - commits are visible across sessions
 - Worktrees are in \`~/.aod/worktrees/\`
 - Check current session: \`tmux display-message -p '#S'\`
+
+## Issue Tracking (beads)
+
+Use \`bd\` for ALL task tracking across sessions. Issues are shared via git.
+
+**Quick Commands:**
+\`\`\`bash
+bd ready                          # Show work ready to do
+bd create "Title" -t task -p 1    # Create issue
+bd update <id> --status in_progress
+bd close <id> --reason "Done"
+bd list                           # All issues
+\`\`\`
+
+**Cross-Session Coordination:**
+- Issues are stored in \`.beads/issues.jsonl\` (git-tracked)
+- Use \`bd sync\` to force sync before coordinating
+- Other sessions see your changes after you commit
+- Use \`discovered-from\` dependency to link discovered work
+
+**Workflow:**
+1. Check \`bd ready\` for unblocked work
+2. Claim: \`bd update <id> --status in_progress\`
+3. Work on it in this session
+4. Complete: \`bd close <id> --reason "Done"\`
+5. Commit \`.beads/issues.jsonl\` with your changes
 EOF
 
     info "Created CLAUDE.md in worktree"
