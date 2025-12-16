@@ -5,6 +5,20 @@ All notable changes to hal-9000 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.2] - 2025-12-16
+
+### Added
+- **DEVONthink MCP test suite**: 39 security validation tests
+  - Basic input validation tests (query, UUID, limit, content, doc type)
+  - URL scheme validation tests (blocks file://, ftp://, javascript:)
+  - File path validation tests (home/temp restriction, sensitive path blocking)
+  - Academic identifier tests (arXiv, PubMed, DOI pattern validation)
+  - Security constants verification
+- Shell test scripts for server setup and end-to-end workflow validation
+
+### Changed
+- hal-9000 is now the canonical source for DEVONthink MCP server (supersedes dt-mcp)
+
 ## [1.3.1] - 2025-12-16
 
 ### Changed
