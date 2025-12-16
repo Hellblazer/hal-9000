@@ -68,9 +68,11 @@ jobs:
 
       - name: Run integration tests
         run: |
-          QUICK_FLAG=""
-          if [ "${{ github.event.inputs.quick }}" = "true" ]; then
-            QUICK_FLAG="--quick"
+          # Use quick mode for push/PR (validates DinD environment)
+          # Full tests only available via manual dispatch with quick=false
+          QUICK_FLAG="--quick"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.quick }}" = "false" ]; then
+            QUICK_FLAG=""
           fi
 
           docker run --privileged \
