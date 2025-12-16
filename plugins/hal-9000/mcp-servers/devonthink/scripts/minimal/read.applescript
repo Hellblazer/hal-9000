@@ -51,9 +51,21 @@ end run
 on escapeString(str)
 	set str to my replaceText(str, "\\", "\\\\")
 	set str to my replaceText(str, "\"", "\\\"")
-	set str to my replaceText(str, return, "\\n")
+	set str to my replaceText(str, return, "\\r")
+	set str to my replaceText(str, linefeed, "\\n")
 	set str to my replaceText(str, tab, "\\t")
-	return str
+	-- Remove other control characters (ASCII 0-31 except those already handled)
+	set cleanStr to ""
+	repeat with i from 1 to length of str
+		set c to character i of str
+		set cid to id of c
+		if cid < 32 and cid is not 9 and cid is not 10 and cid is not 13 then
+			-- Skip control character
+		else
+			set cleanStr to cleanStr & c
+		end if
+	end repeat
+	return cleanStr
 end escapeString
 
 on tagsToJSON(tagList)
@@ -69,9 +81,9 @@ end tagsToJSON
 on joinList(lst, delimiter)
 	set oldDelimiters to AppleScript's text item delimiters
 	set AppleScript's text item delimiters to delimiter
-	set result to lst as text
+	set joinedText to lst as text
 	set AppleScript's text item delimiters to oldDelimiters
-	return result
+	return joinedText
 end joinList
 
 on replaceText(theText, findStr, replaceStr)

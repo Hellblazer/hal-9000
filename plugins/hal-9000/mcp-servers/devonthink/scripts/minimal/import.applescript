@@ -1,121 +1,137 @@
--- Minimal DEVONthink Import
--- Usage: osascript import.applescript "url" "tags" "database" "groupPath"
--- Downloads file with curl and imports to DEVONthink
+-- DEVONthink Import Tool
+-- Usage: osascript import.applescript "mode" "source" "name" "tags" "database" "groupPath"
+-- Modes: "file" (local), "webarchive" (URL to web doc), "download" (URL to file)
 
 on run argv
-	set sourceUrl to item 1 of argv
+	set importMode to item 1 of argv
+	set sourceInput to item 2 of argv
+	set customName to ""
 	set tagsString to ""
 	set targetDatabase to ""
 	set targetGroup to ""
 
-	if (count of argv) > 1 then
-		set tagsString to item 2 of argv
-	end if
-
 	if (count of argv) > 2 then
-		set targetDatabase to item 3 of argv
+		set customName to item 3 of argv
 	end if
 
 	if (count of argv) > 3 then
-		set targetGroup to item 4 of argv
+		set tagsString to item 4 of argv
 	end if
 
-	-- Validate URL
-	if sourceUrl is "" then
-		return "{\"error\":\"URL is required\"}"
+	if (count of argv) > 4 then
+		set targetDatabase to item 5 of argv
+	end if
+
+	if (count of argv) > 5 then
+		set targetGroup to item 6 of argv
+	end if
+
+	-- Validate input
+	if sourceInput is "" then
+		return "{\"error\":\"Source path or URL is required\"}"
+	end if
+
+	-- Parse tags
+	set tagList to {}
+	if tagsString is not "" then
+		set oldDelims to AppleScript's text item delimiters
+		set AppleScript's text item delimiters to ","
+		set newTags to text items of tagsString
+		set AppleScript's text item delimiters to oldDelims
+
+		repeat with i from 1 to count of newTags
+			set tagText to item i of newTags as text
+			set trimmedTag to my simpleTrim(tagText)
+			if trimmedTag is not "" then
+				set end of tagList to trimmedTag
+			end if
+		end repeat
 	end if
 
 	try
-		-- Create temp directory
-		set tempDir to (do shell script "mktemp -d")
-
-		-- Extract filename from URL or generate one
-		set fileName to my getFilenameFromUrl(sourceUrl)
-		set tempFile to tempDir & "/" & fileName
-
-		-- Download with curl
-		set curlCmd to "curl -L -o " & quoted form of tempFile & " " & quoted form of sourceUrl & " 2>&1"
-		try
-			do shell script curlCmd
-		on error errMsg
-			do shell script "rm -rf " & quoted form of tempDir
-			return "{\"error\":\"Download failed: " & my escapeString(errMsg) & "\"}"
-		end try
-
-		-- Check if file was downloaded
-		try
-			do shell script "test -f " & quoted form of tempFile
-		on error
-			do shell script "rm -rf " & quoted form of tempDir
-			return "{\"error\":\"Downloaded file not found\"}"
-		end try
-
-		-- Parse tags BEFORE entering DEVONthink tell block (inline to avoid scoping issues)
-
-		set tagList to {}
-		if tagsString is not "" then
-			set oldDelims to AppleScript's text item delimiters
-			set AppleScript's text item delimiters to ","
-			set newTags to text items of tagsString
-			set AppleScript's text item delimiters to oldDelims
-
-
-			repeat with i from 1 to count of newTags
-				set tagText to item i of newTags as text
-				set trimmedTag to my simpleTrim(tagText)
-				if trimmedTag is not "" then
-					set end of tagList to trimmedTag
-				end if
-			end repeat
-		else
-		end if
-
 		tell application id "DNtp"
-			try
-				-- Determine target location
-				set targetLocation to missing value
+			-- Determine target location
+			set targetLocation to missing value
 
-				if targetDatabase is not "" then
-					set db to database targetDatabase
-					if targetGroup is not "" then
-						set targetLocation to create location targetGroup in db
-					else
-						set targetLocation to db
-					end if
+			if targetDatabase is not "" then
+				set db to database targetDatabase
+				if targetGroup is not "" then
+					set targetLocation to create location targetGroup in db
 				else
-					set targetLocation to incoming group of current database
+					set targetLocation to db
+				end if
+			else
+				set targetLocation to incoming group of current database
+			end if
+
+			-- Import based on mode
+			set importedRecord to missing value
+
+			if importMode is "file" then
+				-- Local file import
+				set importedRecord to import sourceInput to targetLocation
+
+			else if importMode is "webarchive" then
+				-- Create web archive from URL
+				set importedRecord to create web document from sourceInput in targetLocation
+
+			else if importMode is "download" then
+				-- Download file and import (for PDFs, etc.)
+				set tempDir to (do shell script "mktemp -d")
+
+				-- Extract filename using shell (use unique var name to avoid DEVONthink conflicts)
+				set dlFileName to do shell script "echo " & quoted form of sourceInput & " | sed 's/\\?.*$//' | sed 's|.*/||'"
+				if dlFileName does not contain "." then
+					set dlFileName to dlFileName & ".pdf"
+				end if
+				if dlFileName is "" then
+					set dlFileName to "import_" & (do shell script "date +%s") & ".pdf"
 				end if
 
-				-- Import file to DEVONthink
+				set tempFile to tempDir & "/" & dlFileName
+
+				-- Download with curl
+				set curlCmd to "curl -L -s -o " & quoted form of tempFile & " " & quoted form of sourceInput
+				do shell script curlCmd
+
+				-- Check file exists
+				try
+					do shell script "test -s " & quoted form of tempFile
+				on error
+					do shell script "rm -rf " & quoted form of tempDir
+					error "Download failed: empty or missing file"
+				end try
+
+				-- Import the downloaded file
 				set importedRecord to import tempFile to targetLocation
 
-
-				-- Apply tags if we have any
-				if (count of tagList) > 0 then
-					set tags of importedRecord to tagList
-				else
-				end if
-
-				-- Clean up temp file
+				-- Cleanup
 				do shell script "rm -rf " & quoted form of tempDir
+			else
+				return "{\"error\":\"Unknown import mode: " & importMode & "\"}"
+			end if
 
-				-- Extract record properties inside tell block
+			-- Apply custom name if provided
+			if customName is not "" then
+				set name of importedRecord to customName
+			end if
 
-				set recordUUID to uuid of importedRecord
-				set recordName to name of importedRecord
-				set recordType to type of importedRecord as string
-				set recordPath to path of importedRecord
-				set recordTags to tags of importedRecord
-				set recordSize to size of importedRecord
+			-- Apply tags if any
+			if (count of tagList) > 0 then
+				set tags of importedRecord to tagList
+			end if
 
-			on error errMsg
-				-- Clean up temp file on error
-				do shell script "rm -rf " & quoted form of tempDir
-				return "{\"error\":\"Import failed: " & my escapeString(errMsg) & "\"}"
-			end try
+			-- Extract properties
+			set recordUUID to uuid of importedRecord
+			set recordName to name of importedRecord
+			set recordType to type of importedRecord as string
+			set recordPath to path of importedRecord
+			set recordTags to tags of importedRecord
+			set recordSize to size of importedRecord
+
 		end tell
 
-		-- Build JSON OUTSIDE tell block (build tags JSON inline to avoid function call issues)
+		-- Build JSON response
 		set tagsJSON to "["
 		if (count of recordTags) > 0 then
 			repeat with i from 1 to count of recordTags
@@ -147,22 +163,18 @@ end run
 
 on getFilenameFromUrl(url)
 	try
-		-- Extract filename using shell commands for reliability
 		set fileName to do shell script "echo " & quoted form of url & " | sed 's/\\?.*$//' | sed 's|.*/||'"
 
-		-- If no extension, add .pdf (common for papers)
 		if fileName does not contain "." then
 			set fileName to fileName & ".pdf"
 		end if
 
-		-- If empty, use fallback
 		if fileName is "" then
 			return "import_" & (do shell script "date +%s") & ".pdf"
 		end if
 
 		return fileName
 	on error
-		-- Fallback to timestamp-based filename
 		return "import_" & (do shell script "date +%s") & ".pdf"
 	end try
 end getFilenameFromUrl
@@ -170,46 +182,24 @@ end getFilenameFromUrl
 on escapeString(str)
 	set str to my replaceText(str, "\\", "\\\\")
 	set str to my replaceText(str, "\"", "\\\"")
-	set str to my replaceText(str, return, "\\n")
+	set str to my replaceText(str, return, "\\r")
+	set str to my replaceText(str, linefeed, "\\n")
 	set str to my replaceText(str, tab, "\\t")
-	return str
+	set cleanStr to ""
+	repeat with i from 1 to length of str
+		set c to character i of str
+		set cid to id of c
+		if cid < 32 and cid is not 9 and cid is not 10 and cid is not 13 then
+			-- Skip control character
+		else
+			set cleanStr to cleanStr & c
+		end if
+	end repeat
+	return cleanStr
 end escapeString
 
-on tagsToJSON(tagList)
-	if (count of tagList) is 0 then
-		return "[]"
-	end if
-
-	set jsonTags to {}
-	repeat with i from 1 to count of tagList
-		set tagText to item i of tagList as text
-		set end of jsonTags to "\"" & my escapeString(tagText) & "\""
-	end repeat
-	set result to "[" & my joinList(jsonTags, ",") & "]"
-	return result
-end tagsToJSON
-
-on joinList(lst, delimiter)
-	set oldDelimiters to AppleScript's text item delimiters
-	set AppleScript's text item delimiters to delimiter
-	set joinedText to lst as text
-	set AppleScript's text item delimiters to oldDelimiters
-	return joinedText
-end joinList
-
-on splitString(str, delimiter)
-	set oldDelimiters to AppleScript's text item delimiters
-	set AppleScript's text item delimiters to delimiter
-	set result to text items of str
-	set AppleScript's text item delimiters to oldDelimiters
-	return result
-end splitString
-
 on simpleTrim(str)
-	-- Simple AppleScript-only trim function
 	set str to str as text
-
-	-- Remove leading spaces
 	repeat while str begins with " " or str begins with tab
 		if (length of str) > 1 then
 			set str to text 2 thru -1 of str
@@ -217,8 +207,6 @@ on simpleTrim(str)
 			return ""
 		end if
 	end repeat
-
-	-- Remove trailing spaces
 	repeat while str ends with " " or str ends with tab
 		if (length of str) > 1 then
 			set str to text 1 thru -2 of str
@@ -226,7 +214,6 @@ on simpleTrim(str)
 			return ""
 		end if
 	end repeat
-
 	return str
 end simpleTrim
 

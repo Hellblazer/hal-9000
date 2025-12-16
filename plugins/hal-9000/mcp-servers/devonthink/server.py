@@ -31,7 +31,7 @@ from mcp.types import (
 SCRIPT_DIR = Path(__file__).parent / "scripts" / "minimal"
 
 # Validation constants
-ALLOWED_SCRIPTS = {'search', 'read', 'create'}
+ALLOWED_SCRIPTS = {'search', 'read', 'create', 'import'}
 ALLOWED_DOC_TYPES = {'markdown', 'txt', 'rtf'}
 MAX_QUERY_LENGTH = 1000
 MAX_CONTENT_SIZE = 10 * 1024 * 1024  # 10MB
@@ -114,7 +114,8 @@ async def run_applescript(script_name: str, *args) -> dict:
         raise FileNotFoundError(f"AppleScript not found: {script_path}")
 
     # Build command
-    cmd = ["osascript", str(script_path)] + [str(arg) for arg in args if arg]
+    # IMPORTANT: Use 'is not None' not 'if arg' - empty strings must be passed through
+    cmd = ["osascript", str(script_path)] + [str(arg) for arg in args if arg is not None]
 
     log(f"Running: {' '.join(cmd)}")
 
@@ -255,12 +256,16 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "source": {
                         "type": "string",
-                        "enum": ["url", "arxiv", "pubmed", "doi"],
-                        "description": 'Source type: "url" for direct URL, "arxiv" for arXiv papers, "pubmed" for PubMed Central, "doi" for DOI',
+                        "enum": ["url", "pdf", "arxiv", "pubmed", "doi", "file"],
+                        "description": 'Source type: "url" for web page (creates web archive), "pdf" for direct PDF download, "file" for local file path, "arxiv" for arXiv papers, "pubmed" for PubMed Central, "doi" for DOI',
                     },
                     "identifier": {
                         "type": "string",
-                        "description": "URL or paper identifier (e.g., '2301.00001' for arXiv, 'PMC12345' for PubMed, '10.1000/xyz' for DOI)",
+                        "description": "URL, file path, or paper identifier (e.g., '2301.00001' for arXiv, 'PMC12345' for PubMed, '10.1000/xyz' for DOI)",
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Custom name/title for the imported document (optional, uses default if omitted)",
                     },
                     "tags": {
                         "type": "string",
@@ -363,21 +368,36 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             # Import tool
             source = arguments["source"]
             identifier = arguments["identifier"]
+            custom_name = arguments.get("name", "")
             tags = arguments.get("tags", "")
             database = arguments.get("database", "")
             group_path = arguments.get("groupPath", "")
 
-            # Build URL based on source type
-            if source == "url":
-                url = identifier
+            # Determine import mode and source based on source type
+            if source == "file":
+                # Local file import
+                import_mode = "file"
+                import_source = identifier
+            elif source == "url":
+                # Web archive for URLs
+                import_mode = "webarchive"
+                import_source = identifier
+            elif source == "pdf":
+                # Direct PDF download from URL
+                import_mode = "download"
+                import_source = identifier
             else:
-                url = build_paper_url(source, identifier)
+                # Download PDF for academic papers (arxiv, pubmed, doi)
+                import_mode = "download"
+                import_source = build_paper_url(source, identifier)
 
-            log(f"Import: source={source}, identifier={identifier}, url={url}")
+            log(f"Import: mode={import_mode}, source={source}, target={import_source}, name={custom_name or '(auto)'}")
 
             result = await run_applescript(
                 "import",
-                url,
+                import_mode,
+                import_source,
+                custom_name,
                 tags,
                 database,
                 group_path

@@ -5,6 +5,19 @@ All notable changes to hal-9000 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2025-12-16
+
+### Changed
+- **DEVONthink MCP server updated** from dt-mcp repository with bug fixes:
+  - Added `file` source type for importing local files
+  - Added `pdf` source type for direct PDF downloads
+  - Added custom `name` parameter for imported documents
+  - Fixed empty string handling in AppleScript argument passing
+  - Improved JSON escaping with proper `\r` vs `\n` handling
+  - Added control character removal for JSON safety
+  - Reworked import with three modes: file, webarchive, download
+- Updated DEVONthink README with import mode documentation
+
 ## [1.3.0] - 2025-12-16
 
 ### Added

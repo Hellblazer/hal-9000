@@ -7,7 +7,7 @@ Minimal Python-based MCP server providing Claude direct access to DEVONthink dat
 - **Search** - Advanced DEVONthink search with Boolean operators, field searches, wildcards
 - **Read** - Get document content and metadata by UUID
 - **Create** - Create new markdown, text, or RTF documents
-- **Import** - Import from URLs and academic papers (arXiv, PubMed, DOI)
+- **Import** - Import from URLs, local files, and academic papers (arXiv, PubMed, DOI)
 
 ## Requirements
 
@@ -82,9 +82,25 @@ Supports markdown, plain text, and RTF formats.
 Import this arXiv paper: 2312.03032
 Import from DOI: 10.1000/xyz123
 Import this URL: https://example.com/paper.pdf
+Import the local file: /path/to/document.pdf
+Create a web archive from: https://example.com/article
 ```
 
-Automatically downloads and imports to DEVONthink.
+**Import modes:**
+
+| Source | Mode | Description |
+|--------|------|-------------|
+| `file` | Local import | Import existing file from disk |
+| `url` | Web archive | Create web archive of URL (preserves full page) |
+| `pdf` | Download | Download file directly (for PDFs, documents) |
+| `arxiv` | Download | Fetch PDF from arXiv |
+| `pubmed` | Download | Fetch PDF from PubMed Central |
+| `doi` | Download | Resolve DOI and fetch document |
+
+**Options:**
+- Custom name: `"Import paper.pdf as 'My Research Paper'"`
+- Tags: Import with tags applied
+- Database/group: Specify destination
 
 ## Architecture
 
@@ -111,7 +127,7 @@ Total: ~600 lines of code, ~800 tokens context overhead.
 
 1. Ensure DEVONthink is running
 2. Check network connection
-3. Test AppleScript: `osascript scripts/minimal/import.applescript "https://arxiv.org/pdf/2312.03032.pdf" "test"`
+3. Test AppleScript: `osascript scripts/minimal/import.applescript "download" "https://arxiv.org/pdf/2312.03032.pdf" "" "test"`
 
 ### Permission errors
 
@@ -130,8 +146,8 @@ python3 -c "import sys; sys.path.insert(0, '.'); import server; print('✓ Serve
 # Test search AppleScript
 osascript scripts/minimal/search.applescript "test" "" 10
 
-# Test import
-osascript scripts/minimal/import.applescript "https://example.com/doc.pdf" "test-tag"
+# Test import (mode: download, source: url, name: test, tags: test-tag)
+osascript scripts/minimal/import.applescript "download" "https://example.com/doc.pdf" "test" "test-tag"
 ```
 
 ## Why Python?
