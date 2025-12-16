@@ -38,7 +38,7 @@ if [ "$1" = "/bin/bash" ] || [ "$1" = "bash" ]; then
     echo "hal-9000 source: /hal-9000-src"
     echo ""
     echo "Quick start:"
-    echo "  cd /hal-9000-src/plugins/hal-9000 && ./install.sh"
+    echo "  cd /hal-9000-src && ./install.sh"
     echo ""
     exec su testuser -s /bin/bash
 else

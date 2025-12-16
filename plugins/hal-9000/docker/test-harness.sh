@@ -77,7 +77,8 @@ test_hal9000_install() {
         return 0
     fi
 
-    cd /hal-9000-src/plugins/hal-9000
+    # Source is at /hal-9000-src (build context is plugins/hal-9000)
+    cd /hal-9000-src
 
     # Run installer in host-only mode (option 2) for faster testing
     if echo "2" | timeout 300 ./install.sh 2>&1 | tee /tmp/install.log; then
