@@ -1,0 +1,168 @@
+name: Integration Tests (DinD)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'plugins/hal-9000/**'
+      - '.github/workflows/integration-test.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'plugins/hal-9000/**'
+  workflow_dispatch:
+    inputs:
+      quick:
+        description: 'Run quick tests only'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  build-test-image:
+    name: Build Test Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build test image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./plugins/hal-9000
+          file: ./plugins/hal-9000/docker/Dockerfile.test
+          push: false
+          load: true
+          tags: hal9000-test:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Save test image
+        run: docker save hal9000-test:latest -o /tmp/hal9000-test.tar
+
+      - name: Upload test image
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-image
+          path: /tmp/hal9000-test.tar
+          retention-days: 1
+
+  integration-tests:
+    name: Run Integration Tests
+    needs: build-test-image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download test image
+        uses: actions/download-artifact@v4
+        with:
+          name: test-image
+          path: /tmp
+
+      - name: Load test image
+        run: docker load -i /tmp/hal9000-test.tar
+
+      - name: Run integration tests
+        run: |
+          QUICK_FLAG=""
+          if [ "${{ github.event.inputs.quick }}" = "true" ]; then
+            QUICK_FLAG="--quick"
+          fi
+
+          docker run --privileged \
+            --name hal9000-integration-test \
+            hal9000-test:latest \
+            /hal-9000/test/run-tests.sh $QUICK_FLAG
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          docker logs hal9000-integration-test 2>&1 | tail -100 || true
+          docker cp hal9000-integration-test:/tmp/install.log ./install.log 2>/dev/null || true
+
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-logs
+          path: |
+            install.log
+          retention-days: 7
+
+  quick-smoke-test:
+    name: Quick Smoke Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate shell scripts
+        run: |
+          echo "Validating shell scripts..."
+          find plugins/hal-9000 -name "*.sh" -type f -exec bash -n {} \;
+          echo "All scripts valid"
+
+      - name: Validate JSON files
+        run: |
+          echo "Validating JSON files..."
+          for f in $(find . -name "*.json" -not -path "./.git/*"); do
+            echo "Checking $f"
+            jq empty "$f" || exit 1
+          done
+          echo "All JSON valid"
+
+      - name: Check version consistency
+        run: |
+          echo "Checking version consistency..."
+
+          PLUGIN_VERSION=$(jq -r '.version' plugins/hal-9000/.claude-plugin/plugin.json)
+          MARKETPLACE_VERSION=$(jq -r '.plugins[0].version' .claude-plugin/marketplace.json)
+          BUILD_VERSION=$(grep 'readonly VERSION=' plugins/hal-9000/docker/build-profiles.sh | cut -d'"' -f2)
+
+          echo "plugin.json: $PLUGIN_VERSION"
+          echo "marketplace.json: $MARKETPLACE_VERSION"
+          echo "build-profiles.sh: $BUILD_VERSION"
+
+          if [ "$PLUGIN_VERSION" != "$MARKETPLACE_VERSION" ]; then
+            echo "ERROR: Version mismatch between plugin.json and marketplace.json"
+            exit 1
+          fi
+
+          if [ "$PLUGIN_VERSION" != "$BUILD_VERSION" ]; then
+            echo "ERROR: Version mismatch between plugin.json and build-profiles.sh"
+            exit 1
+          fi
+
+          echo "All versions consistent: $PLUGIN_VERSION"
+
+      - name: Check hooks bundled
+        run: |
+          echo "Verifying safety hooks are bundled..."
+          HOOKS_DIR="plugins/hal-9000/hooks"
+
+          required_hooks=(
+            "bash_hook.py"
+            "env_file_protection_hook.py"
+            "file_length_limit_hook.py"
+            "git_add_block_hook.py"
+            "git_checkout_safety_hook.py"
+            "git_commit_block_hook.py"
+            "rm_block_hook.py"
+            "hooks.json"
+          )
+
+          for hook in "${required_hooks[@]}"; do
+            if [ -f "$HOOKS_DIR/$hook" ]; then
+              echo "✓ $hook"
+            else
+              echo "✗ Missing: $hook"
+              exit 1
+            fi
+          done
+
+          echo "All hooks bundled"

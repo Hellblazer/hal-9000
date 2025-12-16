@@ -1,0 +1,60 @@
+# Dockerfile.test - Docker-in-Docker environment for testing hal-9000
+#
+# This creates a clean "host" environment with Docker inside for full
+# end-to-end testing of hal-9000 installation and orchestration.
+#
+# Usage:
+#   docker build -f Dockerfile.test -t hal9000-test ..
+#   docker run --privileged -it hal9000-test
+#
+# For CI:
+#   docker run --privileged hal9000-test /hal-9000/test/run-tests.sh
+
+FROM docker:27-dind
+
+# Install dependencies needed for hal-9000
+RUN apk add --no-cache \
+    bash \
+    curl \
+    git \
+    python3 \
+    py3-pip \
+    nodejs \
+    npm \
+    tmux \
+    jq \
+    coreutils \
+    && ln -sf /usr/bin/python3 /usr/bin/python
+
+# Create test user with home directory (simulates real host)
+# Add testuser to docker group for socket access
+RUN adduser -D -s /bin/bash testuser \
+    && addgroup testuser docker \
+    && mkdir -p /home/testuser/.claude \
+    && mkdir -p /home/testuser/.local/bin \
+    && mkdir -p /home/testuser/memory-bank \
+    && chown -R testuser:testuser /home/testuser
+
+# Copy hal-9000 source for installation
+COPY . /hal-9000-src
+RUN chown -R testuser:testuser /hal-9000-src
+
+# Create test harness directory with proper permissions
+RUN mkdir -p /hal-9000/test
+COPY docker/test-harness.sh /hal-9000/test/run-tests.sh
+RUN chmod +x /hal-9000/test/run-tests.sh \
+    && chown -R testuser:testuser /hal-9000
+
+# Environment for test user
+ENV HOME=/home/testuser
+ENV PATH="/usr/local/bin:/home/testuser/.local/bin:${PATH}"
+ENV DOCKER_HOST=unix:///var/run/docker.sock
+
+# Wrapper script to start Docker daemon and run tests
+COPY docker/entrypoint-test.sh /entrypoint-test.sh
+RUN chmod +x /entrypoint-test.sh
+
+WORKDIR /home/testuser
+
+ENTRYPOINT ["/entrypoint-test.sh"]
+CMD ["/bin/bash"]
