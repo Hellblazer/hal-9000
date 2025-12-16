@@ -90,8 +90,9 @@ on run argv
 
 				set tempFile to tempDir & "/" & dlFileName
 
-				-- Download with curl
-				set curlCmd to "curl -L -s -o " & quoted form of tempFile & " " & quoted form of sourceInput
+				-- Download with curl (with safety flags)
+				-- --fail: fail on HTTP errors, --max-filesize: 100MB limit, --connect-timeout: 30s, --max-time: 300s
+				set curlCmd to "curl -L -s --fail --max-filesize 104857600 --connect-timeout 30 --max-time 300 -o " & quoted form of tempFile & " " & quoted form of sourceInput
 				do shell script curlCmd
 
 				-- Check file exists

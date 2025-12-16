@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Reworked import with three modes: file, webarchive, download
 - Updated DEVONthink README with import mode documentation
 
+### Security
+- **DEVONthink MCP server hardened** with input validation:
+  - File import: Path validation restricts to home/temp directories, blocks sensitive paths (.ssh, .aws, etc.)
+  - URL import: Scheme validation only allows http/https (blocks file:// and other protocols)
+  - Academic sources: Regex validation for arXiv, PubMed, and DOI identifiers
+  - Curl safety: Added --fail, --max-filesize (100MB), --connect-timeout, --max-time flags
+
 ## [1.3.0] - 2025-12-16
 
 ### Added

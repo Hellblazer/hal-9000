@@ -38,6 +38,17 @@ MAX_CONTENT_SIZE = 10 * 1024 * 1024  # 10MB
 MAX_SEARCH_LIMIT = 100
 UUID_PATTERN = re.compile(r'^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$', re.IGNORECASE)
 
+# Academic paper identifier patterns
+ARXIV_PATTERN = re.compile(r'^\d{4}\.\d{4,5}(v\d+)?$')  # e.g., 2301.00001, 2301.00001v2
+PUBMED_PATTERN = re.compile(r'^PMC\d+$', re.IGNORECASE)  # e.g., PMC12345
+DOI_PATTERN = re.compile(r'^10\.\d{4,}/[^\s]+$')  # e.g., 10.1000/xyz123
+
+# Allowed URL schemes for import
+ALLOWED_URL_SCHEMES = {'http', 'https'}
+
+# Maximum file size for imports (100MB)
+MAX_IMPORT_FILE_SIZE = 100 * 1024 * 1024
+
 
 def log(message: str):
     """Log to stderr (doesn't interfere with MCP JSON-RPC on stdout)"""
@@ -100,6 +111,105 @@ def validate_doc_type(doc_type: str) -> str:
     if doc_type not in ALLOWED_DOC_TYPES:
         raise ValueError(f"Invalid document type: {doc_type}. Allowed: {', '.join(ALLOWED_DOC_TYPES)}")
     return doc_type
+
+
+def validate_file_path(file_path: str) -> str:
+    """Validate file path for import - security critical"""
+    if not file_path:
+        raise ValueError("File path cannot be empty")
+
+    # Resolve to absolute path and follow symlinks
+    try:
+        path = Path(file_path).expanduser().resolve(strict=True)
+    except (FileNotFoundError, RuntimeError) as e:
+        raise ValueError(f"File not found or invalid path: {file_path}")
+
+    # Must be a regular file (not directory, symlink to directory, device, etc.)
+    if not path.is_file():
+        raise ValueError(f"Path is not a regular file: {file_path}")
+
+    # Check file size
+    file_size = path.stat().st_size
+    if file_size > MAX_IMPORT_FILE_SIZE:
+        raise ValueError(f"File too large: {file_size} bytes (max {MAX_IMPORT_FILE_SIZE})")
+
+    # Security: Restrict to user's home directory and common safe locations
+    home = Path.home().resolve()
+    allowed_prefixes = [
+        home,
+        Path("/tmp").resolve(),
+        Path("/var/folders").resolve(),  # macOS temp
+    ]
+
+    # Check if path is under an allowed prefix
+    path_allowed = False
+    for prefix in allowed_prefixes:
+        try:
+            path.relative_to(prefix)
+            path_allowed = True
+            break
+        except ValueError:
+            continue
+
+    if not path_allowed:
+        raise ValueError(f"File path not in allowed directory. Files must be in home directory or temp folders.")
+
+    # Block sensitive files even within home directory
+    sensitive_patterns = [
+        '.ssh', '.gnupg', '.aws', '.azure', '.kube',
+        '.netrc', '.npmrc', '.pypirc',
+        'credentials', 'secrets', '.env',
+    ]
+    path_str = str(path).lower()
+    for pattern in sensitive_patterns:
+        if pattern in path_str:
+            raise ValueError(f"Cannot import files from sensitive directories")
+
+    return str(path)
+
+
+def validate_url(url: str) -> str:
+    """Validate URL for import - only allow http/https"""
+    if not url:
+        raise ValueError("URL cannot be empty")
+
+    # Parse URL to check scheme
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        raise ValueError(f"Invalid URL format: {url}")
+
+    # Check scheme
+    if parsed.scheme.lower() not in ALLOWED_URL_SCHEMES:
+        raise ValueError(f"URL scheme '{parsed.scheme}' not allowed. Use http or https.")
+
+    # Must have a host
+    if not parsed.netloc:
+        raise ValueError(f"URL must have a host: {url}")
+
+    return url
+
+
+def validate_arxiv_id(identifier: str) -> str:
+    """Validate arXiv paper identifier"""
+    if not ARXIV_PATTERN.match(identifier):
+        raise ValueError(f"Invalid arXiv ID format: {identifier}. Expected format: YYMM.NNNNN (e.g., 2301.00001)")
+    return identifier
+
+
+def validate_pubmed_id(identifier: str) -> str:
+    """Validate PubMed Central identifier"""
+    if not PUBMED_PATTERN.match(identifier):
+        raise ValueError(f"Invalid PubMed ID format: {identifier}. Expected format: PMC followed by numbers (e.g., PMC12345)")
+    return identifier
+
+
+def validate_doi(identifier: str) -> str:
+    """Validate DOI identifier"""
+    if not DOI_PATTERN.match(identifier):
+        raise ValueError(f"Invalid DOI format: {identifier}. Expected format: 10.XXXX/... (e.g., 10.1000/xyz123)")
+    return identifier
 
 
 async def run_applescript(script_name: str, *args) -> dict:
@@ -374,22 +484,36 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             group_path = arguments.get("groupPath", "")
 
             # Determine import mode and source based on source type
+            # Apply appropriate validation for each source type
             if source == "file":
-                # Local file import
+                # Local file import - validate path for security
                 import_mode = "file"
-                import_source = identifier
+                import_source = validate_file_path(identifier)
             elif source == "url":
-                # Web archive for URLs
+                # Web archive for URLs - validate URL scheme
                 import_mode = "webarchive"
-                import_source = identifier
+                import_source = validate_url(identifier)
             elif source == "pdf":
-                # Direct PDF download from URL
+                # Direct PDF download from URL - validate URL scheme
                 import_mode = "download"
-                import_source = identifier
-            else:
-                # Download PDF for academic papers (arxiv, pubmed, doi)
+                import_source = validate_url(identifier)
+            elif source == "arxiv":
+                # Validate arXiv identifier format
+                validate_arxiv_id(identifier)
                 import_mode = "download"
                 import_source = build_paper_url(source, identifier)
+            elif source == "pubmed":
+                # Validate PubMed identifier format
+                validate_pubmed_id(identifier)
+                import_mode = "download"
+                import_source = build_paper_url(source, identifier)
+            elif source == "doi":
+                # Validate DOI format
+                validate_doi(identifier)
+                import_mode = "download"
+                import_source = build_paper_url(source, identifier)
+            else:
+                raise ValueError(f"Unknown import source: {source}")
 
             log(f"Import: mode={import_mode}, source={source}, target={import_source}, name={custom_name or '(auto)'}")
 
