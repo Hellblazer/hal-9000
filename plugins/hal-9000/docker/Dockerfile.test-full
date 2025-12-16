@@ -1,0 +1,74 @@
+# Dockerfile.test-full - Ubuntu-based environment for thorough hal-9000 testing
+#
+# This provides a realistic test environment matching actual install targets
+# (Ubuntu/Debian) rather than Alpine. Use for full installation testing.
+#
+# Usage:
+#   docker build -f Dockerfile.test-full -t hal9000-test-full ..
+#   docker run --privileged -it hal9000-test-full
+#   docker run --privileged hal9000-test-full /hal-9000/test/run-full-tests.sh
+#
+# Note: This is NOT used by CI - it's for local thorough testing only.
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    bash \
+    curl \
+    wget \
+    git \
+    python3 \
+    python3-pip \
+    python3-venv \
+    nodejs \
+    npm \
+    tmux \
+    jq \
+    sudo \
+    ca-certificates \
+    gnupg \
+    lsb-release \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Docker CLI (for container tests that pull from ghcr.io)
+RUN install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+    && chmod a+r /etc/apt/keyrings/docker.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list \
+    && apt-get update \
+    && apt-get install -y docker-ce-cli \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create test user with sudo access (simulates real user environment)
+RUN useradd -m -s /bin/bash testuser \
+    && echo "testuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers \
+    && mkdir -p /home/testuser/.claude \
+    && mkdir -p /home/testuser/.local/bin \
+    && mkdir -p /home/testuser/memory-bank \
+    && chown -R testuser:testuser /home/testuser
+
+# Copy hal-9000 source
+COPY . /hal-9000-src
+RUN chown -R testuser:testuser /hal-9000-src
+
+# Create test harness directory
+RUN mkdir -p /hal-9000/test
+COPY docker/test-harness-full.sh /hal-9000/test/run-full-tests.sh
+RUN chmod +x /hal-9000/test/run-full-tests.sh \
+    && chown -R testuser:testuser /hal-9000
+
+# Environment
+ENV HOME=/home/testuser
+ENV PATH="/home/testuser/.local/bin:${PATH}"
+
+# Entrypoint script
+COPY docker/entrypoint-test-full.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+WORKDIR /home/testuser
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/bin/bash"]
