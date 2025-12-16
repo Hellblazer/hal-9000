@@ -57,6 +57,7 @@ hal9000-list                      # List active sessions
 hal9000-attach hal9000-1          # Attach to session
 hal9000-send hal9000-1 "cmd"      # Send command
 hal9000-broadcast "npm install"   # Send to all
+hal9000-stop hal9000-1            # Stop single session
 hal9000-cleanup                   # Stop all
 ```
 

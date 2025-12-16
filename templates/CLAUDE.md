@@ -31,14 +31,14 @@ bd dep add <id> <blocker-id>      # Add dependency
 
 Always commit `.beads/issues.jsonl` with code changes. Run `bd onboard` for full guide.
 
-## Agents
+## Agents (12 total)
 
 Spawn parallel agents to conserve context. Use plan-auditor to validate plans.
 
-- **Development**: java-developer, java-architect-planner, java-debugger
-- **Review**: code-review-expert, plan-auditor, deep-analyst, codebase-deep-analyzer
-- **Research**: deep-research-synthesizer, devonthink-researcher
-- **Organization**: knowledge-tidier, pdf-chromadb-processor, project-management-setup
+- **Development (3)**: java-developer, java-architect-planner, java-debugger
+- **Review (4)**: code-review-expert, plan-auditor, deep-analyst, codebase-deep-analyzer
+- **Research (2)**: deep-research-synthesizer, devonthink-researcher
+- **Organization (3)**: knowledge-tidier, pdf-chromadb-processor, project-management-setup
 
 ## MCP Servers
 

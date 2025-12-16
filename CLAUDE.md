@@ -17,21 +17,20 @@ hal-9000/
 ├── .claude-plugin/
 │   └── marketplace.json          # Marketplace definition
 ├── plugins/
-│   ├── hal-9000/                 # MCP server suite plugin
-│   │   ├── .claude-plugin/
-│   │   │   └── plugin.json       # Plugin metadata
-│   │   ├── mcp-servers/          # MCP server docs
-│   │   └── README.md
-│   └── session-tools/            # Session management plugin
+│   └── hal-9000/                 # Main plugin
 │       ├── .claude-plugin/
 │       │   └── plugin.json       # Plugin metadata
-│       ├── commands/             # Slash command files
+│       ├── agents/               # 12 custom agent definitions
+│       ├── aod/                  # Army of Darkness multi-branch tool
+│       ├── commands/             # Slash commands (/check, /load, etc.)
+│       ├── hal9000/              # Containerized Claude launcher
+│       ├── hooks/                # Safety hooks
+│       ├── mcp-servers/          # MCP server configs & docs
 │       └── README.md
-├── templates/                    # CLAUDE.md templates
-├── install.sh                    # Legacy installer (optional)
-├── uninstall.sh                  # Legacy uninstaller
+├── templates/                    # CLAUDE.md templates for projects
+├── CHEATSHEET.md                 # Quick reference guide
 ├── README.md                     # Main documentation
-└── CLAUDE.md                     # This file
+└── CLAUDE.md                     # This file (repo development guide)
 ```
 
 ## What is a Plugin Marketplace?
@@ -93,17 +92,17 @@ A Claude Code plugin marketplace is a repository that:
 - Provides `hooks` in plugin.json
 - Can trigger on SessionStart, PreCompact, etc.
 
-### Modifying Existing Plugins
+### Modifying Existing Plugin
 
 **hal-9000 plugin**:
 - MCP server configs in `.claude-plugin/plugin.json`
-- Documentation in `mcp-servers/` subdirectories
-- To add MCP server: update plugin.json + add docs
-
-**session-tools plugin**:
-- Command files in `commands/` directory
-- Command metadata in `.claude-plugin/plugin.json`
-- To add command: create .md file + update plugin.json
+- MCP documentation in `mcp-servers/*/README.md`
+- Commands in `commands/*.md` (referenced in plugin.json)
+- Agents in `agents/*.md` (installed to ~/.claude/agents/)
+- Hooks in `hooks/*.py` (registered via hooks.json)
+- To add MCP server: update plugin.json + add docs in mcp-servers/
+- To add command: create .md file in commands/ + update plugin.json
+- To add agent: create .md file in agents/
 
 ### Testing Changes
 

@@ -1,30 +1,33 @@
 # Custom Agent Configurations
 
-Agent configuration files for specialized Claude Code tasks. Installed to `~/.claude/agents/`.
+Agent configuration files for specialized Claude Code tasks. 12 agents installed to `~/.claude/agents/`.
 
 ## Available Agents
 
-### Development
+### Development (3)
 - **java-developer** - Java implementation with test-first methodology
 - **java-architect-planner** - Architecture design and planning
 - **java-debugger** - Bug investigation and fixing
 
-### Review & Analysis
+### Review & Analysis (4)
 - **code-review-expert** - Code quality and best practices review
 - **plan-auditor** - Technical plan validation
 - **deep-analyst** - Complex problem analysis
 - **codebase-deep-analyzer** - Comprehensive codebase analysis
 
-### Research
-- **Explore** - Codebase exploration and discovery
+### Research (2)
 - **deep-research-synthesizer** - Multi-source research synthesis
 - **devonthink-researcher** - DEVONthink database research
 
-### Organization
-- **Plan** - Architecture and implementation planning
+### Organization (3)
 - **project-management-setup** - Project tracking infrastructure
 - **knowledge-tidier** - Information consolidation across knowledge bases
 - **pdf-chromadb-processor** - PDF processing into ChromaDB
+
+### Built-in Agent Patterns
+These are common invocation patterns, not separate agent files:
+- **Explore** - Use codebase-deep-analyzer for exploration tasks
+- **Plan** - Use java-architect-planner or plan-auditor for planning
 
 ## Usage
 
@@ -34,7 +37,7 @@ Launch agents via Task tool with `subagent_type` parameter:
 ```
 Use java-developer agent to implement UserService
 Use code-review-expert agent to review the authentication module
-Use Explore agent to find all database query patterns
+Use codebase-deep-analyzer agent to find all database query patterns
 ```
 
 ### Parallel Execution
@@ -42,19 +45,19 @@ Use Explore agent to find all database query patterns
 Launch multiple agents simultaneously:
 ```
 Launch three agents in parallel:
-- Explore agent: Find authentication code
-- Plan agent: Design OAuth2 integration
-- code-review-expert: Review existing auth patterns
+- codebase-deep-analyzer agent: Find authentication code
+- java-architect-planner agent: Design OAuth2 integration
+- code-review-expert agent: Review existing auth patterns
 ```
 
 ### Sequential Workflows
 
 Chain agents for multi-step tasks:
 ```
-1. Plan agent: Design payment processing feature
-2. plan-auditor: Validate the design
-3. java-developer: Implement according to plan
-4. code-review-expert: Review implementation
+1. java-architect-planner agent: Design payment processing feature
+2. plan-auditor agent: Validate the design
+3. java-developer agent: Implement according to plan
+4. code-review-expert agent: Review implementation
 ```
 
 ## When to Use Agents
@@ -73,7 +76,7 @@ Don't use agents for:
 ## Agent Selection
 
 **Planning & Design**
-- New feature → Plan
+- New feature → java-architect-planner
 - Validate design → plan-auditor
 - Multi-phase project → project-management-setup
 
@@ -87,8 +90,8 @@ Don't use agents for:
 - System understanding → codebase-deep-analyzer
 - Complex debugging → deep-analyst
 
-**Exploration**
-- Find code patterns → Explore
+**Research**
+- Find code patterns → codebase-deep-analyzer
 - Research topics → deep-research-synthesizer
 - Document search → devonthink-researcher
 
@@ -101,7 +104,7 @@ Some agents support thoroughness levels:
 
 Example:
 ```
-Use Explore agent with very thorough level to find all configuration loading patterns
+Use codebase-deep-analyzer agent with very thorough level to find all configuration loading patterns
 ```
 
 ## Integration
@@ -160,8 +163,8 @@ bd close <id> --reason "Implemented and tested"
 
 ### Feature Implementation
 ```
-1. Explore: Find existing payment patterns (quick)
-2. Plan: Design Stripe checkout integration
+1. codebase-deep-analyzer: Find existing payment patterns (quick)
+2. java-architect-planner: Design Stripe checkout integration
 3. plan-auditor: Review integration plan
 4. java-developer: Implement PaymentService
 5. code-review-expert: Review implementation
@@ -169,7 +172,7 @@ bd close <id> --reason "Implemented and tested"
 
 ### Bug Investigation
 ```
-1. Explore: Find code paths to NullPointerException (medium)
+1. codebase-deep-analyzer: Find code paths to NullPointerException (medium)
 2. java-debugger: Debug UserService.authenticate() NPE
 3. code-review-expert: Review fix for defensive patterns
 ```
@@ -178,15 +181,15 @@ bd close <id> --reason "Implemented and tested"
 ```
 1. codebase-deep-analyzer: Analyze microservices architecture
 2. deep-analyst: Investigate service coupling
-3. Plan: Design service decomposition
+3. java-architect-planner: Design service decomposition
 4. plan-auditor: Validate decomposition plan
 ```
 
 ### Research & Implementation
 ```
 1. deep-research-synthesizer: Research Spring Boot rate limiting
-2. Explore: Find current rate limiting code
-3. Plan: Design improved rate limiting
+2. codebase-deep-analyzer: Find current rate limiting code
+3. java-architect-planner: Design improved rate limiting
 4. java-developer: Implement according to plan
 ```
 
@@ -213,5 +216,5 @@ bd close <id> --reason "Implemented and tested"
 
 ### Agent doesn't find expected code
 - Verify search patterns are correct
-- Try different agents (Explore vs. Grep)
+- Try codebase-deep-analyzer with different thoroughness levels
 - Check code location assumptions

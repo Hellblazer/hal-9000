@@ -1,6 +1,6 @@
 # HAL-9000 Plugin
 
-[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
 [![Container](https://img.shields.io/badge/docker-optimized-success?logo=docker)](../../docker/README.md)
 [![MCP Servers](https://img.shields.io/badge/MCP-4%20servers-purple)](mcp-servers/)
 [![Custom Agents](https://img.shields.io/badge/agents-12-orange)](AGENTS.md)
@@ -53,15 +53,20 @@ Productivity tools for Claude Code: aod multi-branch development, MCP servers, c
 
 ### Development Environments
 
-**ClaudeBox** - Quick isolated Claude sessions
-- `claudebox run --profile python` - One-off containerized session
-- Good for: testing, experiments, different codebases, clean environments
-- [ClaudeBox documentation →](https://github.com/RchGrav/claudebox)
+**hal9000** - Containerized Claude sessions
+- `hal9000 run --profile python` - Single containerized session
+- `hal9000 squad --sessions 3` - Multiple parallel sessions
+- Good for: isolated development, parallel tasks on same codebase
+- [hal9000 documentation →](hal9000/README.md)
 
 **aod (Army of Darkness)** - Multi-branch parallel development
 - Uses git worktrees + tmux + hal-9000 containers with pre-installed MCP servers
 - Good for: working on multiple branches of same repo simultaneously
 - [aod documentation →](aod/README.md)
+
+**ClaudeBox** - Foundation tool (external)
+- hal9000 and aod build on ClaudeBox container infrastructure
+- [ClaudeBox documentation →](https://github.com/RchGrav/claudebox)
 
 ## Installation
 
@@ -102,12 +107,12 @@ Override with `MEMORY_BANK_ROOT` environment variable.
 
 ### DEVONthink
 
-Requires dt-mcp repository:
-```bash
-git clone https://github.com/yourusername/dt-mcp.git ~/git/dt-mcp
-cd ~/git/dt-mcp
-npm install
-```
+DEVONthink MCP server is included in `mcp-servers/devonthink/`. Requires:
+- macOS with DEVONthink Pro/Server installed
+- Python 3.8+ (pre-installed on macOS)
+- Grant automation permissions in System Settings
+
+The server is automatically configured during hal-9000 installation.
 
 ## Usage
 
@@ -157,16 +162,21 @@ aod-broadcast "cmd"              # Send to all sessions
 aod-cleanup                      # Stop all sessions
 ```
 
-**v1.2.0 Architecture:** MCP servers (Memory Bank, ChromaDB, Sequential Thinking) pre-installed in Docker image and auto-configured on container startup. Shared Memory Bank via host mount for cross-container coordination.
+**v1.3.0 Architecture:** MCP servers (Memory Bank, ChromaDB, Sequential Thinking) pre-installed in Docker image and auto-configured on container startup. Shared Memory Bank via host mount for cross-container coordination.
 
-### Foundation Tools
+### hal9000 Sessions
 
-ClaudeBox is available for standalone use:
+hal9000 wraps ClaudeBox for containerized Claude with the full hal-9000 stack:
 
 ```bash
-# ClaudeBox - Containerized development
-claudebox run --profile python
+# Single container
+hal9000 run --profile python
+
+# Multiple sessions
+hal9000 squad --sessions 3
 ```
+
+See [hal9000 documentation](hal9000/README.md) for session management commands.
 
 ## Documentation
 

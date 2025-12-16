@@ -17,7 +17,7 @@ Optimized container images with pre-installed Claude CLI, MCP servers, and tools
 | `ghcr.io/hellblazer/hal-9000:node` | **Node.js** | Base + Node 20 LTS, npm, yarn, pnpm |
 | `ghcr.io/hellblazer/hal-9000:java` | **Java** | Base + Java 21 LTS, Maven, Gradle |
 
-### Features (v1.2.0)
+### Features (v1.3.0)
 
 - ✅ **Claude CLI pre-installed** - No per-container Claude installation
 - ✅ **MCP servers included** - Memory Bank, ChromaDB, Sequential Thinking
@@ -151,7 +151,7 @@ docker build -f docker/Dockerfile.hal9000 -t ghcr.io/hellblazer/hal-9000:latest 
 
 **Status:** Published to GitHub Container Registry
 - `ghcr.io/hellblazer/hal-9000:latest`
-- `ghcr.io/hellblazer/hal-9000:1.2.0`
+- `ghcr.io/hellblazer/hal-9000:1.3.0`
 
 **Prerequisites:**
 1. Create GitHub Personal Access Token with `write:packages` scope at https://github.com/settings/tokens
@@ -164,11 +164,11 @@ docker build -f docker/Dockerfile.hal9000 -t ghcr.io/hellblazer/hal-9000:latest 
 docker build -f docker/Dockerfile.hal9000 -t ghcr.io/hellblazer/hal-9000:latest .
 
 # Tag with version
-docker tag ghcr.io/hellblazer/hal-9000:latest ghcr.io/hellblazer/hal-9000:1.2.0
+docker tag ghcr.io/hellblazer/hal-9000:latest ghcr.io/hellblazer/hal-9000:1.3.0
 
 # Push both tags
 docker push ghcr.io/hellblazer/hal-9000:latest
-docker push ghcr.io/hellblazer/hal-9000:1.2.0
+docker push ghcr.io/hellblazer/hal-9000:1.3.0
 ```
 
 **Make image public:**

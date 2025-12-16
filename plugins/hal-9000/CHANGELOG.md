@@ -5,6 +5,25 @@ All notable changes to hal-9000 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-12-15
+
+### Added
+- **hal9000 command**: New containerized Claude launcher for single and multi-session development
+  - `hal9000 run` - Single container launch
+  - `hal9000 squad` - Multiple parallel sessions
+  - Session management: hal9000-list, hal9000-attach, hal9000-send, hal9000-broadcast, hal9000-stop, hal9000-cleanup
+- **Documentation consolidation**: Comprehensive review and consistency fixes across all documentation
+
+### Changed
+- Unified agent documentation - clarified 12 installed agents vs agent invocation patterns
+- Updated all version references from 1.2.0 to 1.3.0
+- Repository structure in CLAUDE.md now reflects actual layout
+
+### Fixed
+- DEVONthink installation instructions no longer reference non-existent external repository
+- Version badge in plugins/hal-9000/README.md now matches plugin.json
+- Agent selection guide uses correct agent names throughout
+
 ## [1.2.0] - 2025-12-15
 
 ### Added

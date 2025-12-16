@@ -8,7 +8,7 @@ aod (Army of Darkness) orchestrates multiple isolated development environments s
 
 Inspired by claude-squad's multi-session workflow concept, aod is an independent implementation using bash scripting, tmux, and Docker containers. Each branch runs in complete isolation with its own container, filesystem state, and terminal session.
 
-**v1.2.0:** Containers now include pre-installed MCP servers (Memory Bank, ChromaDB, Sequential Thinking) with automatic configuration. Zero manual setup required.
+**v1.3.0:** Containers now include pre-installed MCP servers (Memory Bank, ChromaDB, Sequential Thinking) with automatic configuration. Zero manual setup required.
 
 ## Architecture
 
@@ -36,7 +36,7 @@ aod (Orchestrator)
 - **Session Context** - Auto-generated `CLAUDE.md` in each worktree with session info
 - **Shared Memory Bank** - Host's `~/memory-bank` mounted for cross-container data sharing
 
-**v1.2.0 Container Architecture:**
+**v1.3.0 Container Architecture:**
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ hal-9000 Container (ghcr.io/hellblazer/hal-9000:latest) │
@@ -214,7 +214,7 @@ docker ps
 
 Containers mount the host's `~/.claudebox/hal-9000` directory for agents and tools, plus `~/memory-bank` for shared Memory Bank access across containers.
 
-**v1.2.0 Features:**
+**v1.3.0 Features:**
 - MCP servers pre-installed in Docker image (no download delay)
 - Auto-configured on container startup
 - Shared Memory Bank for cross-container coordination
@@ -778,7 +778,7 @@ Don't run untrusted code in aod sessions without additional sandboxing.
 - Tmux session: <1s
 - hal-9000 container: 3-7s
 
-**v1.2.0 Architecture - Pre-installed MCP Servers:**
+**v1.3.0 Architecture - Pre-installed MCP Servers:**
 
 All tools and MCP servers are pre-installed in the Docker image:
 - Claude CLI, claude-code-tools, Memory Bank, ChromaDB, Sequential Thinking
@@ -787,7 +787,7 @@ All tools and MCP servers are pre-installed in the Docker image:
 - First container: ~5 seconds (image pull once, then instant)
 - Nth container: ~5 seconds (reuses cached image)
 
-**v1.2.0 MCP Server Architecture:**
+**v1.3.0 MCP Server Architecture:**
 - MCP servers run INSIDE each container (not on host)
 - Each container has independent MCP server instances
 - Memory Bank shared via host mount (`~/memory-bank`)
