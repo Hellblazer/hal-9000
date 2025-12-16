@@ -31,15 +31,23 @@ For thorough testing of complete hal-9000 installation. NOT used by CI.
 docker build -f docker/Dockerfile.test-full -t hal9000-test-full .
 
 # Run full tests (installs everything, takes several minutes)
-docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+# Uses volume for testuser home to avoid disk space issues
+docker run --rm \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v hal9000-test-home:/home/testuser \
     hal9000-test-full /hal-9000/test/run-full-tests.sh
 
 # Interactive mode
-docker run -it -v /var/run/docker.sock:/var/run/docker.sock \
+docker run -it \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v hal9000-test-home:/home/testuser \
     hal9000-test-full
 
 # Skip installation (test pre-installed components)
 docker run --rm hal9000-test-full /hal-9000/test/run-full-tests.sh --skip-install
+
+# Clean up the test volume when done
+docker volume rm hal9000-test-home
 ```
 
 **What it tests:**
