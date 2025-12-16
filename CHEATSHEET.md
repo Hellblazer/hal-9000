@@ -1,22 +1,37 @@
 # HAL-9000 Cheat Sheet
 
-Quick reference for aod, hal9000, tmux, tmux-cli, and terminal tools.
+Quick reference for aod, hal9000, beads (bd), tmux, tmux-cli, and terminal tools.
 
 ## aod (Army of Darkness)
 
 ### Setup & Launch
 
+**YAML format (recommended):**
+```yaml
+# aod.yml
+tasks:
+  - branch: feature/auth
+    profile: python
+    description: Add OAuth2 authentication
+
+  - branch: feature/api
+    profile: node
+    description: Build REST API endpoints
+```
+
+**Simple format (still supported):**
 ```bash
-# Create configuration file
-cat > aod.conf <<EOF
+# aod.conf - format: branch:profile:description
 feature/auth:python:Add OAuth2 authentication
 feature/api:node:Build REST API endpoints
 bugfix/validation:python:Fix input validation
-EOF
+```
 
-# Launch all sessions
-aod aod.conf          # Uses aod.conf in current directory
-aod my-tasks.conf     # Use custom config file
+```bash
+# Launch sessions
+aod aod.yml           # YAML config
+aod aod.conf          # Simple config
+aod-init              # Generate config template
 ```
 
 ### Managing Sessions
@@ -294,6 +309,91 @@ tmux-cli send "slow command" --pane=2 --delay-enter=1.0
 tmux-cli send "partial input" --pane=2 --enter=False
 ```
 
+## beads (bd) - Issue Tracking
+
+AI-optimized issue tracker with dependency support. "Issues chained together like beads."
+
+### Setup
+
+```bash
+# Initialize in project
+bd init
+
+# Get onboarding guide
+bd onboard
+```
+
+### Creating Issues
+
+```bash
+# Create issue
+bd create "Add OAuth2 authentication" -t feature -p 1
+
+# Types: bug, feature, task, epic, chore
+# Priority: 0 (critical) to 4 (backlog)
+
+# With description
+bd create "Fix login bug" -t bug -p 0 -d "Users can't log in after password reset"
+```
+
+### Working on Issues
+
+```bash
+# Show ready work (no blockers)
+bd ready
+
+# Claim a task
+bd update <id> --status in_progress
+
+# View issue details
+bd show <id>
+
+# Complete task
+bd close <id> --reason "Implemented and tested"
+```
+
+### Dependencies
+
+```bash
+# Add dependency (id depends on blocker-id)
+bd dep add <id> <blocker-id>
+
+# View dependency tree
+bd dep tree <id>
+
+# List all issues
+bd list
+```
+
+### AI Workflow Pattern
+
+```bash
+# 1. Check what's ready
+bd ready --json
+
+# 2. Claim task
+bd update <id> --status in_progress --json
+
+# 3. Work on it...
+
+# 4. Found new work during implementation?
+bd create "Found bug" -t bug -p 1
+
+# 5. Complete original task
+bd close <id> --reason "Done"
+
+# 6. Commit together
+git add .beads/issues.jsonl src/
+git commit -m "feat: implement auth, refs bd-<id>"
+```
+
+### Tips
+
+- Always commit `.beads/issues.jsonl` with code changes
+- Use `--json` flag for programmatic parsing
+- Link discovered issues with dependencies
+- Use `bd ready` not `bd list` to find unblocked work
+
 ## Terminal Tools
 
 ### vault - Encrypted .env Backup
@@ -405,14 +505,28 @@ tmux-cli capture --pane=$PANE
 
 ## Configuration Files
 
-### aod.conf Format
+### aod Config Formats
 
-```
-branch:profile:description
+**YAML format (recommended):**
+```yaml
+# aod.yml
+tasks:
+  - branch: feature/auth
+    profile: python
+    description: Add OAuth2 authentication
+
+  - branch: feature/api
+    profile: node
+    description: Build REST API endpoints
+
+  - branch: feature/fullstack
+    profile: python,node
+    description: Full-stack feature
 ```
 
-**Examples:**
+**Simple format:**
 ```
+# aod.conf - format: branch:profile:description
 feature/quick-fix::                           # Branch only
 feature/api:node:                             # Branch + profile
 feature/auth:python:Add OAuth2 authentication # Full specification
@@ -649,5 +763,8 @@ git worktree prune
 ## Related Documentation
 
 - aod Full Documentation: `plugins/hal-9000/aod/README.md`
+- hal9000 Documentation: `plugins/hal-9000/hal9000/README.md`
+- beads (bd) Documentation: `plugins/hal-9000/mcp-servers/beads/README.md`
 - tmux-cli Documentation: Run `tmux-cli --help`
 - Session Commands: `plugins/hal-9000/commands/*.md`
+- Agent Documentation: `plugins/hal-9000/AGENTS.md`

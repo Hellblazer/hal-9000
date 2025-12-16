@@ -6,6 +6,25 @@
 
 Claude Code productivity suite: containerized Claude, multi-branch development, MCP servers, issue tracking (beads), and custom agents.
 
+## Architecture: tmux is the Backbone
+
+**tmux is required** for hal9000 and aod. It's the coordination layer that makes everything work:
+
+- **Session isolation** - Each Claude instance runs in its own tmux session
+- **Remote control** - Send commands to any session without switching (`aod-send`, `hal9000-send`)
+- **Persistence** - Sessions survive disconnection; reattach anytime
+- **Orchestration** - Broadcast commands to all sessions simultaneously
+
+```bash
+# Required: Install tmux first
+brew install tmux        # macOS
+apt install tmux         # Ubuntu/Debian
+```
+
+All session management commands (`*-list`, `*-attach`, `*-send`, `*-broadcast`) are thin wrappers around tmux. Understanding tmux basics helps tremendously.
+
+**[tmux Cheat Sheet →](CHEATSHEET.md#tmux-essentials)** | **[tmux-cli Reference →](CHEATSHEET.md#tmux-cli-remote-control)**
+
 ## Quick Start
 
 ### 1. Add Marketplace
