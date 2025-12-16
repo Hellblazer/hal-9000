@@ -74,7 +74,14 @@ aod-list | aod-attach | aod-send | aod-broadcast | aod-cleanup
 
 ## Safety Hooks
 
-Git, file, and environment hooks protect against accidental secret commits and sensitive file access.
+Guardrails that may block or prompt for approval:
+
+- **rm_block**: Blocks `rm` - use TRASH directory instead
+- **git_add_block**: Blocks `git add -A/.` - stage files explicitly
+- **git_checkout_safety**: Blocks destructive checkout with uncommitted changes
+- **git_commit_block**: Requires approval before commits
+- **env_file_protection**: Blocks `.env` access - use `env-safe` instead
+- **file_length_limit**: Speed bump for files >10K lines
 
 ---
 

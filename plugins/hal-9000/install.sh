@@ -338,30 +338,13 @@ EOF
         echo -e "${YELLOW}⚠ Skipped CLAUDE.md template${NC}"
     fi
 
-    # Download hooks
+    # Install safety hooks (bundled locally)
     HOOKS_DIR="$HOME/.claude/hooks/claude-code-tools"
     mkdir -p "$HOOKS_DIR"
 
-    HOOKS_BASE_URL="https://raw.githubusercontent.com/pchalasani/claude-code-tools/main/hooks"
-    HOOKS=(
-        "bash_hook.py"
-        "env_file_protection_hook.py"
-        "file_size_conditional_hook.py"
-        "git_add_block_hook.py"
-        "git_checkout_safety_hook.py"
-        "git_commit_block_hook.py"
-        "grep_block_hook.py"
-        "notification_hook.sh"
-        "posttask_subtask_flag.py"
-        "pretask_subtask_flag.py"
-        "rm_block_hook.py"
-    )
-
-    echo "Downloading safety hooks..."
-    for hook in "${HOOKS[@]}"; do
-        curl -fsSL "$HOOKS_BASE_URL/$hook" -o "$HOOKS_DIR/$hook"
-        chmod +x "$HOOKS_DIR/$hook"
-    done
+    echo "Installing safety hooks..."
+    cp "$SCRIPT_DIR/hooks"/* "$HOOKS_DIR/"
+    chmod +x "$HOOKS_DIR"/*.py 2>/dev/null || true
 
     # Install custom agents
     echo ""
@@ -610,26 +593,8 @@ EOF
     echo "Copying safety hooks to shared location..."
     SHARED_HOOKS_DIR="$CLAUDEBOX_SHARED_DIR/hooks"
     mkdir -p "$SHARED_HOOKS_DIR"
-
-    HOOKS_BASE_URL="https://raw.githubusercontent.com/pchalasani/claude-code-tools/main/hooks"
-    HOOKS=(
-        "bash_hook.py"
-        "env_file_protection_hook.py"
-        "file_size_conditional_hook.py"
-        "git_add_block_hook.py"
-        "git_checkout_safety_hook.py"
-        "git_commit_block_hook.py"
-        "grep_block_hook.py"
-        "notification_hook.sh"
-        "posttask_subtask_flag.py"
-        "pretask_subtask_flag.py"
-        "rm_block_hook.py"
-    )
-
-    for hook in "${HOOKS[@]}"; do
-        curl -fsSL "$HOOKS_BASE_URL/$hook" -o "$SHARED_HOOKS_DIR/$hook"
-        chmod +x "$SHARED_HOOKS_DIR/$hook"
-    done
+    cp "$SCRIPT_DIR/hooks"/* "$SHARED_HOOKS_DIR/"
+    chmod +x "$SHARED_HOOKS_DIR"/*.py 2>/dev/null || true
 
     # Copy session commands to shared location
     echo "Copying session management commands..."

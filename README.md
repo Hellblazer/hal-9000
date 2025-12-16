@@ -182,7 +182,21 @@ Usage: Agents are invoked automatically by Claude Code based on task context.
 - **vault** - Encrypted .env backup with SOPS
 - **env-safe** - Safe .env inspection without exposing secrets
 - **find-session** - Search across all Claude Code sessions
-- **Safety Hooks** - Git, file, and environment protection
+
+### Safety Hooks
+
+Guardrails that prevent destructive operations:
+
+| Hook | Protection |
+|------|------------|
+| **rm_block** | Blocks `rm` - suggests moving to TRASH instead |
+| **git_add_block** | Blocks `git add -A/.` - requires explicit file staging |
+| **git_checkout_safety** | Blocks `git checkout -f/.` with uncommitted changes |
+| **git_commit_block** | Requires explicit approval before commits |
+| **env_file_protection** | Blocks read/write/search of `.env` files |
+| **file_length_limit** | Speed bump for files >10K lines (allows override) |
+
+Hooks are installed to `~/.claude/hooks/` and activate automatically.
 
 ## Configuration
 
