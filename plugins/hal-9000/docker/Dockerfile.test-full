@@ -50,9 +50,17 @@ RUN useradd -m -s /bin/bash testuser \
     && mkdir -p /home/testuser/memory-bank \
     && chown -R testuser:testuser /home/testuser
 
-# Copy hal-9000 source
+# Install uv (Astral UV) for testuser - needed for claude-code-tools (vault, env-safe, tmux-cli)
+USER testuser
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+USER root
+
+# Copy hal-9000 source (plugin directory)
 COPY . /hal-9000-src
-RUN chown -R testuser:testuser /hal-9000-src
+# Copy templates from repo root (build context is plugins/hal-9000/, templates at ../../templates/)
+# Note: When building, use --build-context templates=../../templates
+COPY --from=templates . /hal-9000-src/../templates
+RUN chown -R testuser:testuser /hal-9000-src /hal-9000-src/../templates
 
 # Create test harness directory
 RUN mkdir -p /hal-9000/test
@@ -62,6 +70,7 @@ RUN chmod +x /hal-9000/test/run-full-tests.sh \
 
 # Environment
 ENV HOME=/home/testuser
+# Include testuser's local bin (where uv installs tools)
 ENV PATH="/home/testuser/.local/bin:${PATH}"
 
 # Entrypoint script

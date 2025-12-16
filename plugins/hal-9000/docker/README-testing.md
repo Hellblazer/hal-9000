@@ -27,8 +27,11 @@ docker run --privileged -it hal9000-test
 For thorough testing of complete hal-9000 installation. NOT used by CI.
 
 ```bash
-# Build
-docker build -f docker/Dockerfile.test-full -t hal9000-test-full .
+# Build (from plugins/hal-9000/ directory)
+# Note: --build-context adds templates from repo root
+docker build -f docker/Dockerfile.test-full \
+    --build-context templates=../../templates \
+    -t hal9000-test-full .
 
 # Run full tests (installs everything, takes several minutes)
 # Uses volume for testuser home to avoid disk space issues

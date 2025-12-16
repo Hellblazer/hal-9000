@@ -1,100 +1,20 @@
-name: Integration Tests (DinD)
+name: Integration Tests
 
 on:
   push:
     branches: [ main ]
     paths:
       - 'plugins/hal-9000/**'
+      - 'templates/**'
       - '.github/workflows/integration-test.yml'
   pull_request:
     branches: [ main ]
     paths:
       - 'plugins/hal-9000/**'
+      - 'templates/**'
   workflow_dispatch:
-    inputs:
-      quick:
-        description: 'Run quick tests only'
-        required: false
-        default: 'false'
-        type: boolean
 
 jobs:
-  build-test-image:
-    name: Build Test Image
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build test image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./plugins/hal-9000
-          file: ./plugins/hal-9000/docker/Dockerfile.test
-          push: false
-          load: true
-          tags: hal9000-test:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Save test image
-        run: docker save hal9000-test:latest -o /tmp/hal9000-test.tar
-
-      - name: Upload test image
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-image
-          path: /tmp/hal9000-test.tar
-          retention-days: 1
-
-  integration-tests:
-    name: Run Integration Tests
-    needs: build-test-image
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Download test image
-        uses: actions/download-artifact@v4
-        with:
-          name: test-image
-          path: /tmp
-
-      - name: Load test image
-        run: docker load -i /tmp/hal9000-test.tar
-
-      - name: Run integration tests
-        run: |
-          # Use quick mode for push/PR (validates DinD environment)
-          # Full tests only available via manual dispatch with quick=false
-          QUICK_FLAG="--quick"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.quick }}" = "false" ]; then
-            QUICK_FLAG=""
-          fi
-
-          docker run --privileged \
-            --name hal9000-integration-test \
-            hal9000-test:latest \
-            /hal-9000/test/run-tests.sh $QUICK_FLAG
-
-      - name: Collect logs on failure
-        if: failure()
-        run: |
-          docker logs hal9000-integration-test 2>&1 | tail -100 || true
-          docker cp hal9000-integration-test:/tmp/install.log ./install.log 2>/dev/null || true
-
-      - name: Upload failure logs
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: failure-logs
-          path: |
-            install.log
-          retention-days: 7
-
   quick-smoke-test:
     name: Quick Smoke Test
     runs-on: ubuntu-latest
@@ -168,3 +88,88 @@ jobs:
           done
 
           echo "All hooks bundled"
+
+      - name: Check agents bundled
+        run: |
+          echo "Verifying custom agents are bundled..."
+          AGENTS_DIR="plugins/hal-9000/agents"
+
+          agent_count=$(ls -1 "$AGENTS_DIR"/*.md 2>/dev/null | wc -l)
+          if [ "$agent_count" -ge 10 ]; then
+            echo "✓ $agent_count agents bundled"
+          else
+            echo "✗ Expected 10+ agents, found $agent_count"
+            exit 1
+          fi
+
+  full-integration-test:
+    name: Full Integration Test (Ubuntu)
+    runs-on: ubuntu-latest
+    needs: quick-smoke-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build full test image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./plugins/hal-9000
+          file: ./plugins/hal-9000/docker/Dockerfile.test-full
+          build-contexts: |
+            templates=./templates
+          push: false
+          load: true
+          tags: hal9000-test-full:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run full integration tests
+        run: |
+          docker run --rm \
+            --name hal9000-full-test \
+            hal9000-test-full:latest \
+            /hal-9000/test/run-full-tests.sh
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          # Container already removed with --rm, but capture any remaining info
+          echo "Test failed - check output above for details"
+
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [quick-smoke-test, full-integration-test]
+    if: always()
+
+    steps:
+      - name: Check test results
+        run: |
+          echo "=== Test Results ==="
+          echo ""
+
+          if [ "${{ needs.quick-smoke-test.result }}" = "success" ]; then
+            echo "✓ Quick Smoke Test: PASSED"
+          else
+            echo "✗ Quick Smoke Test: FAILED"
+          fi
+
+          if [ "${{ needs.full-integration-test.result }}" = "success" ]; then
+            echo "✓ Full Integration Test: PASSED"
+          else
+            echo "✗ Full Integration Test: FAILED"
+          fi
+
+          echo ""
+
+          if [ "${{ needs.quick-smoke-test.result }}" != "success" ] || \
+             [ "${{ needs.full-integration-test.result }}" != "success" ]; then
+            echo "Some tests failed!"
+            exit 1
+          fi
+
+          echo "All tests passed!"

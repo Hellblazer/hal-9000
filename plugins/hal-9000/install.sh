@@ -382,31 +382,8 @@ EOF
     AGENT_COUNT=$(ls -1 "$SCRIPT_DIR/agents"/*.md 2>/dev/null | wc -l | xargs)
     echo -e "${GREEN}Installed $AGENT_COUNT custom agents to ~/.claude/agents/${NC}"
 
-# Install ClaudeBox (host only, skip if orchestration disabled)
+# Install aod (Army of Darkness) scripts (host only, skip if orchestration disabled)
 if [[ "$SKIP_HOST_ORCHESTRATION" == "false" ]]; then
-    echo ""
-    echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
-    echo -e "${BLUE}  Installing ClaudeBox${NC}"
-    echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
-    echo ""
-
-    if command -v brew &> /dev/null; then
-        if brew search claudebox | grep -q "claudebox"; then
-            brew install claudebox
-        else
-            echo "Downloading ClaudeBox installer..."
-            curl -fsSL https://github.com/Hellblazer/claudebox/releases/latest/download/claudebox.run -o /tmp/claudebox.run
-            chmod +x /tmp/claudebox.run
-            /tmp/claudebox.run
-            rm /tmp/claudebox.run
-        fi
-    else
-        echo "Installing ClaudeBox from GitHub releases..."
-        curl -fsSL https://github.com/Hellblazer/claudebox/releases/latest/download/claudebox.run -o /tmp/claudebox.run
-        chmod +x /tmp/claudebox.run
-        /tmp/claudebox.run
-        rm /tmp/claudebox.run
-    fi
     # Install aod (Army of Darkness) scripts
     echo ""
     echo -e "${BLUE}════════════════════════════════════════════════════${NC}"

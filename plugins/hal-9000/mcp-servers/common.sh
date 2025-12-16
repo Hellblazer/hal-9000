@@ -8,18 +8,11 @@ readonly YELLOW='\033[1;33m'
 readonly BLUE='\033[0;34m'
 readonly NC='\033[0m' # No Color
 
-# Get Claude config path based on OS
+# Get Claude Code config path
+# Claude Code (CLI) uses ~/.claude.json for MCP server configuration
+# This is different from Claude Desktop which uses ~/Library/Application Support/Claude/
 get_claude_config_path() {
-    local config_path
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        config_path="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        config_path="$HOME/.config/Claude/claude_desktop_config.json"
-    else
-        echo -e "${RED}Error: Unsupported OS: $OSTYPE${NC}" >&2
-        return 1
-    fi
-
+    local config_path="$HOME/.claude.json"
     echo "$config_path"
 }
 

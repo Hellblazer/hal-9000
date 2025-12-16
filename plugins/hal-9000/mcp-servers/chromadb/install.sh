@@ -58,77 +58,156 @@ update_path_if_needed "$PYTHON_BIN_DIR"
 echo ""
 echo -e "${BLUE}ChromaDB Configuration${NC}"
 echo ""
-echo "Choose ChromaDB client type:"
-echo "1) Cloud (ChromaDB Cloud service)"
-echo "2) Local (Local ChromaDB instance)"
 
-CLIENT_TYPE_CHOICE=""
-while true; do
-    read -rp "Select [1]: " CLIENT_TYPE_CHOICE
-    CLIENT_TYPE_CHOICE=${CLIENT_TYPE_CHOICE:-1}
-    if [[ "$CLIENT_TYPE_CHOICE" =~ ^[12]$ ]]; then
-        break
-    fi
-    echo -e "${RED}Invalid selection. Please enter 1 or 2.${NC}"
-done
+# Check for CHROMA_CLIENT_TYPE environment variable
+CHROMA_CLIENT_TYPE="${CHROMA_CLIENT_TYPE:-}"
 
-if [[ "$CLIENT_TYPE_CHOICE" = "1" ]]; then
-    # Cloud configuration
-    echo ""
-    echo "Get your ChromaDB Cloud credentials from: https://www.trychroma.com/"
-    echo ""
-    read -rp "Tenant ID: " CHROMADB_TENANT
-    read -rp "Database name: " CHROMADB_DATABASE
-    read -rsp "API key: " CHROMADB_API_KEY
-    echo ""  # Newline after password input
-
-    # Validate inputs
-    if [[ -z "$CHROMADB_TENANT" ]] || [[ -z "$CHROMADB_DATABASE" ]] || [[ -z "$CHROMADB_API_KEY" ]]; then
-        echo -e "${RED}Error: All cloud credentials are required${NC}"
-        exit 1
-    fi
-
-    # Create config snippet
-    CONFIG_JSON=$(cat <<EOF
-{
-  "mcpServers": {
-    "chromadb": {
-      "command": "$CHROMA_MCP_PATH",
-      "args": [
-        "--client-type", "cloud",
-        "--tenant", "$CHROMADB_TENANT",
-        "--database", "$CHROMADB_DATABASE",
-        "--api-key", "$CHROMADB_API_KEY"
-      ]
-    }
-  }
-}
-EOF
-)
+if [[ -n "$CHROMA_CLIENT_TYPE" ]]; then
+    echo -e "${GREEN}Using client type from environment: $CHROMA_CLIENT_TYPE${NC}"
+    CLIENT_TYPE="$CHROMA_CLIENT_TYPE"
 else
-    # Local configuration
-    read -rp "ChromaDB path [$HOME/.chromadb]: " CHROMADB_PATH
-    CHROMADB_PATH=${CHROMADB_PATH:-$HOME/.chromadb}
+    echo "Choose ChromaDB client type:"
+    echo "1) Cloud     - ChromaDB Cloud service (recommended)"
+    echo "2) HTTP      - Self-hosted Chroma server"
+    echo "3) Persistent - Local file-based storage"
+    echo "4) Ephemeral  - In-memory (testing only)"
+    echo ""
 
-    # Create directory if it doesn't exist
-    mkdir -p "$CHROMADB_PATH"
+    CLIENT_TYPE_CHOICE=""
+    while true; do
+        read -rp "Select [1]: " CLIENT_TYPE_CHOICE
+        CLIENT_TYPE_CHOICE=${CLIENT_TYPE_CHOICE:-1}
+        if [[ "$CLIENT_TYPE_CHOICE" =~ ^[1234]$ ]]; then
+            break
+        fi
+        echo -e "${RED}Invalid selection. Please enter 1, 2, 3, or 4.${NC}"
+    done
 
-    # Create config snippet
-    CONFIG_JSON=$(cat <<EOF
+    case "$CLIENT_TYPE_CHOICE" in
+        1) CLIENT_TYPE="cloud" ;;
+        2) CLIENT_TYPE="http" ;;
+        3) CLIENT_TYPE="persistent" ;;
+        4) CLIENT_TYPE="ephemeral" ;;
+    esac
+fi
+
+# Configure based on client type
+case "$CLIENT_TYPE" in
+    cloud)
+        echo ""
+        echo "Get your ChromaDB Cloud credentials from: https://www.trychroma.com/"
+        echo ""
+
+        CHROMADB_TENANT="${CHROMADB_TENANT:-}"
+        CHROMADB_DATABASE="${CHROMADB_DATABASE:-}"
+        CHROMADB_API_KEY="${CHROMADB_API_KEY:-}"
+
+        if [[ -n "$CHROMADB_TENANT" ]] && [[ -n "$CHROMADB_DATABASE" ]] && [[ -n "$CHROMADB_API_KEY" ]]; then
+            echo -e "${GREEN}Using credentials from environment variables${NC}"
+        else
+            [[ -z "$CHROMADB_TENANT" ]] && read -rp "Tenant ID: " CHROMADB_TENANT
+            [[ -z "$CHROMADB_DATABASE" ]] && read -rp "Database name: " CHROMADB_DATABASE
+            [[ -z "$CHROMADB_API_KEY" ]] && { read -rsp "API key: " CHROMADB_API_KEY; echo ""; }
+        fi
+
+        if [[ -z "$CHROMADB_TENANT" ]] || [[ -z "$CHROMADB_DATABASE" ]] || [[ -z "$CHROMADB_API_KEY" ]]; then
+            echo -e "${YELLOW}Cloud credentials not provided - skipping ChromaDB${NC}"
+            echo "Set CHROMADB_TENANT, CHROMADB_DATABASE, CHROMADB_API_KEY and re-run"
+            exit 0
+        fi
+
+        CONFIG_JSON=$(cat <<EOF
 {
   "mcpServers": {
     "chromadb": {
       "command": "$CHROMA_MCP_PATH",
-      "args": [
-        "--client-type", "local",
-        "--path", "$CHROMADB_PATH"
-      ]
+      "args": ["--client-type", "cloud", "--tenant", "$CHROMADB_TENANT", "--database", "$CHROMADB_DATABASE", "--api-key", "$CHROMADB_API_KEY"]
     }
   }
 }
 EOF
 )
-fi
+        ;;
+
+    http)
+        echo ""
+        CHROMADB_HOST="${CHROMADB_HOST:-}"
+        CHROMADB_PORT="${CHROMADB_PORT:-}"
+
+        if [[ -n "$CHROMADB_HOST" ]] && [[ -n "$CHROMADB_PORT" ]]; then
+            echo -e "${GREEN}Using HTTP config from environment variables${NC}"
+        else
+            [[ -z "$CHROMADB_HOST" ]] && read -rp "Chroma host [localhost]: " CHROMADB_HOST
+            CHROMADB_HOST=${CHROMADB_HOST:-localhost}
+            [[ -z "$CHROMADB_PORT" ]] && read -rp "Chroma port [8000]: " CHROMADB_PORT
+            CHROMADB_PORT=${CHROMADB_PORT:-8000}
+        fi
+
+        if [[ -z "$CHROMADB_HOST" ]] || [[ -z "$CHROMADB_PORT" ]]; then
+            echo -e "${YELLOW}HTTP config not provided - skipping ChromaDB${NC}"
+            exit 0
+        fi
+
+        CONFIG_JSON=$(cat <<EOF
+{
+  "mcpServers": {
+    "chromadb": {
+      "command": "$CHROMA_MCP_PATH",
+      "args": ["--client-type", "http", "--host", "$CHROMADB_HOST", "--port", "$CHROMADB_PORT"]
+    }
+  }
+}
+EOF
+)
+        ;;
+
+    persistent)
+        echo ""
+        CHROMADB_DATA_DIR="${CHROMADB_DATA_DIR:-}"
+
+        if [[ -n "$CHROMADB_DATA_DIR" ]]; then
+            echo -e "${GREEN}Using data directory from environment: $CHROMADB_DATA_DIR${NC}"
+        else
+            read -rp "Data directory [$HOME/.chromadb]: " CHROMADB_DATA_DIR
+            CHROMADB_DATA_DIR=${CHROMADB_DATA_DIR:-$HOME/.chromadb}
+        fi
+
+        # Create directory if needed
+        mkdir -p "$CHROMADB_DATA_DIR"
+
+        CONFIG_JSON=$(cat <<EOF
+{
+  "mcpServers": {
+    "chromadb": {
+      "command": "$CHROMA_MCP_PATH",
+      "args": ["--client-type", "persistent", "--data-dir", "$CHROMADB_DATA_DIR"]
+    }
+  }
+}
+EOF
+)
+        ;;
+
+    ephemeral)
+        echo -e "${YELLOW}Note: Ephemeral mode loses all data on restart${NC}"
+        CONFIG_JSON=$(cat <<EOF
+{
+  "mcpServers": {
+    "chromadb": {
+      "command": "$CHROMA_MCP_PATH",
+      "args": ["--client-type", "ephemeral"]
+    }
+  }
+}
+EOF
+)
+        ;;
+
+    *)
+        echo -e "${RED}Unknown client type: $CLIENT_TYPE${NC}"
+        exit 1
+        ;;
+esac
 
 # Handle Claude config merge
 if [[ -f "$CLAUDE_CONFIG" ]]; then

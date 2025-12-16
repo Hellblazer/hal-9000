@@ -30,7 +30,8 @@ fi
 
 # Test installation
 echo "Testing sequential-thinking MCP server..."
-if npx -y @modelcontextprotocol/server-sequential-thinking --help &> /dev/null; then
+# Note: < /dev/null prevents npx from consuming stdin (important for automated installs)
+if npx -y @modelcontextprotocol/server-sequential-thinking --help </dev/null &>/dev/null; then
     echo -e "${GREEN}✓ Sequential Thinking MCP server is available${NC}"
 else
     echo -e "${YELLOW}Note: Will be installed via npx on first use${NC}"

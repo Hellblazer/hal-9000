@@ -15,9 +15,16 @@ check_node_version || exit 1
 # Get Claude config path
 CLAUDE_CONFIG=$(get_claude_config_path) || exit 1
 
-# Check if already configured
+# Check if already configured (check both common key names)
+EXISTING_KEY=""
 if is_mcp_server_configured "$CLAUDE_CONFIG" "memory-bank"; then
-    echo -e "${YELLOW}Memory Bank MCP server is already configured${NC}"
+    EXISTING_KEY="memory-bank"
+elif is_mcp_server_configured "$CLAUDE_CONFIG" "allPepper-memory-bank"; then
+    EXISTING_KEY="allPepper-memory-bank"
+fi
+
+if [[ -n "$EXISTING_KEY" ]]; then
+    echo -e "${YELLOW}Memory Bank MCP server is already configured (as '$EXISTING_KEY')${NC}"
     echo ""
     read -rp "Overwrite existing configuration? (y/N): " overwrite
     if [[ ! "$overwrite" =~ ^[Yy]$ ]]; then
