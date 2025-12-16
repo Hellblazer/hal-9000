@@ -7,7 +7,7 @@
 FROM ghcr.io/hellblazer/hal-9000:latest
 
 LABEL profile="java"
-LABEL description="Java development with Claude CLI, GraalVM 23, native-image, Maven, Gradle"
+LABEL description="Java development with Claude CLI, GraalVM 25 LTS, native-image, Maven, Gradle"
 
 # Install dependencies for GraalVM native-image
 RUN apt-get update && apt-get install -y \
@@ -19,12 +19,12 @@ RUN apt-get update && apt-get install -y \
     maven \
     && rm -rf /var/lib/apt/lists/*
 
-# Install GraalVM JDK 23 (includes native-image)
+# Install GraalVM JDK 25 LTS (includes native-image)
 # Using Oracle GraalVM which bundles native-image
-ARG GRAALVM_VERSION=23.0.1
+ARG GRAALVM_VERSION=25
 ARG TARGETARCH
 RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo "aarch64" || echo "x64") && \
-    wget -q https://download.oracle.com/graalvm/23/latest/graalvm-jdk-23_linux-${ARCH}_bin.tar.gz -O /tmp/graalvm.tar.gz && \
+    wget -q https://download.oracle.com/graalvm/25/latest/graalvm-jdk-25_linux-${ARCH}_bin.tar.gz -O /tmp/graalvm.tar.gz && \
     mkdir -p /opt/graalvm && \
     tar -xzf /tmp/graalvm.tar.gz -C /opt/graalvm --strip-components=1 && \
     rm /tmp/graalvm.tar.gz
