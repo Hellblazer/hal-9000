@@ -1,0 +1,7 @@
+# HAL-9000 Test Configuration
+# Testing Claude CLI in container with MCP server access
+
+tasks:
+  - branch: test/hal9000-smoke
+    profile: ""
+    description: Smoke test HAL-9000 container with Claude CLI
