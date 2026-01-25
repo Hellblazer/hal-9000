@@ -58,6 +58,21 @@ logs/
 !.pm/PHASE1-*.md
 !.pm/SESSION-SUMMARY-*.md
 
+# Plugin implementation artifacts and test scaffolding
+plugins/*/lib/
+plugins/*/mcp-servers/IMPLEMENTATION_PLAN.md
+plugins/*/mcp-servers/SCHEMA.md
+plugins/*/mcp-servers/schema/
+plugins/*/tests/TESTING_ARCHITECTURE.md
+plugins/*/tests/component/
+plugins/*/tests/conftest.py
+plugins/*/tests/fixtures/
+plugins/*/tests/lib/
+plugins/*/tests/pipeline/
+plugins/*/tests/pytest.ini
+plugins/*/tests/unit/
+plugins/*/tests/integration/
+
 # Python cache directories
 __pycache__/
 *.pyc
