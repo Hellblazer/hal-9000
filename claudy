@@ -340,13 +340,14 @@ launch_container_session() {
         "$container_image"
     )
 
-    # Run shell or Claude
+    # Run shell or Claude (using tmux inside container for session persistence)
     if [[ "$shell_mode" == "true" ]]; then
-        info "Starting bash shell..."
-        "${docker_cmd[@]}" bash -i
+        info "Starting bash shell in tmux..."
+        "${docker_cmd[@]}" tmux new-session -s shell
     else
-        info "Starting Claude CLI..."
-        "${docker_cmd[@]}" claude
+        info "Starting Claude CLI in tmux..."
+        # Set HOME to /home/claude so Claude finds its config
+        "${docker_cmd[@]}" bash -c 'export HOME=/home/claude && exec tmux new-session -s claude "claude"'
     fi
 }
 

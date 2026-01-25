@@ -45,6 +45,8 @@ logs/
 /commands/
 /docs/
 /scripts/
+!/scripts/build/
+!/scripts/build/*.sh
 /tests/
 /install-mcp-servers.sh
 

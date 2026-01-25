@@ -34,8 +34,9 @@ RUN curl -fsSL https://claude.ai/install.sh | bash
 
 # Install Node.js 20 LTS for MCP servers and development
 # (Not needed for Claude Code binary itself, only for MCP npm packages)
+# Note: NodeSource package includes npm, don't install npm separately
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs npm \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # Pre-install MCP server npm packages globally (pinned to latest stable versions)
@@ -55,7 +56,8 @@ RUN uv tool install claude-code-tools
 
 # Pre-install chroma-mcp (ChromaDB MCP server)
 # Pinned to latest stable version (0.2.6 as of Jan 2026)
-RUN uv pip install chroma-mcp==0.2.6
+# Use uv tool install for CLI tools (avoids externally managed Python issues)
+RUN uv tool install chroma-mcp==0.2.6
 
 # Create workspace and hal-9000 mount point
 RUN mkdir -p /workspace /hal-9000 /root/memory-bank
