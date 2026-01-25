@@ -61,6 +61,7 @@ logs/
 !.pm/CLAUDE-NATIVE-BUILD-COMPATIBILITY.md
 !.pm/DOCKERFILE-NATIVE-BUILD-UPDATE.md
 !.pm/NATIVE-BUILD-RESEARCH-SUMMARY.md
+!.pm/MCP-SERVER-VERSIONS.md
 
 # Plugin implementation artifacts and test scaffolding
 plugins/*/lib/

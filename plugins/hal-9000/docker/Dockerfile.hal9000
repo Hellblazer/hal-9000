@@ -9,7 +9,10 @@ FROM debian:bookworm-slim
 
 LABEL maintainer="hal-9000"
 LABEL description="HAL-9000 base image with Claude CLI, MCP servers, and claude-code-tools"
-LABEL version="1.2.0"
+LABEL version="1.3.0"
+LABEL mcp_servers="memory-bank-mcp:0.2.2, sequential-thinking:2025.12.18, chroma-mcp:0.2.6"
+LABEL build_date="2026-01-25"
+LABEL claude_method="native_build"
 
 # Install system dependencies including Python 3 (for chroma-mcp)
 RUN apt-get update && apt-get install -y \
@@ -34,10 +37,11 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs npm \
     && rm -rf /var/lib/apt/lists/*
 
-# Pre-install MCP server npm packages globally (no npx download needed at runtime)
+# Pre-install MCP server npm packages globally (pinned to latest stable versions)
+# Updated 2026-01-25: memory-bank-mcp@0.2.2, sequential-thinking@2025.12.18
 RUN npm install -g \
-    @allpepper/memory-bank-mcp \
-    @modelcontextprotocol/server-sequential-thinking
+    @allpepper/memory-bank-mcp@0.2.2 \
+    @modelcontextprotocol/server-sequential-thinking@2025.12.18
 
 # Install uv (fast Python package installer)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -49,7 +53,8 @@ ENV PATH="/root/.local/bin:${PATH}"
 RUN uv tool install claude-code-tools
 
 # Pre-install chroma-mcp (ChromaDB MCP server)
-RUN uv tool install chroma-mcp
+# Pinned to latest stable version (0.2.6 as of Jan 2026)
+RUN uv pip install chroma-mcp==0.2.6
 
 # Create workspace and hal-9000 mount point
 RUN mkdir -p /workspace /hal-9000 /root/memory-bank
