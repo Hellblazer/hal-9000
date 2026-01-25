@@ -22,6 +22,8 @@ logs/
 # Only allow Python in proper locations (scripts/, src/, tests/)
 /*.py
 !scripts/*.py
+!claudy
+!install-claudy.sh
 
 # Prevent JSON data file sprawl in root (ART-678)
 # Only allow JSON in proper locations (src/, .claude/, docs/archive/)
@@ -29,8 +31,32 @@ logs/
 !/.claude/*.json
 /node_modules/**
 
+# Prevent markdown sprawl in root (ART-880)
+# Only allow essential documentation and README files
+/*.md
+!README.md
+!README-*.md
+!CHEATSHEET.md
+!CLAUDE.md
+!/plugins/*/README.md
+
+# Prevent directory sprawl in root
+/agents/
+/commands/
+/docs/
+/scripts/
+/tests/
+/install-mcp-servers.sh
+
 # Working documents - temporary/ephemeral files for agent work
 /working-documents/
+/.pm/
+!.pm/CONTINUATION.md
+!.pm/METHODOLOGY.md
+!.pm/AGENT_INSTRUCTIONS.md
+!.pm/BEADS.md
+!.pm/PHASE1-*.md
+!.pm/SESSION-SUMMARY-*.md
 
 # Python cache directories
 __pycache__/
