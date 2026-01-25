@@ -8,7 +8,9 @@ set -Eeuo pipefail
 readonly SCRIPT_NAME="claudy"
 readonly SCRIPT_VERSION="0.1.0"
 readonly HAL9000_HOME="${HOME}/.hal9000"
-readonly CLAUDE_HOME="${HOME}/.claude"
+# CLAUDE_HOME can be overridden by environment variable or --claude-home argument
+# Default: ~/.claude (same as Claude Code)
+readonly DEFAULT_CLAUDE_HOME="${HOME}/.claude"
 readonly DEFAULT_PROFILE="base"
 readonly CONTAINER_IMAGE_BASE="ghcr.io/hellblazer/hal-9000"
 
@@ -55,6 +57,7 @@ OPTIONS:
   --profile PROFILE      Profile: base, python, node, java (default: auto-detect)
   --shell, -s            Start bash shell instead of Claude
   --name NAME            Custom session name (default: auto from directory)
+  --claude-home PATH     Path to Claude config directory (default: $CLAUDE_HOME or ~/.claude)
   --detach, -d           Don't attach to tmux session after launch
   --verify               Verify prerequisites and exit
   --diagnose             Show diagnostic information
@@ -65,15 +68,16 @@ ARGUMENTS:
   DIRECTORY              Project directory (default: current directory)
 
 EXAMPLES:
-  claudy                              # Current dir, auto-detect profile
-  claudy --profile python             # Force Python profile
-  claudy ~/projects/myapp             # Specific directory
-  claudy --shell -d                   # Detached shell session
-  claudy --diagnose                   # Check setup
+  claudy                                    # Current dir, auto-detect profile
+  claudy --profile python                   # Force Python profile
+  claudy ~/projects/myapp                   # Specific directory
+  claudy --shell -d                         # Detached shell session
+  claudy --claude-home ~/git/.claude        # Use alternate Claude config
+  claudy --diagnose                         # Check setup
 
 ENVIRONMENT:
+  CLAUDE_HOME            Override Claude config directory (default: ~/.claude)
   HAL9000_HOME           Override session storage (default: ~/.hal9000)
-  CLAUDE_HOME            Claude configuration (default: ~/.claude)
   DOCKER_SOCKET          Docker socket path (default: /var/run/docker.sock)
 
 For more information, see documentation at:
@@ -354,6 +358,7 @@ main() {
     local project_dir="."
     local profile=""
     local session_name=""
+    local claude_home="${CLAUDE_HOME:-$DEFAULT_CLAUDE_HOME}"
     local shell_mode=false
     local detach=false
     local verify_only=false
@@ -371,6 +376,10 @@ main() {
                 ;;
             --name)
                 session_name="$2"
+                shift 2
+                ;;
+            --claude-home)
+                claude_home="$2"
                 shift 2
                 ;;
             --detach|-d)
@@ -402,6 +411,9 @@ main() {
                 ;;
         esac
     done
+
+    # Export CLAUDE_HOME for use in functions
+    export CLAUDE_HOME="$claude_home"
 
     # Verify prerequisites
     if ! verify_prerequisites; then

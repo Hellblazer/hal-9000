@@ -126,6 +126,12 @@ claudy --name my-session
 
 # Specific directory
 claudy ~/projects/myapp
+
+# Use version-controlled config (great for reproducibility)
+claudy --claude-home ~/git/.claude ~/my-project
+
+# Use isolated config for testing (no effect on ~/.claude)
+claudy --claude-home ~/.hal9000/test-config
 ```
 
 ### Help and Diagnostics
@@ -141,17 +147,39 @@ claudy --verify
 claudy --diagnose
 ```
 
-### Environment Variables
+### Environment Variables and Config Override
+
+**CLAUDE_HOME**: Path to Claude Code configuration directory
+
+```bash
+# Use tracked/version-controlled config (great for teams or reproducibility)
+export CLAUDE_HOME=$HOME/git/.claude
+claudy
+
+# Use custom config location for testing/isolation
+export CLAUDE_HOME=$HOME/.hal9000/test-config
+claudy
+
+# Default: uses ~/.claude (same as Claude Code)
+claudy
+```
+
+**HAL9000_HOME**: Path to claudy session storage
 
 ```bash
 # Override default session storage location
 export HAL9000_HOME=$HOME/.my-hal9000-sessions
-
-# Override Claude home (rarely needed)
-export CLAUDE_HOME=$HOME/.my-claude-config
-
-# Then run claudy as usual
 claudy
+```
+
+**Via Command-Line Arguments**:
+
+```bash
+# Override Claude home without environment variable
+claudy --claude-home ~/git/.claude
+
+# Combine with other options
+claudy --claude-home ~/.hal9000/test-config --profile python ~/my-project
 ```
 
 ## How It Works
