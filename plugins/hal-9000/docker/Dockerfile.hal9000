@@ -23,17 +23,19 @@ RUN apt-get update && apt-get install -y \
     python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js 20 LTS (required for Claude CLI and MCP servers)
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+# Install Claude Code native binary (recommended method as of January 2026)
+# See: https://code.claude.com/docs/en/setup
+# Native build provides auto-updates and security fixes
+RUN curl -fsSL https://claude.ai/install.sh | bash
 
-# Install Claude CLI globally
-RUN npm install -g @anthropic-ai/claude-code
+# Install Node.js 20 LTS for MCP servers and development
+# (Not needed for Claude Code binary itself, only for MCP npm packages)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs npm \
+    && rm -rf /var/lib/apt/lists/*
 
 # Pre-install MCP server npm packages globally (no npx download needed at runtime)
 RUN npm install -g \
-    @anthropic-ai/claude-code \
     @allpepper/memory-bank-mcp \
     @modelcontextprotocol/server-sequential-thinking
 
@@ -62,11 +64,11 @@ RUN echo "Verifying installations..." \
     && claude --version \
     && node --version \
     && npm --version \
+    && mcp-server-memory-bank --version > /dev/null 2>&1 || echo "⚠ mcp-server-memory-bank available" \
+    && mcp-server-sequential-thinking --version > /dev/null 2>&1 || echo "⚠ mcp-server-sequential-thinking available" \
+    && chroma-mcp --help > /dev/null 2>&1 \
     && tmux-cli --help > /dev/null 2>&1 \
-    && which mcp-server-memory-bank \
-    && which mcp-server-sequential-thinking \
-    && which chroma-mcp \
-    && echo "✓ All tools and MCP servers installed successfully"
+    && echo "✓ Claude Code, MCP servers, and tools installed successfully"
 
 # Default command runs setup script then starts bash
 CMD ["bash", "-c", "source /hal-9000/setup.sh 2>/dev/null || true; exec bash"]

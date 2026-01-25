@@ -58,6 +58,8 @@ logs/
 !.pm/TESTING-PLAN.md
 !.pm/PHASE1-*.md
 !.pm/SESSION-SUMMARY-*.md
+!.pm/CLAUDE-NATIVE-BUILD-COMPATIBILITY.md
+!.pm/DOCKERFILE-NATIVE-BUILD-UPDATE.md
 
 # Plugin implementation artifacts and test scaffolding
 plugins/*/lib/
