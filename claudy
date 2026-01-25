@@ -329,6 +329,7 @@ launch_container_session() {
         --name "$session_name"
         -v "$abs_project_path:/workspace"
         -v "$session_dir/.claude:/home/claude/.claude"
+        -v /var/run/docker.sock:/var/run/docker.sock
         -e "CLAUDY_SESSION=$session_name"
         -e "CLAUDY_PROJECT_DIR=$abs_project_path"
         -w "/workspace"

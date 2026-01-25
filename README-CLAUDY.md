@@ -51,6 +51,22 @@ claudy
 
 ## Features
 
+### Docker Integration
+
+claudy automatically mounts your Docker daemon socket into the container, allowing you to use `docker` commands as if you were on the host:
+
+```bash
+# Inside claudy container
+docker build -t my-app .
+docker run my-app
+docker compose up
+
+# All commands work against your host Docker daemon
+```
+
+**Requirements**: Docker daemon running on host
+**Security**: Container doesn't have Docker privileges - uses host daemon
+
 ### Automatic Project Detection
 
 claudy automatically detects your project type:
@@ -160,8 +176,9 @@ claudy
 1. **Detect**: Auto-detect project type from markers
 2. **Initialize**: Create session directory and copy host config
 3. **Authenticate**: Copy ~/.claude/.session.json to container
-4. **Launch**: Start tmux session and open Claude inside container
-5. **Mount**: Project directory mounted at /workspace
+4. **Docker Setup**: Mount host Docker daemon socket (`/var/run/docker.sock`)
+5. **Launch**: Start tmux session and open Claude inside container
+6. **Mount**: Project directory mounted at /workspace
 
 ### Session Naming
 

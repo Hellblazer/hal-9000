@@ -62,6 +62,7 @@ logs/
 !.pm/DOCKERFILE-NATIVE-BUILD-UPDATE.md
 !.pm/NATIVE-BUILD-RESEARCH-SUMMARY.md
 !.pm/MCP-SERVER-VERSIONS.md
+!.pm/CLAUDY-DOCKER-INTEGRATION.md
 
 # Plugin implementation artifacts and test scaffolding
 plugins/*/lib/
