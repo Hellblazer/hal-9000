@@ -6,7 +6,7 @@
 set -Eeuo pipefail
 
 readonly SCRIPT_NAME="claudy"
-readonly SCRIPT_VERSION="0.1.0"
+readonly SCRIPT_VERSION="0.2.0"
 readonly HAL9000_HOME="${HOME}/.hal9000"
 # CLAUDE_HOME can be overridden by environment variable or --claude-home argument
 # Default: ~/.claude (same as Claude Code)
@@ -58,6 +58,7 @@ OPTIONS:
   --shell, -s            Start bash shell instead of Claude
   --name NAME            Custom session name (default: auto from directory)
   --claude-home PATH     Path to Claude config directory (default: $CLAUDE_HOME or ~/.claude)
+  --api-key KEY          Anthropic API key (or set ANTHROPIC_API_KEY env var)
   --detach, -d           Don't attach to tmux session after launch
   --verify               Verify prerequisites and exit
   --diagnose             Show diagnostic information
@@ -67,15 +68,30 @@ OPTIONS:
 ARGUMENTS:
   DIRECTORY              Project directory (default: current directory)
 
+AUTHENTICATION:
+  Claude Code supports multiple authentication methods:
+
+  1. API Key (recommended for containers):
+     export ANTHROPIC_API_KEY=sk-ant-...
+     claudy
+
+  2. Interactive login (inside container):
+     claudy --shell
+     claude /login
+
+  3. Long-lived token:
+     claude setup-token  # On host, then copy token
+
 EXAMPLES:
   claudy                                    # Current dir, auto-detect profile
   claudy --profile python                   # Force Python profile
   claudy ~/projects/myapp                   # Specific directory
   claudy --shell -d                         # Detached shell session
-  claudy --claude-home ~/git/.claude        # Use alternate Claude config
+  claudy --api-key sk-ant-xxx123            # Use specific API key
   claudy --diagnose                         # Check setup
 
 ENVIRONMENT:
+  ANTHROPIC_API_KEY      API key for Claude authentication
   CLAUDE_HOME            Override Claude config directory (default: ~/.claude)
   HAL9000_HOME           Override session storage (default: ~/.hal9000)
   DOCKER_SOCKET          Docker socket path (default: /var/run/docker.sock)
@@ -118,19 +134,47 @@ show_diagnostics() {
         warn "Bash version: $BASH_VERSION (recommend 5.0+)"
     fi
 
+    # Check authentication
+    echo ""
+    info "Authentication:"
+    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+        local key_preview="${ANTHROPIC_API_KEY:0:10}..."
+        success "  ANTHROPIC_API_KEY: Set ($key_preview)"
+    else
+        warn "  ANTHROPIC_API_KEY: Not set"
+    fi
+
     # Check Claude home
     if [[ -d "$CLAUDE_HOME" ]]; then
         success "Claude home: $CLAUDE_HOME (exists)"
-        if [[ -f "$CLAUDE_HOME/.session.json" ]]; then
-            success "  → Session token found"
-        else
-            warn "  → No session token (run: claude /login)"
+
+        # Check for config files
+        local config_count=0
+        [[ -f "$CLAUDE_HOME/settings.json" ]] && ((config_count++))
+        [[ -d "$CLAUDE_HOME/agents" ]] && ((config_count++))
+        [[ -d "$CLAUDE_HOME/mcp-servers" ]] && ((config_count++))
+        [[ -f "$CLAUDE_HOME/CLAUDE.md" ]] && ((config_count++))
+        info "  → Config files found: $config_count"
+
+        # Check for agents
+        if [[ -d "$CLAUDE_HOME/agents" ]]; then
+            local agent_count
+            agent_count=$(find "$CLAUDE_HOME/agents" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+            info "  → Agents: $agent_count"
+        fi
+
+        # Check for MCP servers
+        if [[ -d "$CLAUDE_HOME/mcp-servers/servers" ]]; then
+            local mcp_count
+            mcp_count=$(find "$CLAUDE_HOME/mcp-servers/servers" -name "*.json" 2>/dev/null | wc -l | tr -d ' ')
+            info "  → MCP servers: $mcp_count"
         fi
     else
         warn "Claude home: $CLAUDE_HOME (not configured)"
     fi
 
     # Check hal9000 storage
+    echo ""
     if [[ -d "$HAL9000_HOME" ]]; then
         SESSION_COUNT=$(find "$HAL9000_HOME/claude" -maxdepth 1 -type d 2>/dev/null | wc -l)
         success "hal9000 home: $HAL9000_HOME"
@@ -148,9 +192,26 @@ show_diagnostics() {
         warn "Docker socket not found"
     fi
 
+    # Check for container image
+    echo ""
+    if docker inspect "${CONTAINER_IMAGE_BASE}:base" &> /dev/null; then
+        success "Container image: ${CONTAINER_IMAGE_BASE}:base (available)"
+    else
+        warn "Container image: ${CONTAINER_IMAGE_BASE}:base (not found - run: make build-base)"
+    fi
+
     echo ""
     info "System: $(uname -s) $(uname -m)"
     info "Current directory: $(pwd)"
+
+    # Auth guidance
+    echo ""
+    if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+        info "Authentication options:"
+        echo "  1. Set ANTHROPIC_API_KEY environment variable"
+        echo "  2. Run 'claudy --shell' then 'claude /login' inside container"
+        echo "  3. Run 'claude setup-token' on host for long-lived token"
+    fi
 }
 
 #==============================================================================
@@ -183,7 +244,7 @@ detect_profile() {
 }
 
 #==============================================================================
-# Session management (See: claudy-authentication-revised.md)
+# Session management
 #==============================================================================
 
 get_session_name() {
@@ -224,9 +285,10 @@ verify_prerequisites() {
         error "Docker daemon not running or not accessible"
     fi
 
-    # Check Claude session
-    if [[ ! -f "$CLAUDE_HOME/.session.json" ]]; then
-        warn "No Claude session found. You may need to run: claude /login"
+    # Check authentication - warn if no API key and provide guidance
+    if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+        warn "No ANTHROPIC_API_KEY set. You may need to authenticate inside container."
+        info "  Run 'claude /login' after container starts, or set ANTHROPIC_API_KEY"
     fi
 
     success "Prerequisites verified"
@@ -252,18 +314,17 @@ init_session() {
     mkdir -p "$claude_home_in_container"
     mkdir -p "$session_dir/.workspace"
 
-    # Copy host Claude configuration to session (See: claudy-authentication-revised.md)
+    # Copy host Claude configuration to session
     if [[ -d "$CLAUDE_HOME" ]]; then
-        # Copy .session.json (authentication)
-        if [[ -f "$CLAUDE_HOME/.session.json" ]]; then
-            cp "$CLAUDE_HOME/.session.json" "$claude_home_in_container/.session.json"
-            chmod 600 "$claude_home_in_container/.session.json"
-            info "Copied authentication token"
-        fi
-
         # Copy settings
         if [[ -f "$CLAUDE_HOME/settings.json" ]]; then
             cp "$CLAUDE_HOME/settings.json" "$claude_home_in_container/settings.json"
+            info "Copied settings.json"
+        fi
+
+        # Copy local settings
+        if [[ -f "$CLAUDE_HOME/settings.local.json" ]]; then
+            cp "$CLAUDE_HOME/settings.local.json" "$claude_home_in_container/settings.local.json"
         fi
 
         # Copy user config
@@ -271,28 +332,45 @@ init_session() {
             cp "$CLAUDE_HOME/CLAUDE.md" "$claude_home_in_container/CLAUDE.md"
         fi
 
-        # Copy agents (but not hooks or credentials)
+        # Copy agents
         if [[ -d "$CLAUDE_HOME/agents" ]]; then
             cp -r "$CLAUDE_HOME/agents" "$claude_home_in_container/agents" 2>/dev/null || true
+            local agent_count
+            agent_count=$(find "$claude_home_in_container/agents" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+            info "Copied $agent_count agents"
         fi
 
         # Copy commands
         if [[ -d "$CLAUDE_HOME/commands" ]]; then
             cp -r "$CLAUDE_HOME/commands" "$claude_home_in_container/commands" 2>/dev/null || true
         fi
+
+        # Copy MCP server configurations
+        if [[ -d "$CLAUDE_HOME/mcp-servers" ]]; then
+            cp -r "$CLAUDE_HOME/mcp-servers" "$claude_home_in_container/mcp-servers" 2>/dev/null || true
+            local mcp_count
+            mcp_count=$(find "$claude_home_in_container/mcp-servers/servers" -name "*.json" 2>/dev/null | wc -l | tr -d ' ')
+            info "Copied $mcp_count MCP server configs"
+        fi
+
+        # Copy skills
+        if [[ -d "$CLAUDE_HOME/skills" ]]; then
+            cp -r "$CLAUDE_HOME/skills" "$claude_home_in_container/skills" 2>/dev/null || true
+        fi
     else
         warn "Claude home not found at $CLAUDE_HOME"
     fi
 
     # Create session metadata
-    cat > "$session_dir/.session.json" << METADATA
+    cat > "$session_dir/.claudy-session.json" << METADATA
 {
   "name": "$session_name",
   "profile": "$profile",
   "project_dir": "$abs_project_path",
   "created_at": "$(date -Iseconds)",
   "shell_mode": $shell_mode,
-  "container_image": "${CONTAINER_IMAGE_BASE}:${profile}"
+  "container_image": "${CONTAINER_IMAGE_BASE}:${profile}",
+  "claudy_version": "$SCRIPT_VERSION"
 }
 METADATA
 
@@ -308,6 +386,7 @@ launch_container_session() {
     local profile="$2"
     local project_dir="$3"
     local shell_mode="$4"
+    local api_key="$5"
     local abs_project_path
 
     abs_project_path=$(cd "$project_dir" && pwd)
@@ -325,8 +404,8 @@ launch_container_session() {
     info "  Session: $session_name"
     info "  Directory: $abs_project_path"
 
-    # Prepare docker run command
-    local docker_cmd=(
+    # Build docker run command
+    local docker_args=(
         docker run
         --rm
         -it
@@ -336,18 +415,31 @@ launch_container_session() {
         -v /var/run/docker.sock:/var/run/docker.sock
         -e "CLAUDY_SESSION=$session_name"
         -e "CLAUDY_PROJECT_DIR=$abs_project_path"
-        -w "/workspace"
-        "$container_image"
+        -e "MEMORY_BANK_ROOT=/home/claude/memory-bank"
     )
+
+    # Pass through API key if available
+    if [[ -n "$api_key" ]]; then
+        docker_args+=(-e "ANTHROPIC_API_KEY=$api_key")
+        info "  Auth: API key"
+    elif [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+        docker_args+=(-e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
+        info "  Auth: API key (from environment)"
+    else
+        info "  Auth: Interactive login required"
+    fi
+
+    # Add image
+    docker_args+=(-w "/workspace" "$container_image")
 
     # Run shell or Claude (using tmux inside container for session persistence)
     if [[ "$shell_mode" == "true" ]]; then
         info "Starting bash shell in tmux..."
-        "${docker_cmd[@]}" tmux new-session -s shell
+        "${docker_args[@]}" tmux new-session -s shell
     else
         info "Starting Claude CLI in tmux..."
         # Set HOME to /home/claude so Claude finds its config
-        "${docker_cmd[@]}" bash -c 'export HOME=/home/claude && exec tmux new-session -s claude "claude"'
+        "${docker_args[@]}" bash -c 'export HOME=/home/claude && exec tmux new-session -s claude "claude"'
     fi
 }
 
@@ -360,6 +452,7 @@ main() {
     local profile=""
     local session_name=""
     local claude_home="${CLAUDE_HOME:-$DEFAULT_CLAUDE_HOME}"
+    local api_key=""
     local shell_mode=false
     local detach=false
     local verify_only=false
@@ -383,6 +476,10 @@ main() {
                 claude_home="$2"
                 shift 2
                 ;;
+            --api-key)
+                api_key="$2"
+                shift 2
+                ;;
             --detach|-d)
                 detach=true
                 shift
@@ -392,6 +489,7 @@ main() {
                 shift
                 ;;
             --diagnose)
+                export CLAUDE_HOME="$claude_home"
                 show_diagnostics
                 exit 0
                 ;;
@@ -447,7 +545,7 @@ main() {
     success "Session ready: $session_name"
 
     # Launch container
-    launch_container_session "$session_name" "$profile" "$project_dir" "$shell_mode" || error "Failed to launch container"
+    launch_container_session "$session_name" "$profile" "$project_dir" "$shell_mode" "$api_key" || error "Failed to launch container"
 }
 
 # Run main if script is executed directly
