@@ -81,8 +81,34 @@
     "sessions": "./commands/sessions.md",
     "session-delete": "./commands/session-delete.md"
   },
+  "agents": {
+    "code-review-expert": "./agents/code-review-expert.md",
+    "codebase-deep-analyzer": "./agents/codebase-deep-analyzer.md",
+    "deep-analyst": "./agents/deep-analyst.md",
+    "deep-research-synthesizer": "./agents/deep-research-synthesizer.md",
+    "devonthink-researcher": "./agents/devonthink-researcher.md",
+    "java-architect-planner": "./agents/java-architect-planner.md",
+    "java-debugger": "./agents/java-debugger.md",
+    "java-developer": "./agents/java-developer.md",
+    "knowledge-tidier": "./agents/knowledge-tidier.md",
+    "pdf-chromadb-processor": "./agents/pdf-chromadb-processor.md",
+    "plan-auditor": "./agents/plan-auditor.md",
+    "project-management-setup": "./agents/project-management-setup.md"
+  },
+  "hooks": {
+    "SessionStart": [
+      "./hooks/bash_hook.py"
+    ],
+    "PreCompact": [
+      "./hooks/env_file_protection_hook.py",
+      "./hooks/file_length_limit_hook.py",
+      "./hooks/git_add_block_hook.py",
+      "./hooks/git_checkout_safety_hook.py",
+      "./hooks/git_commit_block_hook.py"
+    ]
+  },
   "install": {
     "script": "./install.sh",
-    "postInstall": "Installation complete! Please restart Claude Code to load all components.\n\nInstalled:\n• MCP Servers: ChromaDB, Memory Bank, Sequential Thinking, DEVONthink\n• beads (bd): Dependency-aware issue tracking for AI workflows\n• Custom Agents: 12 specialized agents (java-developer, code-review-expert, etc.)\n• Session Commands: /check, /load, /sessions, /session-delete\n• Terminal Tools: tmux-cli, find-session, vault, env-safe\n• Safety Hooks: Git, file, and environment protection\n• aod (Army of Darkness): Multi-branch parallel development with git worktrees\n• hal9000: Containerized Claude for isolated sessions\n\nNext steps:\n1. Configure ChromaDB environment variables (if using cloud mode)\n2. Initialize beads: cd your-project && bd init\n3. Try: aod --help, hal9000 --help, tmux-cli --help, bd --help\n4. Test: /sessions, hal9000 run, aod-list, bd ready\n5. See AGENTS.md for agent documentation"
+    "postInstall": "✓ hal-9000 Marketplace Installation Complete\n\nAutomatically Installed:\n• MCP Servers: ChromaDB, Memory Bank, Sequential Thinking, DEVONthink\n• Custom Agents: 12 specialized agents\n• Session Commands: /check, /load, /sessions, /session-delete\n• Safety Hooks: Git, file, and environment protection\n\nOptional System Tools (manual install.sh):\n• aod (Army of Darkness): Multi-branch parallel development\n• beads (bd): AI-optimized issue tracking\n• tmux-cli: Terminal automation\n• vault & env-safe: Credential management\n\nNext Steps:\n1. Commands: /check, /load, /sessions available immediately\n2. MCP servers ready for Claude Code restart\n3. For system tools: cd plugins/hal-9000 && ./install.sh\n4. See plugins/hal-9000/README.md for full documentation"
   }
 }
