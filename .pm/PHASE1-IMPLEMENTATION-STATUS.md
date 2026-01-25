@@ -201,14 +201,14 @@ Total Documentation: ~13 KB
 | Criterion | Status | Evidence |
 |-----------|--------|----------|
 | Simple wrapper | ✅ | Single script, <400 lines |
-| Auto-detect profile | ✅ | 4/4 test cases passing |
+| Auto-detect profile | ✅ | 4/4 unit tests passing |
 | No permission dialogs | ✅ | Container-based architecture |
-| Session isolation | ✅ | Per-project ~/.hal9000/claude/{name} |
-| Auth inheritance | ✅ | Session copying implemented |
-| Frictionless UX | ✅ | Zero-config by default |
+| Session isolation | ⏳ | Implemented, needs directory creation test |
+| Auth inheritance | ⏳ | Implemented, needs token copying test |
+| Frictionless UX | ⏳ | Implemented, needs end-to-end test |
 | Comprehensive help | ✅ | --help and --diagnose implemented |
-| Error handling | ✅ | Graceful degradation, recovery suggestions |
-| Cross-platform | 🔄 | Tested on macOS, Linux verification pending |
+| Error handling | ⏳ | Implemented, needs error scenario tests |
+| Cross-platform | 🔄 | Syntax valid on macOS, Linux/WSL2 untested |
 
 ## Code Quality Metrics
 
@@ -219,15 +219,44 @@ Total Documentation: ~13 KB
 - **Syntax**: bash -n validation PASS
 - **Help Text**: Comprehensive (8 sections, 30+ lines)
 
-## Ready to Commit
+## Testing Status
 
-✅ All Phase 1 Week 1 deliverables complete
-✅ All syntax validation passed
-✅ All core features tested
-✅ Documentation complete
-✅ Project management infrastructure ready
+**Unit Tests** (Basic)
+- ✅ Profile detection: 4/4 tests passing
+- ✅ Session naming: Deterministic generation verified
+- ✅ Help system: Commands tested
+- ✅ Syntax validation: bash -n passed
 
-**Recommended Next Session**: Continue with CLAUDY-IMPL-1-3 (session authentication testing)
+**Integration Tests** (Pending)
+- ⏳ Installation script execution
+- ⏳ Session directory creation
+- ⏳ File permission verification
+- ⏳ Authentication token copying
+- ⏳ Error scenario handling
+
+**Cross-Platform Tests** (Pending)
+- ✅ macOS: Syntax validation passed
+- ⏳ Linux Ubuntu: Not tested
+- ⏳ Linux Debian: Not tested
+- ⏳ WSL2: Not tested
+
+**See**: `.pm/TESTING-PLAN.md` for complete testing strategy
+
+## Implementation Status
+
+✅ **Code**: Phase 1 Week 1 implementation complete
+✅ **Syntax**: All scripts pass bash -n validation
+✅ **Unit Tests**: Profile detection, session naming, help system
+⏳ **Integration Tests**: Not yet executed (blocking full Phase 1)
+⏳ **Cross-Platform**: macOS only, Linux/WSL2 pending
+⏳ **End-to-End**: Not yet tested
+
+**Current Phase**: Implementation complete, testing in progress
+**Recommended Next Action**: Execute integration tests before Phase 1 completion
+
+---
+
+**NOTE**: Phase 1 is NOT YET COMPLETE. Code is ready, but integration and cross-platform testing are required before marking Phase 1 as done.
 
 ---
 
