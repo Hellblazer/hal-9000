@@ -51,18 +51,6 @@ logs/
 # Working documents - temporary/ephemeral files for agent work
 /working-documents/
 /.pm/
-!.pm/CONTINUATION.md
-!.pm/METHODOLOGY.md
-!.pm/AGENT_INSTRUCTIONS.md
-!.pm/BEADS.md
-!.pm/TESTING-PLAN.md
-!.pm/PHASE1-*.md
-!.pm/SESSION-SUMMARY-*.md
-!.pm/CLAUDE-NATIVE-BUILD-COMPATIBILITY.md
-!.pm/DOCKERFILE-NATIVE-BUILD-UPDATE.md
-!.pm/NATIVE-BUILD-RESEARCH-SUMMARY.md
-!.pm/MCP-SERVER-VERSIONS.md
-!.pm/CLAUDY-DOCKER-INTEGRATION.md
 
 # Plugin implementation artifacts and test scaffolding
 plugins/*/lib/
