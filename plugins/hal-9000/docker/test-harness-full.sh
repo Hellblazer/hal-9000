@@ -76,17 +76,16 @@ test_hal9000_install() {
     # Prompt sequence for fresh install:
     # 1. "Proceed with optional system tool installation?" -> y
     # 2. ChromaDB client type: 3 (persistent - local file storage)
-    # 3. ChromaDB data directory: (empty for default ~/.chromadb)
-    # 4. Memory bank directory: (empty for default ~/memory-bank)
-    # 5. Sequential thinking - no prompts needed
-    # 6. beads - installed via brew or skipped
-    # 7. claude-code-tools - installed via uv
-    # Plus extra y's for any merge/config prompts
+    # 3. ChromaDB data directory: "" (empty for default ~/.chromadb)
+    #    Note: On fresh install, ChromaDB CREATES config (no merge prompt)
+    # 4. Memory bank directory: "" (empty for default ~/memory-bank)
+    # 5. Memory bank merge: y (since config now exists from chromadb)
+    # 6. Sequential thinking merge: y (since config exists)
+    # Plus extra y's for any unexpected prompts
     #
-    # Note: On fresh install, ChromaDB creates config file without merge prompt.
-    # Subsequent MCP servers see existing config and ask to merge.
+    # Note: beads requires brew (skipped in CI), claude-code-tools via uv
 
-    printf '%s\n' "y" "3" "" "y" "" "y" "y" "y" "y" "y" "y" "y" > /tmp/install-inputs.txt
+    printf '%s\n' "y" "3" "" "" "y" "y" "y" "y" "y" "y" "y" "y" > /tmp/install-inputs.txt
 
     # Run installer with proper input sequence
     if timeout 600 ./install.sh < /tmp/install-inputs.txt 2>&1 | tee /tmp/install.log; then
