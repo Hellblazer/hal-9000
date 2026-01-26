@@ -9,12 +9,13 @@ FROM debian:bookworm-slim
 
 LABEL maintainer="hal-9000"
 LABEL description="HAL-9000 base image with Claude CLI, MCP servers, and claude-code-tools"
-LABEL version="1.3.0"
+LABEL version="1.4.0"
 LABEL mcp_servers="memory-bank-mcp:0.2.2, sequential-thinking:2025.12.18, chroma-mcp:0.2.6"
 LABEL build_date="2026-01-25"
 LABEL claude_method="native_build"
 
 # Install system dependencies including Python 3 (for chroma-mcp)
+# Also install locale and terminal packages for proper UTF-8 and TUI support
 RUN apt-get update && apt-get install -y \
     curl \
     git \
@@ -25,7 +26,17 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-venv \
     docker.io \
-    && rm -rf /var/lib/apt/lists/*
+    locales \
+    ncurses-term \
+    && rm -rf /var/lib/apt/lists/* \
+    && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
+    && locale-gen
+
+# Set locale and terminal environment for proper Unicode/TUI support
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV TERM=xterm-256color
 
 # Install Claude Code native binary (recommended method as of January 2026)
 # See: https://code.claude.com/docs/en/setup
