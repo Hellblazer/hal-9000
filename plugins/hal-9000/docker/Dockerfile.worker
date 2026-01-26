@@ -1,0 +1,66 @@
+# HAL-9000 Worker Container
+# Lightweight Claude Code execution environment
+#
+# Architecture:
+# - Workers share parent's network namespace (--network=container:parent)
+# - MCP servers run on HOST with stdio transport
+# - Mount host's ~/.claude for MCP server access
+#
+# Build: docker build -f Dockerfile.worker -t ghcr.io/hellblazer/hal-9000:worker .
+
+FROM debian:bookworm-slim
+
+LABEL maintainer="hal-9000"
+LABEL description="HAL-9000 worker container - lightweight Claude Code environment"
+LABEL version="1.0.0"
+LABEL architecture="dind-worker"
+LABEL build_date="2026-01-25"
+
+# Minimal dependencies
+# - curl: For Claude CLI installation and health checks
+# - ca-certificates: SSL/TLS support
+# - locales: UTF-8 support (required by Claude CLI)
+# - git: Optional but useful for most development workflows
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    locales \
+    git \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/share/doc/* /usr/share/man/* \
+    && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
+    && locale-gen
+
+# Set locale for proper UTF-8 support
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV TERM=xterm-256color
+
+# Add Claude CLI to PATH
+ENV PATH="/root/.local/bin:${PATH}"
+
+# Install Claude CLI (native binary)
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
+# Create directory structure
+RUN mkdir -p /workspace /root/.claude /scripts
+
+# Copy entrypoint script
+COPY worker-entrypoint.sh /scripts/worker-entrypoint.sh
+RUN chmod +x /scripts/worker-entrypoint.sh
+
+# Environment variables
+ENV CLAUDE_HOME=/root/.claude
+ENV WORKSPACE=/workspace
+
+WORKDIR /workspace
+
+# Verify Claude CLI installation
+RUN claude --version
+
+# Health check - verify Claude CLI is accessible
+HEALTHCHECK --interval=60s --timeout=10s --start-period=5s --retries=3 \
+    CMD claude --version >/dev/null 2>&1 || exit 1
+
+ENTRYPOINT ["/scripts/worker-entrypoint.sh"]
+CMD ["claude"]

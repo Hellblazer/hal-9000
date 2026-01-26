@@ -174,9 +174,25 @@ spawn_worker() {
     fi
 
     # Mount Claude home for session persistence
-    local claude_home="${HAL9000_HOME:-/root/.hal9000}/workers/${WORKER_NAME}"
-    mkdir -p "$claude_home"
-    docker_args+=(-v "${claude_home}:/root/.claude")
+    # Detect Docker-in-Docker mode (running inside a container)
+    local in_container=false
+    if [[ -f "/.dockerenv" ]] || grep -q docker /proc/1/cgroup 2>/dev/null; then
+        in_container=true
+    fi
+
+    if [[ "$in_container" == "true" ]]; then
+        # Inside container - use named volumes (host paths won't work)
+        local volume_name="hal9000-claude-${WORKER_NAME}"
+        docker volume create "$volume_name" >/dev/null 2>&1 || true
+        docker_args+=(-v "${volume_name}:/root/.claude")
+        log_info "DinD mode: using named volume $volume_name"
+    else
+        # Running on host - use host directory
+        local hal9000_home="${HAL9000_HOME:-$HOME/.hal9000}"
+        local claude_home="${hal9000_home}/workers/${WORKER_NAME}"
+        mkdir -p "$claude_home" 2>/dev/null || true
+        docker_args+=(-v "${claude_home}:/root/.claude")
+    fi
 
     # Pass through API key if set
     if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
