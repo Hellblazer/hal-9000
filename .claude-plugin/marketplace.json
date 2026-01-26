@@ -1,8 +1,8 @@
 {
-  "_version": "2.0.0",
+  "_version": "3.0.0",
   "_schema_version": "1.0",
   "name": "hal-9000",
-  "description": "Hellbound Claude Marketplace - MCP servers and productivity tools for Claude Code",
+  "description": "claudy - Containerized Claude with MCP servers pre-installed",
   "owner": {
     "name": "Hal Hildebrand",
     "url": "https://github.com/Hellblazer"
@@ -11,8 +11,8 @@
     {
       "name": "hal-9000",
       "source": "./plugins/hal-9000",
-      "description": "Complete productivity suite: aod (Army of Darkness) multi-branch development, hal9000 containerized Claude, MCP servers (ChromaDB, Memory Bank, Sequential Thinking, DEVONthink), beads (bd) issue tracking, 12 custom agents, session management, terminal automation (tmux-cli), and safety hooks. Everything you need in one plugin!",
-      "version": "2.0.0"
+      "description": "claudy - Containerized Claude with MCP servers pre-installed",
+      "version": "3.0.0"
     }
   ]
 }
