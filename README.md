@@ -1,295 +1,178 @@
-# HAL-9000 Claude Marketplace
+# claudy - Containerized Claude
 
-[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Container Registry](https://img.shields.io/badge/ghcr.io-hellblazer%2Fhal--9000-blue?logo=docker)](https://github.com/Hellblazer/hal-9000/pkgs/container/hal-9000)
 
-Claude Code productivity suite: containerized Claude, multi-branch development, MCP servers, issue tracking (beads), and custom agents.
-
-## Architecture: tmux is the Backbone
-
-**tmux is required** for hal9000 and aod. It's the coordination layer that makes everything work:
-
-- **Session isolation** - Each Claude instance runs in its own tmux session
-- **Remote control** - Send commands to any session without switching (`aod-send`, `hal9000-send`)
-- **Persistence** - Sessions survive disconnection; reattach anytime
-- **Orchestration** - Broadcast commands to all sessions simultaneously
-
-```bash
-# Required: Install tmux first
-brew install tmux        # macOS
-apt install tmux         # Ubuntu/Debian
-```
-
-All session management commands (`*-list`, `*-attach`, `*-send`, `*-broadcast`) are thin wrappers around tmux. Understanding tmux basics helps tremendously.
-
-**[tmux Cheat Sheet →](CHEATSHEET.md#tmux-essentials)** | **[tmux-cli Reference →](CHEATSHEET.md#tmux-cli-remote-control)**
+Run Claude Code in isolated Docker containers with MCP servers pre-installed.
 
 ## Quick Start
 
-### 1. Add Marketplace
+```bash
+# Install claudy
+curl -fsSL https://raw.githubusercontent.com/Hellblazer/hal-9000/main/install-claudy.sh | bash
 
-Claude Code Settings → Marketplaces → Add: `https://github.com/Hellblazer/hal-9000.git`
+# Set API key
+export ANTHROPIC_API_KEY=sk-ant-api03-...
 
-### 2. Install Plugin
+# Start the daemon (first time)
+claudy daemon start
 
-Browse marketplace → Install "hal-9000" → Run installer (choose mode when prompted)
-
-[Detailed installation guide →](plugins/hal-9000/README.md#installation)
+# Launch Claude in current directory
+claudy
+```
 
 ## What's Included
 
-### hal9000 (Containerized Claude)
+Every container comes with:
 
-Launch isolated Claude containers with the full hal-9000 stack:
+- **Claude CLI** - Native binary, auto-updates
+- **ChromaDB** - Vector database (shared across containers)
+- **Memory Bank** - Persistent memory across sessions
+- **Sequential Thinking** - Step-by-step reasoning
+- **tmux-cli** - Terminal automation tools
 
-```bash
-# Single container in current directory
-hal9000 run
-hal9000 run --profile python
+## Usage
 
-# Multiple sessions for parallel work
-hal9000 squad --sessions 3
-hal9000 squad tasks.conf
-
-# Session management
-hal9000-list                      # List active sessions
-hal9000-attach hal9000-1          # Attach to session
-hal9000-send hal9000-1 "cmd"      # Send command
-hal9000-broadcast "npm install"   # Send to all
-hal9000-stop hal9000-1            # Stop single session
-hal9000-cleanup                   # Stop all
-```
-
-**Features:**
-- ✅ **Claude CLI in containers** - Isolated Claude instance per session
-- ✅ **MCP servers pre-installed** - Memory Bank, ChromaDB, Sequential Thinking ready to use
-- ✅ **Shared Memory Bank** - Host's `~/memory-bank` mounted for cross-container access
-- ✅ **Auto-configured** - MCP servers automatically configured on container startup
-- ✅ **Custom agents & commands** - All 12 agents available in every container
-- ✅ **Language profiles** - Python, Node.js, Java variants available
-
-[Full hal9000 documentation →](plugins/hal-9000/hal9000/README.md)
-
-### aod (Army of Darkness)
-
-Multi-branch parallel development using hal9000 containers with git worktrees:
+### Basic
 
 ```bash
-# Generate config template (YAML or simple format)
-aod-init
-
-# Or create YAML config manually
-cat > aod.yml <<EOF
-tasks:
-  - branch: feature/auth
-    profile: python
-    description: Add OAuth2 authentication
-
-  - branch: feature/api
-    profile: node
-    description: Build REST API endpoints
-EOF
-
-# Launch all sessions
-aod aod.yml
-
-# Manage sessions
-aod-list                         # List active sessions
-aod-attach aod-feature-auth      # Attach to session
-aod-cleanup                      # Stop all sessions
+claudy                     # Launch in current directory
+claudy /path/to/project    # Launch in specific directory
+claudy --shell             # Start bash instead of Claude
 ```
 
-**Simple format** (still supported):
+### Daemon Management
+
 ```bash
-# Format: branch:profile:description
-feature/auth:python:Add OAuth2 authentication
-feature/api:node:Build REST API endpoints
+claudy daemon start        # Start orchestrator + ChromaDB
+claudy daemon status       # Check status
+claudy daemon stop         # Stop everything
 ```
 
-**Use cases:**
-- Work on multiple features simultaneously
-- Code review multiple PRs in parallel
-- Bug triage across different branches
-- Experiment with different approaches
+### Worker Pool (Optional)
 
-Commands: `aod-init`, `aod`, `aod-list`, `aod-attach`, `aod-stop`, `aod-cleanup`, `aod-send`, `aod-broadcast`
+Pre-warm containers for instant startup:
 
-**Quick control:** Use `aod-send SESSION "command"` to execute in specific session, or `aod-broadcast "command"` to run in all sessions without switching.
+```bash
+claudy pool start          # Start pool manager
+claudy pool status         # View warm/busy workers
+claudy pool scale 3        # Maintain 3 warm workers
+```
 
-**Claude awareness:** Each session gets a `CLAUDE.md` with session context - Claude knows which session it's in and can coordinate with other sessions.
+## Architecture
 
-**vs hal9000:** Use aod for multi-branch development with git worktree isolation. Use hal9000 for general containerized work on current directory.
+```
+┌─────────────────────────────────────────────────┐
+│                  Host Machine                    │
+│                                                  │
+│  ┌──────────────────────────────────────────┐   │
+│  │         Parent Container                  │   │
+│  │  ┌────────────────────────────────────┐  │   │
+│  │  │       ChromaDB Server              │  │   │
+│  │  │       (localhost:8000)             │  │   │
+│  │  └────────────────────────────────────┘  │   │
+│  └──────────────────────────────────────────┘   │
+│                      │                           │
+│         ┌────────────┼────────────┐              │
+│         ▼            ▼            ▼              │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐         │
+│  │ Worker 1 │ │ Worker 2 │ │ Worker 3 │         │
+│  │ Claude   │ │ Claude   │ │ Claude   │         │
+│  │ MCP      │ │ MCP      │ │ MCP      │         │
+│  └──────────┘ └──────────┘ └──────────┘         │
+└─────────────────────────────────────────────────┘
+```
 
-[Full aod documentation →](plugins/hal-9000/aod/README.md)
+- **Parent**: Runs ChromaDB server, manages workers
+- **Workers**: Run Claude with MCP servers, share parent's network
 
-### MCP Servers
+## Requirements
 
-**ChromaDB** - Vector database for semantic search<br>
-Usage: `Store this document in ChromaDB`, `Search ChromaDB for "authentication patterns"`<br>
-[Details →](plugins/hal-9000/mcp-servers/chromadb/README.md)
+- Docker
+- Bash
+- `ANTHROPIC_API_KEY` environment variable
 
-**Memory Bank** - Persistent memory across sessions<br>
-Usage: `Save this decision to memory bank`, `What did we decide about the schema?`<br>
-[Details →](plugins/hal-9000/mcp-servers/memory-bank/README.md)
+## Configuration
 
-**Sequential Thinking** - Step-by-step reasoning<br>
-Usage: `Debug this issue using sequential thinking`<br>
-[Details →](plugins/hal-9000/mcp-servers/sequential-thinking/)
+### Environment Variables
 
-**DEVONthink** (macOS) - Document search and import<br>
-Usage: `Search my DEVONthink for ML papers`, `Import arXiv paper 2312.03032`<br>
-[Details →](plugins/hal-9000/mcp-servers/devonthink/README.md)
+```bash
+export ANTHROPIC_API_KEY=sk-ant-api03-...  # Required
+export CLAUDE_HOME=~/.claude               # Claude config (default)
+export MEMORY_BANK_ROOT=~/memory-bank      # Memory storage (default)
+```
 
-### Issue Tracking (beads)
+### Profiles
 
-**bd** - AI-optimized issue tracker with dependency support. "Issues chained together like beads."
+```bash
+claudy --profile base      # Minimal (default)
+claudy --profile python    # + Python tools
+claudy --profile node      # + Node.js tools
+claudy --profile java      # + Java/Maven tools
+```
+
+## Companion Tools
+
+### beads (bd) - Issue Tracking
+
+AI-optimized issue tracker with dependency support:
 
 ```bash
 bd init                           # Initialize in project
 bd create "Task" -t feature -p 1  # Create issue
-bd ready                          # Show ready work (no blockers)
-bd update <id> --status in_progress
-bd close <id> --reason "Done"
-bd dep add <id> <blocker-id>      # Add dependency
+bd ready                          # Show unblocked work
+bd close <id>                     # Complete issue
 ```
 
-[Details →](plugins/hal-9000/mcp-servers/beads/README.md)
+[beads documentation →](plugins/hal-9000/mcp-servers/beads/README.md)
 
-### Custom Agents
+### aod - Multi-Branch Development
 
-12 specialized agents installed to `~/.claude/agents/`:
-
-- **Development** - java-developer, java-architect-planner, java-debugger
-- **Review & Analysis** - code-review-expert, plan-auditor, deep-analyst, codebase-deep-analyzer
-- **Research** - deep-research-synthesizer, devonthink-researcher
-- **Organization** - knowledge-tidier, pdf-chromadb-processor, project-management-setup
-
-Usage: Agents are invoked automatically by Claude Code based on task context.
-
-[Full agent documentation →](plugins/hal-9000/AGENTS.md)
-
-### Session Commands
-
-- `/check` - Save session context
-- `/load` - Resume session
-- `/sessions` - List all sessions
-- `/session-delete` - Delete session
-
-### Terminal Tools
-
-- **tmux-cli** - Control interactive CLI apps from Claude
-- **ccstatusline** - Real-time Claude Code status line (context %, git info, session time)
-- **vault** - Encrypted .env backup with SOPS
-- **env-safe** - Safe .env inspection without exposing secrets
-- **find-session** - Search across all Claude Code sessions
-
-### Safety Hooks
-
-Guardrails that prevent destructive operations:
-
-| Hook | Protection |
-|------|------------|
-| **rm_block** | Blocks `rm` - suggests moving to TRASH instead |
-| **git_add_block** | Blocks `git add -A/.` - requires explicit file staging |
-| **git_checkout_safety** | Blocks `git checkout -f/.` with uncommitted changes |
-| **git_commit_block** | Requires explicit approval before commits |
-| **env_file_protection** | Blocks read/write/search of `.env` files |
-| **file_length_limit** | Speed bump for files >10K lines (allows override) |
-
-Hooks are installed to `~/.claude/hooks/` and activate automatically.
-
-## Configuration
-
-### ChromaDB Cloud
+Parallel development across git branches:
 
 ```bash
-export CHROMADB_TENANT="your-tenant-id"
-export CHROMADB_DATABASE="your-database-name"
-export CHROMADB_API_KEY="your-api-key"
+aod-init                 # Generate config
+aod aod.yml              # Launch all branches
+aod-list                 # Show sessions
+aod-broadcast "cmd"      # Send to all
 ```
 
-Get credentials at [trychroma.com](https://www.trychroma.com/)
-
-### Memory Bank
-
-Default: `~/memory-bank`
-Override: `export MEMORY_BANK_ROOT="/custom/path"`
-
-### Optional Templates
-
-Installer offers optional configuration templates:
-
-**tmux.conf** - Catppuccin theme with CPU/RAM monitoring
-- Session persistence (tmux-resurrect)
-- Mouse support with clipboard integration
-- Powerline status bar
-
-**CLAUDE.md** - hal-9000 best practices guide
-- tmux-cli usage patterns
-- Agent workflow guidance
-- ChromaDB/Memory Bank reference
-- aod command quick reference
-
-Both templates backup existing files before installation.
-
-## Requirements
-
-**Core:**
-- Python 3.8+ (for ChromaDB)
-- Node.js 16+ (for Memory Bank, Sequential Thinking)
-- Bash, curl, git
-
-**For hal9000/aod:**
-- Docker
-- tmux (auto-installed if missing)
-- git (aod only - for worktrees)
-
-**Optional:**
-- macOS + DEVONthink Pro/Server (for DEVONthink MCP)
-- SOPS (for vault encryption)
+[aod documentation →](plugins/hal-9000/aod/README.md)
 
 ## Troubleshooting
 
-**Installation Issues:**
-- **PEP 668 errors**: Automatically handled by installer (v1.1.0+)
-- **Command not found after install**: Add `~/.local/bin` to your PATH
-- **SSL Certificate errors**: Update certificates or use trusted hosts
+```bash
+claudy --diagnose              # Show diagnostic info
+claudy daemon status           # Check daemon health
+docker logs hal9000-parent     # View parent logs
+```
 
-**Runtime Issues:**
-- **MCP servers not appearing**: Restart Claude Code completely (⌘Q)
-- **hal9000/aod sessions not starting**: Verify Docker is running (`docker ps`), check tmux (`which tmux`), try `hal9000-cleanup` or `aod-cleanup` then retry
-- **Python/Node commands not found**: `export PATH="$HOME/.local/bin:$PATH"`, restart shell
+### Common Issues
 
-[Full troubleshooting guide →](plugins/hal-9000/TROUBLESHOOTING.md)
+**"Parent container not running"**
+```bash
+claudy daemon start
+```
+
+**"Cannot connect to Docker"**
+```bash
+# Ensure Docker is running
+docker ps
+```
+
+**"ChromaDB not responding"**
+```bash
+claudy daemon restart
+```
 
 ## Documentation
 
-- **[Cheat Sheet](CHEATSHEET.md)** - Quick reference for hal9000, aod, tmux, tmux-cli, and terminal tools
-- [hal9000 (Containerized Claude)](plugins/hal-9000/hal9000/README.md)
-- [aod (Army of Darkness)](plugins/hal-9000/aod/README.md)
-- [Agent Usage](plugins/hal-9000/AGENTS.md)
-- [ChromaDB MCP](plugins/hal-9000/mcp-servers/chromadb/README.md)
-- [Memory Bank MCP](plugins/hal-9000/mcp-servers/memory-bank/README.md)
-- [Sequential Thinking MCP](plugins/hal-9000/mcp-servers/sequential-thinking/)
-- [DEVONthink MCP](plugins/hal-9000/mcp-servers/devonthink/README.md)
-- [Beads (bd) Issue Tracker](plugins/hal-9000/mcp-servers/beads/README.md)
-
-## Security
-
-- Never commit secrets to git
-- Use `vault backup .env` for encrypted backups
-- Safety hooks block accidental `.env` commits
-- Review files before committing: `git diff --cached`
+- [Architecture Details](plugins/hal-9000/docs/dind/ARCHITECTURE.md)
+- [Configuration Reference](plugins/hal-9000/docs/dind/CONFIGURATION.md)
+- [Troubleshooting Guide](plugins/hal-9000/docs/dind/TROUBLESHOOTING.md)
+- [Development Guide](plugins/hal-9000/docs/dind/DEVELOPMENT.md)
 
 ## License
 
 Apache 2.0
-
-## Credits
-
-- [ChromaDB](https://www.trychroma.com/)
-- [Memory Bank](https://github.com/allpepper/memory-bank-mcp)
-- [Claude Code Tools](https://github.com/pchalasani/claude-code-tools)
-- [ClaudeBox](https://github.com/RchGrav/claudebox)
-- [Beads](https://github.com/steveyegge/beads)

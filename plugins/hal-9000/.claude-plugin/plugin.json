@@ -1,10 +1,10 @@
 {
-  "_version": "2.0.0",
-  "_compatibility": "1.x",
+  "_version": "3.0.0",
+  "_compatibility": "2.x",
   "_schema_version": "1.0",
   "name": "hal-9000",
-  "description": "Complete Claude Code productivity suite: aod (Army of Darkness) multi-branch development, hal9000 containerized Claude, MCP servers (ChromaDB, Memory Bank, Sequential Thinking, DEVONthink), beads (bd) issue tracking, 12 custom agents, session management, terminal automation (tmux-cli), and safety hooks",
-  "version": "2.0.0",
+  "description": "claudy - Containerized Claude with MCP servers pre-installed",
+  "version": "3.0.0",
   "author": {
     "name": "Hal Hildebrand",
     "url": "https://github.com/Hellblazer"
@@ -13,102 +13,15 @@
   "license": "Apache-2.0",
   "homepage": "https://github.com/Hellblazer/hal-9000",
   "keywords": [
-    "mcp-server",
-    "chromadb",
-    "vector-database",
-    "memory-bank",
-    "devonthink",
-    "sequential-thinking",
-    "knowledge-management",
-    "document-research",
-    "session-management",
-    "terminal-automation",
-    "tmux-cli",
-    "vault",
-    "safety-hooks",
-    "agents",
-    "custom-agents",
-    "java-development",
-    "hal9000",
-    "aod",
-    "multi-branch",
+    "claudy",
     "docker",
-    "beads",
-    "issue-tracking",
-    "bd"
+    "containerized-claude",
+    "chromadb",
+    "memory-bank",
+    "mcp-servers"
   ],
-  "mcpServers": {
-    "chromadb": {
-      "comment": "This is a sample configuration. Users should configure via Claude UI after installation, or edit this file to use 'chroma-mcp' (relies on PATH) instead of absolute path.",
-      "command": "chroma-mcp",
-      "args": [
-        "--client-type", "cloud",
-        "--tenant", "${CHROMADB_TENANT}",
-        "--database", "${CHROMADB_DATABASE}",
-        "--api-key", "${CHROMADB_API_KEY}"
-      ],
-      "env": {}
-    },
-    "memory-bank": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@allpepper/memory-bank-mcp@^0.2.1"
-      ],
-      "env": {
-        "MEMORY_BANK_ROOT": "${HOME}/memory-bank"
-      }
-    },
-    "sequential-thinking": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-sequential-thinking@^2025.11.25"
-      ]
-    },
-    "devonthink": {
-      "comment": "Python-based minimal MCP server. Installed locally in mcp-servers/devonthink/",
-      "command": "python3",
-      "args": [
-        "${CLAUDE_PLUGIN_ROOT}/mcp-servers/devonthink/server.py"
-      ],
-      "env": {}
-    }
-  },
-  "commands": {
-    "check": "./commands/check.md",
-    "load": "./commands/load.md",
-    "sessions": "./commands/sessions.md",
-    "session-delete": "./commands/session-delete.md"
-  },
-  "agents": {
-    "code-review-expert": "./agents/code-review-expert.md",
-    "codebase-deep-analyzer": "./agents/codebase-deep-analyzer.md",
-    "deep-analyst": "./agents/deep-analyst.md",
-    "deep-research-synthesizer": "./agents/deep-research-synthesizer.md",
-    "devonthink-researcher": "./agents/devonthink-researcher.md",
-    "java-architect-planner": "./agents/java-architect-planner.md",
-    "java-debugger": "./agents/java-debugger.md",
-    "java-developer": "./agents/java-developer.md",
-    "knowledge-tidier": "./agents/knowledge-tidier.md",
-    "pdf-chromadb-processor": "./agents/pdf-chromadb-processor.md",
-    "plan-auditor": "./agents/plan-auditor.md",
-    "project-management-setup": "./agents/project-management-setup.md"
-  },
-  "hooks": {
-    "SessionStart": [
-      "./hooks/bash_hook.py"
-    ],
-    "PreCompact": [
-      "./hooks/env_file_protection_hook.py",
-      "./hooks/file_length_limit_hook.py",
-      "./hooks/git_add_block_hook.py",
-      "./hooks/git_checkout_safety_hook.py",
-      "./hooks/git_commit_block_hook.py"
-    ]
-  },
   "install": {
-    "script": "./install.sh",
-    "postInstall": "✓ hal-9000 Marketplace Installation Complete\n\nAutomatically Installed:\n• MCP Servers: ChromaDB, Memory Bank, Sequential Thinking, DEVONthink\n• Custom Agents: 12 specialized agents\n• Session Commands: /check, /load, /sessions, /session-delete\n• Safety Hooks: Git, file, and environment protection\n\nOptional System Tools (manual install.sh):\n• aod (Army of Darkness): Multi-branch parallel development\n• beads (bd): AI-optimized issue tracking\n• tmux-cli: Terminal automation\n• vault & env-safe: Credential management\n\nNext Steps:\n1. Commands: /check, /load, /sessions available immediately\n2. MCP servers ready for Claude Code restart\n3. For system tools: cd plugins/hal-9000 && ./install.sh\n4. See plugins/hal-9000/README.md for full documentation"
+    "script": "./install-claudy.sh",
+    "postInstall": "✓ claudy installed\n\nUsage:\n  claudy daemon start    # Start orchestrator\n  claudy                  # Launch Claude\n\nSet ANTHROPIC_API_KEY environment variable before use.\nSee: https://github.com/Hellblazer/hal-9000"
   }
 }
