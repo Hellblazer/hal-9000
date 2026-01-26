@@ -6,7 +6,7 @@
 set -Eeuo pipefail
 
 readonly SCRIPT_NAME="claudy"
-readonly SCRIPT_VERSION="0.2.0"
+readonly SCRIPT_VERSION="0.3.0"
 readonly HAL9000_HOME="${HOME}/.hal9000"
 # CLAUDE_HOME can be overridden by environment variable or --claude-home argument
 # Default: ~/.claude (same as Claude Code)
@@ -54,6 +54,7 @@ USAGE:
   claudy [OPTIONS] [DIRECTORY]
 
 OPTIONS:
+  --setup                Interactive setup for API key (first-time setup)
   --profile PROFILE      Profile: base, python, node, java (default: auto-detect)
   --shell, -s            Start bash shell instead of Claude
   --name NAME            Custom session name (default: auto from directory)
@@ -68,19 +69,19 @@ OPTIONS:
 ARGUMENTS:
   DIRECTORY              Project directory (default: current directory)
 
-AUTHENTICATION:
-  Claude Code supports multiple authentication methods:
+AUTHENTICATION (required):
+  Containerized Claude requires ANTHROPIC_API_KEY environment variable.
+  Host keychain credentials cannot be transferred to containers.
 
-  1. API Key (recommended for containers):
-     export ANTHROPIC_API_KEY=sk-ant-...
-     claudy
+  Option 1 - API Key (recommended):
+    export ANTHROPIC_API_KEY=sk-ant-api03-...
+    Get key at: https://console.anthropic.com/settings/keys
 
-  2. Interactive login (inside container):
-     claudy --shell
-     claude /login
+  Option 2 - Long-lived token:
+    claude setup-token   # Run once on host
+    # Copy the token and set as ANTHROPIC_API_KEY
 
-  3. Long-lived token:
-     claude setup-token  # On host, then copy token
+  Add to ~/.bashrc or ~/.zshrc to persist.
 
 EXAMPLES:
   claudy                                    # Current dir, auto-detect profile
@@ -96,6 +97,10 @@ ENVIRONMENT:
   HAL9000_HOME           Override session storage (default: ~/.hal9000)
   DOCKER_SOCKET          Docker socket path (default: /var/run/docker.sock)
 
+CONTAINER CONFIG:
+  Config is mounted at /claude with CLAUDE_CONFIG_DIR=/claude
+  Host UID/GID passed via USER_UID/USER_GID for file permissions
+
 For more information, see documentation at:
   https://github.com/hellblazer/hal-9000/blob/main/README.md
 EOF
@@ -104,6 +109,104 @@ EOF
 show_version() {
     echo "claudy version $SCRIPT_VERSION"
     echo "hal-9000 plugin version 1.4.0+"
+}
+
+setup_auth() {
+    echo ""
+    info "Claudy Authentication Setup"
+    echo ""
+
+    # Check if already configured
+    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+        success "ANTHROPIC_API_KEY is already set"
+        echo "  Current value: ${ANTHROPIC_API_KEY:0:15}..."
+        echo ""
+        read -p "Replace with a new key? [y/N] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            info "Keeping existing configuration"
+            exit 0
+        fi
+    fi
+
+    echo "Enter your Anthropic API key (or 'q' to quit):"
+    echo "  Get one at: https://console.anthropic.com/settings/keys"
+    echo ""
+    read -p "API Key: " api_key_input
+
+    if [[ "$api_key_input" == "q" ]] || [[ -z "$api_key_input" ]]; then
+        info "Setup cancelled"
+        exit 0
+    fi
+
+    # Validate format
+    if [[ ! "$api_key_input" =~ ^sk-ant- ]]; then
+        warn "Key doesn't look like an Anthropic API key (expected sk-ant-...)"
+        read -p "Continue anyway? [y/N] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
+    fi
+
+    # Detect shell config file
+    local shell_rc=""
+    if [[ -n "${ZSH_VERSION:-}" ]] || [[ "$SHELL" == *"zsh"* ]]; then
+        shell_rc="$HOME/.zshrc"
+    else
+        shell_rc="$HOME/.bashrc"
+    fi
+
+    echo ""
+    info "Where to save the API key?"
+    echo "  1) $shell_rc (recommended - persists across sessions)"
+    echo "  2) Current session only (export now, won't persist)"
+    echo "  3) Cancel"
+    echo ""
+    read -p "Choice [1]: " -n 1 -r choice
+    echo ""
+
+    case "${choice:-1}" in
+        1)
+            # Check if already in file
+            if grep -q "ANTHROPIC_API_KEY" "$shell_rc" 2>/dev/null; then
+                warn "ANTHROPIC_API_KEY already exists in $shell_rc"
+                read -p "Replace it? [y/N] " -n 1 -r
+                echo ""
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    # Remove old line and add new
+                    sed -i.bak '/export ANTHROPIC_API_KEY/d' "$shell_rc"
+                else
+                    info "Setup cancelled"
+                    exit 0
+                fi
+            fi
+
+            echo "" >> "$shell_rc"
+            echo "# Anthropic API key for Claude Code (added by claudy)" >> "$shell_rc"
+            echo "export ANTHROPIC_API_KEY=\"$api_key_input\"" >> "$shell_rc"
+
+            success "Added to $shell_rc"
+            echo ""
+            info "To use now, run:"
+            echo "  source $shell_rc"
+            echo ""
+            info "Or start a new terminal session."
+            ;;
+        2)
+            export ANTHROPIC_API_KEY="$api_key_input"
+            success "API key set for current session"
+            echo ""
+            info "Note: This won't persist. Run 'claudy --setup' again to save permanently."
+            ;;
+        *)
+            info "Setup cancelled"
+            exit 0
+            ;;
+    esac
+
+    echo ""
+    success "Setup complete! You can now run: claudy"
 }
 
 show_diagnostics() {
@@ -212,6 +315,12 @@ show_diagnostics() {
         echo "  2. Run 'claudy --shell' then 'claude /login' inside container"
         echo "  3. Run 'claude setup-token' on host for long-lived token"
     fi
+
+    # Container config info
+    echo ""
+    info "Container config:"
+    echo "  CLAUDE_CONFIG_DIR=/claude (mounted from session)"
+    echo "  USER_UID/USER_GID passed for file permissions"
 }
 
 #==============================================================================
@@ -285,10 +394,20 @@ verify_prerequisites() {
         error "Docker daemon not running or not accessible"
     fi
 
-    # Check authentication - warn if no API key and provide guidance
+    # Check authentication - required for container usage
     if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
-        warn "No ANTHROPIC_API_KEY set. You may need to authenticate inside container."
-        info "  Run 'claude /login' after container starts, or set ANTHROPIC_API_KEY"
+        echo ""
+        warn "Authentication required for containerized Claude"
+        echo ""
+        info "Run the interactive setup:"
+        echo ""
+        echo "  claudy --setup"
+        echo ""
+        info "Or manually set your API key:"
+        echo "  export ANTHROPIC_API_KEY=sk-ant-api03-..."
+        echo "  Get key at: https://console.anthropic.com/settings/keys"
+        echo ""
+        error "Run 'claudy --setup' to configure authentication"
     fi
 
     success "Prerequisites verified"
@@ -315,6 +434,7 @@ init_session() {
     mkdir -p "$session_dir/.workspace"
 
     # Copy host Claude configuration to session
+    # Note: Auth is handled via ANTHROPIC_API_KEY env var, not credential files
     if [[ -d "$CLAUDE_HOME" ]]; then
         # Copy settings
         if [[ -f "$CLAUDE_HOME/settings.json" ]]; then
@@ -405,14 +525,19 @@ launch_container_session() {
     info "  Directory: $abs_project_path"
 
     # Build docker run command
+    # Key technique from claude-container: use CLAUDE_CONFIG_DIR instead of HOME manipulation
+    # Also pass USER_UID/USER_GID for proper file ownership
     local docker_args=(
         docker run
         --rm
         -it
         --name "$session_name"
         -v "$abs_project_path:/workspace"
-        -v "$session_dir/.claude:/home/claude/.claude"
+        -v "$session_dir/.claude:/claude"
         -v /var/run/docker.sock:/var/run/docker.sock
+        -e "CLAUDE_CONFIG_DIR=/claude"
+        -e "USER_UID=$(id -u)"
+        -e "USER_GID=$(id -g)"
         -e "CLAUDY_SESSION=$session_name"
         -e "CLAUDY_PROJECT_DIR=$abs_project_path"
         -e "MEMORY_BANK_ROOT=/home/claude/memory-bank"
@@ -433,13 +558,13 @@ launch_container_session() {
     docker_args+=(-w "/workspace" "$container_image")
 
     # Run shell or Claude (using tmux inside container for session persistence)
+    # CLAUDE_CONFIG_DIR tells Claude where to find config, no HOME manipulation needed
     if [[ "$shell_mode" == "true" ]]; then
         info "Starting bash shell in tmux..."
         "${docker_args[@]}" tmux new-session -s shell
     else
         info "Starting Claude CLI in tmux..."
-        # Set HOME to /home/claude so Claude finds its config
-        "${docker_args[@]}" bash -c 'export HOME=/home/claude && exec tmux new-session -s claude "claude"'
+        "${docker_args[@]}" tmux new-session -s claude "claude"
     fi
 }
 
@@ -487,6 +612,10 @@ main() {
             --verify)
                 verify_only=true
                 shift
+                ;;
+            --setup)
+                setup_auth
+                exit 0
                 ;;
             --diagnose)
                 export CLAUDE_HOME="$claude_home"
