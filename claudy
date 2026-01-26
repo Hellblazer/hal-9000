@@ -55,12 +55,20 @@ claudy - Containerized Claude CLI
 USAGE:
   claudy [OPTIONS] [DIRECTORY]
   claudy daemon <command>
+  claudy pool <command>
 
 DAEMON COMMANDS:
   claudy daemon start    Start the orchestrator (parent container with ChromaDB)
   claudy daemon stop     Stop the orchestrator
   claudy daemon status   Show orchestrator status and worker count
   claudy daemon restart  Restart the orchestrator
+
+POOL COMMANDS:
+  claudy pool start      Start the worker pool manager
+  claudy pool stop       Stop the worker pool manager
+  claudy pool status     Show pool status (warm/busy workers)
+  claudy pool scale <n>  Scale to n warm workers
+  claudy pool cleanup    Force cleanup of idle workers
 
 OPTIONS:
   --setup                Interactive setup for API key (first-time setup)
@@ -571,6 +579,69 @@ handle_daemon_command() {
 }
 
 #==============================================================================
+# Pool management
+#==============================================================================
+
+handle_pool_command() {
+    local cmd="${1:-}"
+    shift || true
+
+    # Handle help without requiring parent
+    if [[ "$cmd" == "help" ]] || [[ -z "$cmd" ]]; then
+        echo "Usage: claudy pool <command> [options]"
+        echo ""
+        echo "Manage the worker pool for fast container startup."
+        echo ""
+        echo "Commands:"
+        echo "  start [--min-warm N] [--max-warm N]  Start the pool manager"
+        echo "  stop                                  Stop the pool manager"
+        echo "  status                                Show pool status"
+        echo "  scale <n>                             Scale to n warm workers"
+        echo "  cleanup                               Force cleanup idle workers"
+        echo "  warm                                  Create a single warm worker"
+        echo ""
+        echo "Options:"
+        echo "  --min-warm N      Minimum warm workers (default: 2)"
+        echo "  --max-warm N      Maximum warm workers (default: 5)"
+        echo "  --idle-timeout N  Seconds before cleanup (default: 300)"
+        return 0
+    fi
+
+    # Check if parent is running for other commands
+    if ! docker ps --format '{{.Names}}' | grep -q "^${PARENT_CONTAINER}$"; then
+        error "Parent container not running. Start with: claudy daemon start"
+    fi
+
+    case "$cmd" in
+        start)
+            info "Starting pool manager..."
+            docker exec "$PARENT_CONTAINER" /scripts/pool-manager.sh start "$@"
+            ;;
+        stop)
+            info "Stopping pool manager..."
+            docker exec "$PARENT_CONTAINER" /scripts/pool-manager.sh stop
+            ;;
+        status)
+            docker exec "$PARENT_CONTAINER" /scripts/pool-manager.sh status
+            ;;
+        scale)
+            docker exec "$PARENT_CONTAINER" /scripts/pool-manager.sh scale "$@"
+            ;;
+        cleanup)
+            info "Cleaning up idle workers..."
+            docker exec "$PARENT_CONTAINER" /scripts/pool-manager.sh cleanup
+            ;;
+        warm)
+            info "Creating warm worker..."
+            docker exec "$PARENT_CONTAINER" /scripts/pool-manager.sh warm
+            ;;
+        *)
+            error "Unknown pool command: $cmd"
+            ;;
+    esac
+}
+
+#==============================================================================
 # Via-parent launch (DinD mode)
 #==============================================================================
 
@@ -951,6 +1022,13 @@ main() {
     if [[ "${1:-}" == "daemon" ]]; then
         shift
         handle_daemon_command "$@"
+        exit 0
+    fi
+
+    # Handle pool subcommand
+    if [[ "${1:-}" == "pool" ]]; then
+        shift
+        handle_pool_command "$@"
         exit 0
     fi
 

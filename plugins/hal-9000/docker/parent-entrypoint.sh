@@ -190,6 +190,13 @@ cleanup_on_exit() {
     # Stop ChromaDB server
     stop_chromadb_server
 
+    # Stop pool manager if running
+    if [[ -f "${HAL9000_HOME}/pool/pool-manager.pid" ]]; then
+        local pool_pid
+        pool_pid=$(cat "${HAL9000_HOME}/pool/pool-manager.pid")
+        kill "$pool_pid" 2>/dev/null || true
+    fi
+
     # Clean up tmux
     tmux -L hal9000 kill-server 2>/dev/null || true
 
@@ -198,6 +205,35 @@ cleanup_on_exit() {
 
     log_info "Coordinator stopped"
     exit 0
+}
+
+# ============================================================================
+# POOL MANAGER
+# ============================================================================
+
+start_pool_manager() {
+    if [[ "${ENABLE_POOL_MANAGER:-false}" != "true" ]]; then
+        log_info "Pool manager disabled (set ENABLE_POOL_MANAGER=true to enable)"
+        return 0
+    fi
+
+    log_info "Starting pool manager..."
+
+    local pool_script="/scripts/pool-manager.sh"
+    if [[ ! -x "$pool_script" ]]; then
+        log_warn "Pool manager script not found: $pool_script"
+        return 0
+    fi
+
+    "$pool_script" start \
+        --min-warm "${MIN_WARM_WORKERS:-2}" \
+        --max-warm "${MAX_WARM_WORKERS:-5}" \
+        --idle-timeout "${IDLE_TIMEOUT:-300}" || {
+        log_warn "Pool manager failed to start"
+        return 0
+    }
+
+    log_success "Pool manager started"
 }
 
 # ============================================================================
@@ -213,6 +249,7 @@ main() {
     init_tmux_server
     start_chromadb_server
     pull_worker_image
+    start_pool_manager
 
     # Handle command
     case "${1:-coordinator}" in
