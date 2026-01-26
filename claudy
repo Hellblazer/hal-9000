@@ -6,7 +6,7 @@
 set -Eeuo pipefail
 
 readonly SCRIPT_NAME="claudy"
-readonly SCRIPT_VERSION="0.3.0"
+readonly SCRIPT_VERSION="0.4.0"
 readonly HAL9000_HOME="${HOME}/.hal9000"
 # CLAUDE_HOME can be overridden by environment variable or --claude-home argument
 # Default: ~/.claude (same as Claude Code)
@@ -428,57 +428,72 @@ init_session() {
 
     # Create session directory structure
     local session_dir="$HAL9000_HOME/claude/$session_name"
-    local claude_home_in_container="$session_dir/.claude"
 
-    mkdir -p "$claude_home_in_container"
+    # Use SHARED config directory for auth persistence (login once, use everywhere)
+    # Per-session isolation caused repeated login prompts
+    local shared_claude_config="$HAL9000_HOME/claude/.shared-config"
+
+    mkdir -p "$shared_claude_config"
     mkdir -p "$session_dir/.workspace"
 
-    # Copy host Claude configuration to session
-    # Note: Auth is handled via ANTHROPIC_API_KEY env var, not credential files
-    if [[ -d "$CLAUDE_HOME" ]]; then
-        # Copy settings
-        if [[ -f "$CLAUDE_HOME/settings.json" ]]; then
-            cp "$CLAUDE_HOME/settings.json" "$claude_home_in_container/settings.json"
-            info "Copied settings.json"
+    # Copy host Claude configuration to shared config (only on first setup)
+    if [[ ! -f "$shared_claude_config/.initialized" ]]; then
+        info "First-time setup: copying config to shared directory..."
+
+        if [[ -d "$CLAUDE_HOME" ]]; then
+            # Copy settings
+            [[ -f "$CLAUDE_HOME/settings.json" ]] && cp "$CLAUDE_HOME/settings.json" "$shared_claude_config/"
+            [[ -f "$CLAUDE_HOME/settings.local.json" ]] && cp "$CLAUDE_HOME/settings.local.json" "$shared_claude_config/"
+            [[ -f "$CLAUDE_HOME/CLAUDE.md" ]] && cp "$CLAUDE_HOME/CLAUDE.md" "$shared_claude_config/"
+
+            # Copy agents
+            if [[ -d "$CLAUDE_HOME/agents" ]]; then
+                cp -r "$CLAUDE_HOME/agents" "$shared_claude_config/" 2>/dev/null || true
+                local agent_count
+                agent_count=$(find "$shared_claude_config/agents" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
+                info "Copied $agent_count agents"
+            fi
+
+            # Copy commands
+            [[ -d "$CLAUDE_HOME/commands" ]] && cp -r "$CLAUDE_HOME/commands" "$shared_claude_config/" 2>/dev/null || true
+
+            # Copy MCP server configurations
+            if [[ -d "$CLAUDE_HOME/mcp-servers" ]]; then
+                cp -r "$CLAUDE_HOME/mcp-servers" "$shared_claude_config/" 2>/dev/null || true
+                local mcp_count
+                mcp_count=$(find "$shared_claude_config/mcp-servers/servers" -name "*.json" 2>/dev/null | wc -l | tr -d ' ')
+                info "Copied $mcp_count MCP server configs"
+            fi
+
+            # Copy skills
+            [[ -d "$CLAUDE_HOME/skills" ]] && cp -r "$CLAUDE_HOME/skills" "$shared_claude_config/" 2>/dev/null || true
         fi
 
-        # Copy local settings
-        if [[ -f "$CLAUDE_HOME/settings.local.json" ]]; then
-            cp "$CLAUDE_HOME/settings.local.json" "$claude_home_in_container/settings.local.json"
-        fi
-
-        # Copy user config
-        if [[ -f "$CLAUDE_HOME/CLAUDE.md" ]]; then
-            cp "$CLAUDE_HOME/CLAUDE.md" "$claude_home_in_container/CLAUDE.md"
-        fi
-
-        # Copy agents
-        if [[ -d "$CLAUDE_HOME/agents" ]]; then
-            cp -r "$CLAUDE_HOME/agents" "$claude_home_in_container/agents" 2>/dev/null || true
-            local agent_count
-            agent_count=$(find "$claude_home_in_container/agents" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
-            info "Copied $agent_count agents"
-        fi
-
-        # Copy commands
-        if [[ -d "$CLAUDE_HOME/commands" ]]; then
-            cp -r "$CLAUDE_HOME/commands" "$claude_home_in_container/commands" 2>/dev/null || true
-        fi
-
-        # Copy MCP server configurations
-        if [[ -d "$CLAUDE_HOME/mcp-servers" ]]; then
-            cp -r "$CLAUDE_HOME/mcp-servers" "$claude_home_in_container/mcp-servers" 2>/dev/null || true
-            local mcp_count
-            mcp_count=$(find "$claude_home_in_container/mcp-servers/servers" -name "*.json" 2>/dev/null | wc -l | tr -d ' ')
-            info "Copied $mcp_count MCP server configs"
-        fi
-
-        # Copy skills
-        if [[ -d "$CLAUDE_HOME/skills" ]]; then
-            cp -r "$CLAUDE_HOME/skills" "$claude_home_in_container/skills" 2>/dev/null || true
-        fi
+        # Mark as initialized
+        touch "$shared_claude_config/.initialized"
+        success "Shared config initialized"
     else
-        warn "Claude home not found at $CLAUDE_HOME"
+        info "Using existing shared config"
+    fi
+
+    # Create .claude.json with API key to bypass OAuth (workaround for headless auth)
+    # This file tells Claude Code to use the API key directly
+    local api_key_for_config="${ANTHROPIC_API_KEY:-}"
+    if [[ -n "$api_key_for_config" ]]; then
+        cat > "$shared_claude_config/.claude.json" << CLAUDEJSON
+{
+  "changelogLastFetched": 1000000000000,
+  "primaryApiKey": "$api_key_for_config",
+  "isQualifiedForDataSharing": false,
+  "hasCompletedOnboarding": true,
+  "lastOnboardingVersion": "2.1.19",
+  "maxSubscriptionNoticeCount": 0,
+  "hasAvailableMaxSubscription": false,
+  "lastReleaseNotesSeen": "2.1.19"
+}
+CLAUDEJSON
+        chmod 600 "$shared_claude_config/.claude.json"
+        info "Configured API key for headless auth"
     fi
 
     # Create session metadata
@@ -511,6 +526,7 @@ launch_container_session() {
 
     abs_project_path=$(cd "$project_dir" && pwd)
     local session_dir="$HAL9000_HOME/claude/$session_name"
+    local shared_claude_config="$HAL9000_HOME/claude/.shared-config"
     local container_image="${CONTAINER_IMAGE_BASE}:${profile}"
 
     # Verify image exists or fall back to base
@@ -526,6 +542,7 @@ launch_container_session() {
 
     # Build docker run command
     # Key technique from claude-container: use CLAUDE_CONFIG_DIR instead of HOME manipulation
+    # Use SHARED config so login persists across all sessions
     # Also pass USER_UID/USER_GID for proper file ownership
     local docker_args=(
         docker run
@@ -533,7 +550,7 @@ launch_container_session() {
         -it
         --name "$session_name"
         -v "$abs_project_path:/workspace"
-        -v "$session_dir/.claude:/claude"
+        -v "$shared_claude_config:/claude"
         -v /var/run/docker.sock:/var/run/docker.sock
         -e "CLAUDE_CONFIG_DIR=/claude"
         -e "USER_UID=$(id -u)"
