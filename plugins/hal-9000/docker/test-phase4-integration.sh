@@ -430,16 +430,18 @@ test_shared_mcp_settings_valid() {
 }
 
 test_mcp_paths_configured() {
-    log_test "MCP settings use correct paths"
+    log_test "MCP settings use HTTP client for ChromaDB"
 
-    local chromadb_path membank_path
-    chromadb_path=$(jq -r '.mcpServers.chromadb.args[-1]' shared-mcp-settings.json 2>/dev/null) || chromadb_path=""
+    local chromadb_type chromadb_host chromadb_port membank_path
+    chromadb_type=$(jq -r '.mcpServers.chromadb.args[1]' shared-mcp-settings.json 2>/dev/null) || chromadb_type=""
+    chromadb_host=$(jq -r '.mcpServers.chromadb.args[3]' shared-mcp-settings.json 2>/dev/null) || chromadb_host=""
+    chromadb_port=$(jq -r '.mcpServers.chromadb.args[5]' shared-mcp-settings.json 2>/dev/null) || chromadb_port=""
     membank_path=$(jq -r '.mcpServers."memory-bank".env.MEMORY_BANK_ROOT' shared-mcp-settings.json 2>/dev/null) || membank_path=""
 
-    if [[ "$chromadb_path" == "/data/chromadb" ]] && [[ "$membank_path" == "/data/membank" ]]; then
-        log_pass "MCP settings use shared volume paths"
+    if [[ "$chromadb_type" == "http" ]] && [[ "$chromadb_host" == "localhost" ]] && [[ "$chromadb_port" == "8000" ]] && [[ "$membank_path" == "/data/membank" ]]; then
+        log_pass "MCP settings use HTTP client (localhost:8000) for ChromaDB"
     else
-        log_fail "MCP paths incorrect: chromadb=$chromadb_path, membank=$membank_path"
+        log_fail "MCP config incorrect: type=$chromadb_type, host=$chromadb_host, port=$chromadb_port, membank=$membank_path"
         return 1
     fi
 }

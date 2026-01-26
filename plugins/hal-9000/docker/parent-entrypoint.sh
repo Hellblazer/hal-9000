@@ -87,6 +87,62 @@ pull_worker_image() {
 }
 
 # ============================================================================
+# CHROMADB SERVER
+# ============================================================================
+
+start_chromadb_server() {
+    log_info "Starting ChromaDB server..."
+
+    local host="${CHROMADB_HOST:-0.0.0.0}"
+    local port="${CHROMADB_PORT:-8000}"
+    local data_dir="${CHROMADB_DATA_DIR:-/data/chromadb}"
+
+    # Ensure data directory exists
+    mkdir -p "$data_dir"
+
+    # Start ChromaDB server in background
+    chroma run \
+        --host "$host" \
+        --port "$port" \
+        --path "$data_dir" \
+        >> "${HAL9000_LOGS_DIR:-/root/.hal9000/logs}/chromadb.log" 2>&1 &
+
+    local chromadb_pid=$!
+    echo "$chromadb_pid" > "${HAL9000_HOME}/chromadb.pid"
+
+    # Wait for server to be ready
+    local max_wait=30
+    local waited=0
+    while [[ $waited -lt $max_wait ]]; do
+        if curl -s "http://localhost:${port}/api/v1/heartbeat" >/dev/null 2>&1; then
+            log_success "ChromaDB server started on port $port (PID: $chromadb_pid)"
+            return 0
+        fi
+        sleep 1
+        ((waited++))
+    done
+
+    log_error "ChromaDB server failed to start within ${max_wait}s"
+    return 1
+}
+
+stop_chromadb_server() {
+    local pid_file="${HAL9000_HOME}/chromadb.pid"
+
+    if [[ -f "$pid_file" ]]; then
+        local pid
+        pid=$(cat "$pid_file")
+        if kill -0 "$pid" 2>/dev/null; then
+            log_info "Stopping ChromaDB server (PID: $pid)..."
+            kill "$pid" 2>/dev/null || true
+            sleep 2
+            kill -9 "$pid" 2>/dev/null || true
+        fi
+        rm -f "$pid_file"
+    fi
+}
+
+# ============================================================================
 # COORDINATOR MODE
 # ============================================================================
 
@@ -131,6 +187,9 @@ cleanup_on_exit() {
         # Use --rm flag when spawning workers for auto-cleanup
     fi
 
+    # Stop ChromaDB server
+    stop_chromadb_server
+
     # Clean up tmux
     tmux -L hal9000 kill-server 2>/dev/null || true
 
@@ -152,6 +211,7 @@ main() {
     init_directories
     verify_docker_socket
     init_tmux_server
+    start_chromadb_server
     pull_worker_image
 
     # Handle command

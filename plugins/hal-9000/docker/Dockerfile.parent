@@ -1,15 +1,17 @@
 # HAL-9000 Parent Container (DinD Orchestrator)
-# Lightweight container for spawning and managing Claude worker containers
+# Container for spawning and managing Claude worker containers
 #
-# Architecture (based on P0 validation spikes):
-# - MCP servers run on HOST with stdio transport (not in containers)
-# - Parent container owns network namespace, spawns workers
-# - Workers use --network=container:parent to access localhost services
+# Architecture:
+# - Parent runs ChromaDB server on port 8000 for shared vector storage
+# - Parent owns network namespace, spawns workers
+# - Workers use --network=container:parent to access localhost:8000
+# - Workers connect to ChromaDB via HTTP (safe for concurrent access)
 #
 # Build: docker build -f Dockerfile.parent -t ghcr.io/hellblazer/hal-9000:parent .
 # Run: docker run -d --name hal9000-parent \
 #        -v /var/run/docker.sock:/var/run/docker.sock \
 #        -v ~/.hal9000:/root/.hal9000 \
+#        -v hal9000-chromadb:/data/chromadb \
 #        ghcr.io/hellblazer/hal-9000:parent
 
 FROM debian:bookworm-slim
@@ -20,11 +22,12 @@ LABEL version="1.0.0"
 LABEL architecture="dind-parent"
 LABEL build_date="2026-01-25"
 
-# Install minimal dependencies for orchestration
+# Install dependencies for orchestration and ChromaDB server
 # - tmux: Session management for workers
 # - curl: Health checks and API calls
 # - jq: JSON processing for configuration
 # - procps: Process monitoring (ps, top)
+# - python3: Required for ChromaDB server
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tmux \
     curl \
@@ -33,9 +36,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     locales \
     gnupg \
+    python3 \
+    python3-pip \
+    python3-venv \
     && rm -rf /var/lib/apt/lists/* \
     && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
     && locale-gen
+
+# Install ChromaDB server in a virtual environment
+RUN python3 -m venv /opt/chromadb-venv \
+    && /opt/chromadb-venv/bin/pip install --no-cache-dir chromadb
+
+# Add ChromaDB to PATH
+ENV PATH="/opt/chromadb-venv/bin:${PATH}"
 
 # Install Docker CLI (latest version for API compatibility)
 # Using official Docker repository for up-to-date client
@@ -55,10 +68,12 @@ ENV TERM=xterm-256color
 #   /sessions    - Worker session metadata
 #   /logs        - Container logs
 #   /config      - Configuration files
+# /data/chromadb - ChromaDB persistent storage (mounted volume)
 RUN mkdir -p \
     /root/.hal9000/sessions \
     /root/.hal9000/logs \
     /root/.hal9000/config \
+    /data/chromadb \
     /workspace \
     /scripts
 
@@ -78,6 +93,12 @@ ENV HAL9000_HOME=/root/.hal9000
 ENV HAL9000_SESSIONS_DIR=/root/.hal9000/sessions
 ENV HAL9000_LOGS_DIR=/root/.hal9000/logs
 ENV WORKER_IMAGE=ghcr.io/hellblazer/hal-9000:worker
+
+# ChromaDB server configuration
+ENV CHROMADB_HOST=0.0.0.0
+ENV CHROMADB_PORT=8000
+ENV CHROMADB_DATA_DIR=/data/chromadb
+ENV CHROMA_ANONYMIZED_TELEMETRY=false
 
 WORKDIR /workspace
 

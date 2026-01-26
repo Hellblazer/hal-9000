@@ -1,6 +1,6 @@
 {
   "$schema": "https://claude.ai/settings-schema.json",
-  "$comment": "HAL-9000 Worker MCP Settings - Use shared volumes",
+  "$comment": "HAL-9000 Worker MCP Settings - Connect to parent's ChromaDB server",
 
   "theme": "dark",
   "preferredNotificationChannel": "terminal",
@@ -10,8 +10,9 @@
     "chromadb": {
       "command": "chroma-mcp",
       "args": [
-        "--client-type", "persistent",
-        "--path", "/data/chromadb"
+        "--client-type", "http",
+        "--host", "localhost",
+        "--port", "8000"
       ],
       "env": {
         "CHROMA_ANONYMIZED_TELEMETRY": "false"

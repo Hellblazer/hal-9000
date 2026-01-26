@@ -209,25 +209,57 @@ docker volume rm hal9000-claude-my-worker
 
 ## Concurrent Access
 
-### ChromaDB
+### ChromaDB Server Architecture
 
-ChromaDB supports concurrent reads but requires careful handling of writes:
+The parent container runs a ChromaDB HTTP server that all workers connect to:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Parent Container                         │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │          ChromaDB Server (port 8000)                │   │
+│  │                                                     │   │
+│  │  - Handles concurrent read/write safely             │   │
+│  │  - Data persisted to /data/chromadb                 │   │
+│  │  - Workers connect via HTTP                         │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                          ↑                                  │
+└──────────────────────────│──────────────────────────────────┘
+                           │ localhost:8000
+        ┌──────────────────┼──────────────────┐
+        │                  │                  │
+        ▼                  ▼                  ▼
+┌───────────────┐  ┌───────────────┐  ┌───────────────┐
+│   Worker 1    │  │   Worker 2    │  │   Worker N    │
+│               │  │               │  │               │
+│ chroma-mcp    │  │ chroma-mcp    │  │ chroma-mcp    │
+│ --client-type │  │ --client-type │  │ --client-type │
+│   http        │  │   http        │  │   http        │
+└───────────────┘  └───────────────┘  └───────────────┘
+```
+
+**Why HTTP client instead of persistent storage?**
+- SQLite (persistent mode) has limited concurrent write support
+- Multiple workers writing to same SQLite file causes locking issues
+- HTTP server handles concurrent access safely
+- Workers share network namespace, so localhost:8000 works
 
 ```yaml
 # MCP server configuration for workers
 mcpServers:
   chromadb:
     command: chroma-mcp
-    args: ["--client-type", "persistent", "--path", "/data/chromadb"]
+    args: ["--client-type", "http", "--host", "localhost", "--port", "8000"]
     env:
       CHROMA_ANONYMIZED_TELEMETRY: "false"
 ```
 
 **Concurrency notes:**
-- Multiple readers are safe
-- Writes are serialized by SQLite
-- Use collection-level isolation for heavy workloads
-- Consider ChromaDB Cloud for true multi-tenancy
+- Parent runs ChromaDB server, handles all database operations
+- Workers connect as HTTP clients (safe concurrent access)
+- Server-side locking ensures data integrity
+- No file-level conflicts between workers
 
 ### Memory Bank
 
@@ -248,16 +280,16 @@ Memory Bank uses file-based storage with project isolation:
 
 ## Configuration Integration
 
-### MCP Server Paths
+### MCP Server Configuration
 
-Workers need MCP servers configured to use shared volumes:
+Workers connect to parent's ChromaDB server via HTTP:
 
 ```json
 {
   "mcpServers": {
     "chromadb": {
       "command": "chroma-mcp",
-      "args": ["--client-type", "persistent", "--path", "/data/chromadb"]
+      "args": ["--client-type", "http", "--host", "localhost", "--port", "8000"]
     },
     "memory-bank": {
       "command": "npx",

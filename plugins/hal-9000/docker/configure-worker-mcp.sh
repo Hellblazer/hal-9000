@@ -33,7 +33,8 @@ log_warn() { printf "${YELLOW}[mcp-config]${NC} %s\n" "$1"; }
 # ============================================================================
 
 CLAUDE_HOME="${CLAUDE_HOME:-/root/.claude}"
-CHROMADB_PATH="/data/chromadb"
+CHROMADB_HOST="${CHROMADB_HOST:-localhost}"
+CHROMADB_PORT="${CHROMADB_PORT:-8000}"
 MEMBANK_PATH="/data/membank"
 VOLUME_NAME=""
 MINIMAL=false
@@ -53,8 +54,9 @@ generate_full_settings() {
     "chromadb": {
       "command": "chroma-mcp",
       "args": [
-        "--client-type", "persistent",
-        "--path", "${CHROMADB_PATH}"
+        "--client-type", "http",
+        "--host", "${CHROMADB_HOST}",
+        "--port", "${CHROMADB_PORT}"
       ],
       "env": {
         "CHROMA_ANONYMIZED_TELEMETRY": "false"
@@ -118,7 +120,7 @@ configure_local() {
 
     # Show result
     log_info "Settings file: $settings_file"
-    log_info "ChromaDB path: $CHROMADB_PATH"
+    log_info "ChromaDB server: ${CHROMADB_HOST}:${CHROMADB_PORT}"
     log_info "Memory Bank path: $MEMBANK_PATH"
 }
 
@@ -201,31 +203,37 @@ Configure MCP Settings for HAL-9000 Worker
 Usage: configure-worker-mcp.sh [options]
 
 Options:
-  --volume NAME     Configure a named volume instead of current container
-  --chromadb PATH   ChromaDB path (default: /data/chromadb)
-  --membank PATH    Memory Bank path (default: /data/membank)
-  --claude-home DIR Claude home directory (default: /root/.claude)
-  --minimal         Create minimal config (no MCP servers)
-  --verify          Verify current configuration
-  -h, --help        Show this help
+  --volume NAME       Configure a named volume instead of current container
+  --chromadb-host H   ChromaDB server host (default: localhost)
+  --chromadb-port P   ChromaDB server port (default: 8000)
+  --membank PATH      Memory Bank path (default: /data/membank)
+  --claude-home DIR   Claude home directory (default: /root/.claude)
+  --minimal           Create minimal config (no MCP servers)
+  --verify            Verify current configuration
+  -h, --help          Show this help
 
 Examples:
-  # Inside worker container
+  # Inside worker container (connects to parent's ChromaDB)
   configure-worker-mcp.sh
 
   # Configure a specific volume
   configure-worker-mcp.sh --volume hal9000-claude-my-worker
 
-  # Custom paths
-  configure-worker-mcp.sh --chromadb /custom/chromadb --membank /custom/membank
+  # Custom ChromaDB server
+  configure-worker-mcp.sh --chromadb-host chromadb-server --chromadb-port 9000
 
   # Minimal config (no MCP servers needed)
   configure-worker-mcp.sh --minimal
 
 MCP Servers Configured:
-  chromadb           Persistent vector database at CHROMADB_PATH
-  memory-bank        Project state at MEMBANK_PATH
+  chromadb           HTTP client connecting to parent's ChromaDB server
+  memory-bank        Project state at MEMBANK_PATH (file-based)
   sequential-thinking Chain-of-thought reasoning
+
+Architecture:
+  Parent container runs ChromaDB server on port 8000.
+  Workers connect via HTTP (--network=container:parent allows localhost access).
+  This ensures safe concurrent read/write from multiple workers.
 EOF
 }
 
