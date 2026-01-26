@@ -78,12 +78,12 @@ RUN mkdir -p \
     /scripts
 
 # Copy orchestration scripts
-COPY parent-entrypoint.sh /scripts/parent-entrypoint.sh
-COPY spawn-worker.sh /scripts/spawn-worker.sh
-COPY coordinator.sh /scripts/coordinator.sh
-COPY init-volumes.sh /scripts/init-volumes.sh
-COPY setup-dashboard.sh /scripts/setup-dashboard.sh
-COPY tmux-dashboard.conf /scripts/tmux-dashboard.conf
+COPY docker/parent-entrypoint.sh /scripts/parent-entrypoint.sh
+COPY docker/spawn-worker.sh /scripts/spawn-worker.sh
+COPY docker/coordinator.sh /scripts/coordinator.sh
+COPY docker/init-volumes.sh /scripts/init-volumes.sh
+COPY docker/setup-dashboard.sh /scripts/setup-dashboard.sh
+COPY docker/tmux-dashboard.conf /scripts/tmux-dashboard.conf
 
 # Make scripts executable
 RUN chmod +x /scripts/*.sh

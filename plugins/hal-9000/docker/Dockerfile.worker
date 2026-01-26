@@ -73,7 +73,7 @@ RUN uv tool install claude-code-tools
 RUN mkdir -p /workspace /root/.claude /root/memory-bank /scripts
 
 # Copy entrypoint script
-COPY worker-entrypoint.sh /scripts/worker-entrypoint.sh
+COPY docker/worker-entrypoint.sh /scripts/worker-entrypoint.sh
 RUN chmod +x /scripts/worker-entrypoint.sh
 
 # Environment variables

@@ -81,3 +81,4 @@ __pycache__/
 
 # Node modules (already covered but explicit)
 node_modules/
+.pm-archive/
