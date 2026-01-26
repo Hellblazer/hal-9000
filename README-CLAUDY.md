@@ -134,6 +134,26 @@ claudy --claude-home ~/git/.claude ~/my-project
 claudy --claude-home ~/.hal9000/test-config
 ```
 
+### DinD Mode (v0.6.0+)
+
+For multi-worker orchestration with shared services:
+
+```bash
+# Start the daemon (parent container with ChromaDB)
+claudy daemon start
+
+# Spawn workers via parent (shared network namespace)
+claudy --via-parent ~/my-project
+
+# Check orchestrator status
+claudy daemon status
+
+# Stop orchestrator
+claudy daemon stop
+```
+
+See `plugins/hal-9000/docker/README-dind.md` for full DinD architecture documentation.
+
 ### Help and Diagnostics
 
 ```bash

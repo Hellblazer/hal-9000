@@ -28,7 +28,41 @@ Based on Phase 0 validation spikes:
 - **Network namespace sharing works** - Workers access parent's localhost
 - **Lightweight workers achievable** - 469MB (79% reduction from 2.85GB)
 
-## Quick Start
+## Quick Start with Claudy
+
+The easiest way to use the DinD architecture is through the `claudy` CLI (v0.6.0+).
+
+### 1. Start the Daemon
+
+```bash
+# Start the orchestrator (parent container with ChromaDB)
+claudy daemon start
+
+# Check status
+claudy daemon status
+```
+
+### 2. Spawn Workers
+
+```bash
+# Interactive worker
+claudy --via-parent /path/to/project
+
+# Background worker
+claudy --via-parent --detach --name my-worker /path/to/project
+```
+
+### 3. Manage the Daemon
+
+```bash
+claudy daemon status    # Check health and worker count
+claudy daemon restart   # Restart the orchestrator
+claudy daemon stop      # Stop the orchestrator
+```
+
+## Manual Quick Start
+
+For advanced use cases, you can manage containers directly.
 
 ### 1. Build Images
 
@@ -64,6 +98,52 @@ docker exec hal9000-parent /scripts/spawn-worker.sh /path/to/project
 
 # Background worker
 docker exec hal9000-parent /scripts/spawn-worker.sh -d -n my-worker /path/to/project
+```
+
+## Migration from v0.5.x
+
+If you're upgrading from claudy v0.5.x (single-container mode) to v0.6.x (DinD mode):
+
+### Automatic Migration
+
+```bash
+# Dry run first (see what would happen)
+./scripts/migrate-to-dind.sh --dry-run
+
+# Run migration
+./scripts/migrate-to-dind.sh
+```
+
+The migration script will:
+1. Back up your existing data (ChromaDB, Memory Bank, plugins)
+2. Create named Docker volumes
+3. Migrate data into volumes
+4. Start the DinD daemon
+5. Verify the migration
+
+### Using Legacy Mode
+
+If you need to use the old single-container mode temporarily:
+
+```bash
+claudy --legacy /path/to/project
+```
+
+Note: `--legacy` mode is deprecated and will be removed in v1.0.
+
+### Rollback
+
+If you encounter issues, you can rollback:
+
+```bash
+# List available backups
+./scripts/rollback-dind.sh --list-backups
+
+# Rollback to v0.5.x mode
+./scripts/rollback-dind.sh
+
+# Keep volume data while rolling back
+./scripts/rollback-dind.sh --keep-volumes
 ```
 
 ## Container Images

@@ -164,13 +164,13 @@ spawn_worker() {
     fi
 
     # Mount project directory if specified
+    # In DinD mode, the path is a host path but we're running inside a container
+    # Docker daemon is on the host, so paths must be host paths
     if [[ -n "$PROJECT_DIR" ]]; then
-        if [[ -d "$PROJECT_DIR" ]]; then
-            docker_args+=(-v "${PROJECT_DIR}:/workspace")
-            log_info "Mounting project: $PROJECT_DIR -> /workspace"
-        else
-            log_warn "Project directory not found: $PROJECT_DIR"
-        fi
+        # In DinD mode, we can't check if directory exists from inside container
+        # because it's a host path. Just mount it and let docker fail if invalid.
+        docker_args+=(-v "${PROJECT_DIR}:/workspace")
+        log_info "Mounting project: $PROJECT_DIR -> /workspace"
     fi
 
     # Mount Claude home for session persistence
@@ -228,6 +228,12 @@ spawn_worker() {
 
     # Image
     docker_args+=("$WORKER_IMAGE")
+
+    # For detached mode, override command to keep container running
+    # Default entrypoint is bash which exits without TTY
+    if [[ "$DETACH" == "true" ]]; then
+        docker_args+=(bash -c "sleep infinity")
+    fi
 
     log_info "Spawning worker: $WORKER_NAME"
     log_info "Image: $WORKER_IMAGE"

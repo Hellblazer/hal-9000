@@ -114,12 +114,12 @@ start_chromadb_server() {
     local max_wait=30
     local waited=0
     while [[ $waited -lt $max_wait ]]; do
-        if curl -s "http://localhost:${port}/api/v1/heartbeat" >/dev/null 2>&1; then
+        if curl -s "http://localhost:${port}/api/v2/heartbeat" >/dev/null 2>&1; then
             log_success "ChromaDB server started on port $port (PID: $chromadb_pid)"
             return 0
         fi
         sleep 1
-        ((waited++))
+        waited=$((waited + 1))
     done
 
     log_error "ChromaDB server failed to start within ${max_wait}s"

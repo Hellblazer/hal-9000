@@ -44,9 +44,10 @@ logs/
 /agents/
 /commands/
 /docs/
-/scripts/
+/scripts/*
 !/scripts/build/
-!/scripts/build/*.sh
+!/scripts/migrate-to-dind.sh
+!/scripts/rollback-dind.sh
 /tests/
 /install-mcp-servers.sh
 

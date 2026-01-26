@@ -6,8 +6,10 @@
 set -Eeuo pipefail
 
 readonly SCRIPT_NAME="claudy"
-readonly SCRIPT_VERSION="0.5.0"
+readonly SCRIPT_VERSION="0.6.0"
 readonly HAL9000_HOME="${HOME}/.hal9000"
+readonly PARENT_CONTAINER="hal9000-parent"
+readonly PARENT_IMAGE="ghcr.io/hellblazer/hal-9000:parent"
 # CLAUDE_HOME can be overridden by environment variable or --claude-home argument
 # Default: ~/.claude (same as Claude Code)
 readonly DEFAULT_CLAUDE_HOME="${HOME}/.claude"
@@ -52,6 +54,13 @@ claudy - Containerized Claude CLI
 
 USAGE:
   claudy [OPTIONS] [DIRECTORY]
+  claudy daemon <command>
+
+DAEMON COMMANDS:
+  claudy daemon start    Start the orchestrator (parent container with ChromaDB)
+  claudy daemon stop     Stop the orchestrator
+  claudy daemon status   Show orchestrator status and worker count
+  claudy daemon restart  Restart the orchestrator
 
 OPTIONS:
   --setup                Interactive setup for API key (first-time setup)
@@ -61,6 +70,8 @@ OPTIONS:
   --claude-home PATH     Path to Claude config directory (default: $CLAUDE_HOME or ~/.claude)
   --api-key KEY          Anthropic API key (or set ANTHROPIC_API_KEY env var)
   --detach, -d           Don't attach to tmux session after launch
+  --via-parent           Launch worker via parent container (requires daemon running)
+  --legacy               Force single-container mode (v0.5.x behavior, deprecated)
   --verify               Verify prerequisites and exit
   --diagnose             Show diagnostic information
   --help, -h             Show this help message
@@ -90,6 +101,12 @@ EXAMPLES:
   claudy --shell -d                         # Detached shell session
   claudy --api-key sk-ant-xxx123            # Use specific API key
   claudy --diagnose                         # Check setup
+
+DAEMON EXAMPLES:
+  claudy daemon start                       # Start the orchestrator
+  claudy daemon status                      # Check status and workers
+  claudy daemon stop                        # Stop the orchestrator
+  claudy --via-parent ~/project             # Launch worker via parent (DinD mode)
 
 ENVIRONMENT:
   ANTHROPIC_API_KEY      API key for Claude authentication
@@ -321,6 +338,313 @@ show_diagnostics() {
     info "Container config:"
     echo "  CLAUDE_CONFIG_DIR=/claude (mounted from session)"
     echo "  USER_UID/USER_GID passed for file permissions"
+}
+
+#==============================================================================
+# Daemon commands
+#==============================================================================
+
+daemon_status() {
+    info "HAL-9000 Orchestrator Status"
+    echo ""
+
+    # Check if parent container exists
+    if docker ps -a --format '{{.Names}}' | grep -q "^${PARENT_CONTAINER}$"; then
+        local status
+        status=$(docker inspect --format '{{.State.Status}}' "$PARENT_CONTAINER" 2>/dev/null || echo "unknown")
+
+        case "$status" in
+            running)
+                success "Parent container: Running"
+
+                # Get uptime
+                local started_at
+                started_at=$(docker inspect --format '{{.State.StartedAt}}' "$PARENT_CONTAINER" 2>/dev/null || echo "")
+                if [[ -n "$started_at" ]]; then
+                    info "  Started: $started_at"
+                fi
+
+                # Check ChromaDB server
+                if docker exec "$PARENT_CONTAINER" curl -s "http://localhost:8000/api/v2/heartbeat" >/dev/null 2>&1; then
+                    success "  ChromaDB server: Running on port 8000"
+                else
+                    warn "  ChromaDB server: Not responding"
+                fi
+
+                # Count workers
+                local worker_count
+                worker_count=$(docker ps --filter "name=hal9000-worker" --format '{{.Names}}' | wc -l | tr -d ' ')
+                info "  Active workers: $worker_count"
+
+                # List workers
+                if [[ "$worker_count" -gt 0 ]]; then
+                    echo ""
+                    info "Workers:"
+                    docker ps --filter "name=hal9000-worker" --format '  {{.Names}}: {{.Status}}' 2>/dev/null
+                fi
+                ;;
+            exited)
+                warn "Parent container: Stopped"
+                local exit_code
+                exit_code=$(docker inspect --format '{{.State.ExitCode}}' "$PARENT_CONTAINER" 2>/dev/null || echo "?")
+                info "  Exit code: $exit_code"
+                ;;
+            *)
+                warn "Parent container: $status"
+                ;;
+        esac
+    else
+        warn "Parent container: Not found"
+        info "  Run 'claudy daemon start' to create"
+    fi
+
+    # Check for shared volumes
+    echo ""
+    info "Shared volumes:"
+    for vol in hal9000-chromadb hal9000-memorybank hal9000-plugins; do
+        if docker volume inspect "$vol" >/dev/null 2>&1; then
+            success "  $vol: exists"
+        else
+            info "  $vol: not created"
+        fi
+    done
+}
+
+daemon_start() {
+    info "Starting HAL-9000 orchestrator..."
+
+    # Check if already running
+    if docker ps --format '{{.Names}}' | grep -q "^${PARENT_CONTAINER}$"; then
+        success "Orchestrator already running"
+        daemon_status
+        return 0
+    fi
+
+    # Remove stopped container if exists
+    if docker ps -a --format '{{.Names}}' | grep -q "^${PARENT_CONTAINER}$"; then
+        info "Removing stopped parent container..."
+        docker rm "$PARENT_CONTAINER" >/dev/null 2>&1 || true
+    fi
+
+    # Pull image if not available
+    if ! docker image inspect "$PARENT_IMAGE" >/dev/null 2>&1; then
+        info "Pulling parent image: $PARENT_IMAGE"
+        docker pull "$PARENT_IMAGE" || {
+            warn "Could not pull image, trying local build..."
+            local docker_dir="${HAL9000_HOME}/../hal-9000/plugins/hal-9000/docker"
+            if [[ -f "$docker_dir/Dockerfile.parent" ]]; then
+                docker build -f "$docker_dir/Dockerfile.parent" -t "$PARENT_IMAGE" "$docker_dir"
+            else
+                error "Parent image not available. Build with: make build-parent"
+            fi
+        }
+    fi
+
+    # Create shared volumes if they don't exist
+    for vol in hal9000-chromadb hal9000-memorybank hal9000-plugins; do
+        if ! docker volume inspect "$vol" >/dev/null 2>&1; then
+            info "Creating volume: $vol"
+            docker volume create "$vol" >/dev/null
+        fi
+    done
+
+    # Ensure hal9000 directories exist
+    mkdir -p "$HAL9000_HOME/sessions"
+    mkdir -p "$HAL9000_HOME/logs"
+    mkdir -p "$HAL9000_HOME/config"
+
+    # Start parent container
+    info "Starting parent container..."
+    local docker_args=(
+        docker run -d
+        --name "$PARENT_CONTAINER"
+        --restart unless-stopped
+        -v /var/run/docker.sock:/var/run/docker.sock
+        -v "${HAL9000_HOME}:/root/.hal9000"
+        -v hal9000-chromadb:/data/chromadb
+        -v hal9000-memorybank:/data/membank
+        -v hal9000-plugins:/data/plugins
+    )
+
+    # Pass through API key if set
+    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+        docker_args+=(-e ANTHROPIC_API_KEY)
+    fi
+
+    docker_args+=("$PARENT_IMAGE")
+
+    if "${docker_args[@]}" >/dev/null; then
+        # Wait for ChromaDB to start
+        info "Waiting for ChromaDB server..."
+        local max_wait=30
+        local waited=0
+        while [[ $waited -lt $max_wait ]]; do
+            if docker exec "$PARENT_CONTAINER" curl -s "http://localhost:8000/api/v2/heartbeat" >/dev/null 2>&1; then
+                success "ChromaDB server ready"
+                break
+            fi
+            sleep 1
+            ((waited++))
+        done
+
+        if [[ $waited -ge $max_wait ]]; then
+            warn "ChromaDB server did not respond within ${max_wait}s"
+        fi
+
+        success "Orchestrator started"
+        echo ""
+        daemon_status
+    else
+        error "Failed to start parent container"
+    fi
+}
+
+daemon_stop() {
+    info "Stopping HAL-9000 orchestrator..."
+
+    # Check for running workers
+    local worker_count
+    worker_count=$(docker ps --filter "name=hal9000-worker" --format '{{.Names}}' | wc -l | tr -d ' ')
+
+    if [[ "$worker_count" -gt 0 ]]; then
+        warn "There are $worker_count active workers"
+        info "Workers will lose their network connection to ChromaDB"
+        echo ""
+        read -p "Stop anyway? [y/N] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            info "Cancelled"
+            return 0
+        fi
+    fi
+
+    # Stop parent container
+    if docker ps --format '{{.Names}}' | grep -q "^${PARENT_CONTAINER}$"; then
+        info "Stopping parent container..."
+        docker stop "$PARENT_CONTAINER" >/dev/null 2>&1
+        success "Orchestrator stopped"
+    elif docker ps -a --format '{{.Names}}' | grep -q "^${PARENT_CONTAINER}$"; then
+        info "Removing stopped container..."
+        docker rm "$PARENT_CONTAINER" >/dev/null 2>&1
+        success "Container removed"
+    else
+        info "Orchestrator not running"
+    fi
+}
+
+daemon_restart() {
+    info "Restarting HAL-9000 orchestrator..."
+    daemon_stop
+    sleep 2
+    daemon_start
+}
+
+handle_daemon_command() {
+    local cmd="${1:-}"
+
+    case "$cmd" in
+        start)
+            daemon_start
+            ;;
+        stop)
+            daemon_stop
+            ;;
+        status)
+            daemon_status
+            ;;
+        restart)
+            daemon_restart
+            ;;
+        ""|help)
+            echo "Usage: claudy daemon <command>"
+            echo ""
+            echo "Commands:"
+            echo "  start    Start the orchestrator (parent container with ChromaDB server)"
+            echo "  stop     Stop the orchestrator"
+            echo "  status   Show orchestrator status and worker count"
+            echo "  restart  Restart the orchestrator"
+            ;;
+        *)
+            error "Unknown daemon command: $cmd"
+            ;;
+    esac
+}
+
+#==============================================================================
+# Via-parent launch (DinD mode)
+#==============================================================================
+
+launch_via_parent() {
+    local session_name="$1"
+    local profile="$2"
+    local project_dir="$3"
+    local shell_mode="$4"
+    local api_key="$5"
+    local detach="$6"
+    local abs_project_path
+
+    abs_project_path=$(cd "$project_dir" && pwd)
+
+    # Check if parent is running
+    if ! docker ps --format '{{.Names}}' | grep -q "^${PARENT_CONTAINER}$"; then
+        warn "Parent container not running"
+        echo ""
+        read -p "Start the orchestrator now? [Y/n] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            daemon_start
+        else
+            error "Cannot launch via parent without orchestrator. Run 'claudy daemon start' first."
+        fi
+    fi
+
+    info "Launching worker via parent container..."
+    info "  Worker: $session_name"
+    info "  Profile: $profile"
+    info "  Project: $abs_project_path"
+
+    # Build spawn-worker command
+    local spawn_args=()
+    spawn_args+=(-n "$session_name")
+
+    if [[ "$detach" == "true" ]]; then
+        spawn_args+=(-d)
+    fi
+
+    # Use worker image based on profile
+    local worker_image="${CONTAINER_IMAGE_BASE}:${profile}"
+    spawn_args+=(-i "$worker_image")
+
+    # Project directory - use HOST path because spawn-worker.sh
+    # talks to the host's Docker daemon via socket
+    spawn_args+=("$abs_project_path")
+
+    # Execute spawn-worker.sh inside parent container
+    # Pass through environment variables
+    local exec_args=(docker exec)
+
+    if [[ "$detach" != "true" ]]; then
+        exec_args+=(-it)
+    fi
+
+    if [[ -n "$api_key" ]]; then
+        exec_args+=(-e "ANTHROPIC_API_KEY=$api_key")
+    elif [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+        exec_args+=(-e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
+    fi
+
+    exec_args+=("$PARENT_CONTAINER" /scripts/spawn-worker.sh "${spawn_args[@]}")
+
+    info "Executing: ${exec_args[*]}"
+
+    if "${exec_args[@]}"; then
+        if [[ "$detach" == "true" ]]; then
+            success "Worker spawned in background: $session_name"
+            info "Attach with: docker exec -it $session_name bash"
+        fi
+    else
+        error "Failed to spawn worker via parent"
+    fi
 }
 
 #==============================================================================
@@ -620,6 +944,15 @@ main() {
     local shell_mode=false
     local detach=false
     local verify_only=false
+    local via_parent=false
+    local legacy_mode=false
+
+    # Handle daemon subcommand first
+    if [[ "${1:-}" == "daemon" ]]; then
+        shift
+        handle_daemon_command "$@"
+        exit 0
+    fi
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -646,6 +979,14 @@ main() {
                 ;;
             --detach|-d)
                 detach=true
+                shift
+                ;;
+            --via-parent)
+                via_parent=true
+                shift
+                ;;
+            --legacy)
+                legacy_mode=true
                 shift
                 ;;
             --verify)
@@ -682,9 +1023,32 @@ main() {
     # Export CLAUDE_HOME for use in functions
     export CLAUDE_HOME="$claude_home"
 
-    # Verify prerequisites
-    if ! verify_prerequisites; then
-        exit 1
+    # Handle legacy mode (deprecated single-container mode)
+    if [[ "$legacy_mode" == "true" ]]; then
+        warn "DEPRECATION: --legacy mode is deprecated and will be removed in v1.0"
+        warn "Please migrate to DinD architecture:"
+        warn "  1. Run: ./scripts/migrate-to-dind.sh"
+        warn "  2. Use: claudy daemon start && claudy --via-parent"
+        echo ""
+        if [[ "$via_parent" == "true" ]]; then
+            warn "--legacy overrides --via-parent; using single-container mode"
+            via_parent=false
+        fi
+    fi
+
+    # Verify prerequisites (skip API key check for via-parent mode)
+    if [[ "$via_parent" == "true" ]]; then
+        # For via-parent, just check Docker is available
+        if ! command -v docker &> /dev/null; then
+            error "Docker not found"
+        fi
+        if ! docker ps &> /dev/null; then
+            error "Docker daemon not running"
+        fi
+    else
+        if ! verify_prerequisites; then
+            exit 1
+        fi
     fi
 
     if [[ "$verify_only" == "true" ]]; then
@@ -707,13 +1071,21 @@ main() {
         session_name=$(get_session_name "$project_dir")
     fi
 
-    info "Initializing session..."
-    init_session "$project_dir" "$profile" "$session_name" "$shell_mode" || error "Failed to initialize session"
+    # Launch via parent or direct
+    if [[ "$via_parent" == "true" ]]; then
+        # DinD mode: spawn worker via parent container
+        info "Using via-parent mode (DinD)"
+        launch_via_parent "$session_name" "$profile" "$project_dir" "$shell_mode" "$api_key" "$detach" || error "Failed to launch via parent"
+    else
+        # Direct mode: launch container directly
+        info "Initializing session..."
+        init_session "$project_dir" "$profile" "$session_name" "$shell_mode" || error "Failed to initialize session"
 
-    success "Session ready: $session_name"
+        success "Session ready: $session_name"
 
-    # Launch container
-    launch_container_session "$session_name" "$profile" "$project_dir" "$shell_mode" "$api_key" || error "Failed to launch container"
+        # Launch container
+        launch_container_session "$session_name" "$profile" "$project_dir" "$shell_mode" "$api_key" || error "Failed to launch container"
+    fi
 }
 
 # Run main if script is executed directly
