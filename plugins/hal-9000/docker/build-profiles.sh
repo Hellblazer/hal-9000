@@ -19,11 +19,24 @@ readonly YELLOW='\033[1;33m'
 readonly NC='\033[0m'
 
 # Available profiles
-readonly ALL_PROFILES=(
+# DinD profiles (claudy) - these are the primary images
+readonly DIND_PROFILES=(
+    "parent:Dockerfile.parent"
+    "worker:Dockerfile.worker"
+)
+
+# Legacy profiles (standalone hal9000) - kept for backwards compatibility
+readonly LEGACY_PROFILES=(
     "base:Dockerfile.hal9000"
     "python:Dockerfile.python"
     "node:Dockerfile.node"
     "java:Dockerfile.java"
+)
+
+# All profiles
+readonly ALL_PROFILES=(
+    "${DIND_PROFILES[@]}"
+    "${LEGACY_PROFILES[@]}"
 )
 
 show_help() {
@@ -38,7 +51,11 @@ ${GREEN}Options:${NC}
   --no-cache      Build without using cache
   --help          Show this help
 
-${GREEN}Profiles:${NC}
+${GREEN}Profiles (DinD/claudy):${NC}
+  parent          Orchestrator with ChromaDB server
+  worker          Claude CLI + MCP servers pre-installed
+
+${GREEN}Profiles (Legacy/standalone):${NC}
   base            Base image with claude-code-tools only
   python          Python 3.11 + uv + pip
   node            Node.js 20 LTS + npm + yarn + pnpm
@@ -51,10 +68,12 @@ ${GREEN}Examples:${NC}
   build-profiles.sh --push --no-cache  # Rebuild and push all
 
 ${GREEN}Images Created:${NC}
-  ${IMAGE_BASE}:latest       (base)
-  ${IMAGE_BASE}:python
-  ${IMAGE_BASE}:node
-  ${IMAGE_BASE}:java
+  ${IMAGE_BASE}:parent       (DinD orchestrator)
+  ${IMAGE_BASE}:worker       (DinD worker with MCP)
+  ${IMAGE_BASE}:latest       (legacy base)
+  ${IMAGE_BASE}:python       (legacy)
+  ${IMAGE_BASE}:node         (legacy)
+  ${IMAGE_BASE}:java         (legacy)
 
 EOF
 }
