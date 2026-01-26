@@ -59,6 +59,7 @@ help:
 	@echo "  $(YELLOW)make test-dind$(NC)                 Run all DinD tests"
 	@echo "  $(YELLOW)make test-pool-manager$(NC)         Pool manager tests"
 	@echo "  $(YELLOW)make test-resource-limits$(NC)      Resource limits tests"
+	@echo "  $(YELLOW)make benchmark-dind$(NC)            Performance benchmarks"
 	@echo ""
 	@echo "$(GREEN)Build Targets:$(NC)"
 	@echo "  $(YELLOW)make build-base$(NC)        Build base image"
@@ -240,6 +241,11 @@ test-resource-limits:
 	$(QUIET)./scripts/build/test-resource-limits.sh all
 	@echo "$(GREEN)✓ Resource limits tests passed$(NC)"
 
+benchmark-dind:
+	@echo "$(YELLOW)Running DinD performance benchmarks...$(NC)"
+	@./scripts/build/benchmark-dind.sh all
+	@echo "$(GREEN)✓ Benchmarks complete$(NC)"
+
 ##############################################################################
 # BUILD TARGETS
 ##############################################################################
@@ -381,6 +387,6 @@ version:
 .PHONY: validate validate-bash validate-json validate-markdown validate-shellcheck
 .PHONY: test test-claudy test-claudy-syntax test-claudy-unit test-claudy-config
 .PHONY: test-claudy-errors test-claudy-integration test-claudy-docker test-claudy-cleanup
-.PHONY: test-dind test-pool-manager test-resource-limits
+.PHONY: test-dind test-pool-manager test-resource-limits benchmark-dind
 .PHONY: build build-base build-python build-node build-java build-test-image
 .PHONY: package ci lint shellcheck-detailed install-dev-tools watch version
