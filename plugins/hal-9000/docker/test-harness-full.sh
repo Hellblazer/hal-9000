@@ -410,6 +410,12 @@ test_commands_installed() {
 test_tmux_cli_installed() {
     log "Testing tmux-cli installation..."
 
+    # v3.0.0+: claudy mode - tools are in Docker
+    if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
+        skip "Claudy mode - tmux-cli is in Docker worker image"
+        return 0
+    fi
+
     if command -v tmux-cli >/dev/null 2>&1; then
         pass "tmux-cli installed"
         verbose "$(tmux-cli --version 2>&1 | head -1 || echo 'version unknown')"
@@ -545,6 +551,12 @@ test_memory_bank_mcp_responds() {
 test_tmux_cli_functional() {
     log "Testing tmux-cli functionality..."
 
+    # v3.0.0+: claudy mode - tools are in Docker
+    if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
+        skip "Claudy mode - tmux-cli is in Docker worker image"
+        return 0
+    fi
+
     if ! command -v tmux-cli >/dev/null 2>&1; then
         fail "tmux-cli not found"
         return 1
@@ -585,6 +597,12 @@ test_tmux_cli_functional() {
 test_vault_functional() {
     log "Testing vault functionality..."
 
+    # v3.0.0+: claudy mode - tools are in Docker
+    if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
+        skip "Claudy mode - vault is in Docker worker image"
+        return 0
+    fi
+
     # Check vault is installed
     if ! command -v vault >/dev/null 2>&1; then
         fail "vault not found in PATH"
@@ -604,6 +622,12 @@ test_vault_functional() {
 
 test_env_safe_functional() {
     log "Testing env-safe functionality..."
+
+    # v3.0.0+: claudy mode - tools are in Docker
+    if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
+        skip "Claudy mode - env-safe is in Docker worker image"
+        return 0
+    fi
 
     if ! command -v env-safe >/dev/null 2>&1; then
         fail "env-safe not found"
