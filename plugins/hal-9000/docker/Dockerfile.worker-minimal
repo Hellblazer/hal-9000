@@ -1,0 +1,42 @@
+# Dockerfile.worker-minimal
+# Phase 0 Validation Spike P0-4: Minimal worker image prototype
+# Objective: Determine realistic minimum size for worker container with only Claude CLI
+#
+# Build: docker build -f Dockerfile.worker-minimal -t hal9000-worker-minimal .
+
+FROM debian:bookworm-slim
+
+LABEL maintainer="hal-9000"
+LABEL description="Minimal worker image - Claude CLI only (validation spike)"
+LABEL version="0.1.0-spike"
+
+# Minimal dependencies only - no build tools, no dev packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    git \
+    locales \
+    && rm -rf /var/lib/apt/lists/* \
+    && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
+    && locale-gen
+
+# Set locale for proper UTF-8 support (required by Claude CLI)
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+# Add Claude CLI location to PATH (install.sh puts it in ~/.local/bin)
+ENV PATH="/root/.local/bin:${PATH}"
+
+# Install Claude CLI (native binary)
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
+# Create minimal workspace
+RUN mkdir -p /workspace
+
+WORKDIR /workspace
+
+# Verify Claude CLI installation
+RUN claude --version
+
+# Default command
+CMD ["bash"]

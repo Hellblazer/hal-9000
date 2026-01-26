@@ -1,64 +1,118 @@
-# Claudy Implementation - Session Continuation
+# Claudy DinD Architecture - Session Continuation
 
-**Session Start Date**: 2026-01-25
-**Project**: Claudy - Containerized Claude CLI Tool
-**Status**: Entering implementation phase
-**Phase**: Phase 1 - Core Foundation
+**Session Date**: 2026-01-25
+**Project**: Claudy - Docker-in-Docker Claude Orchestration
+**Status**: Phase 0 COMPLETE - MODIFIED GO Decision Made
+**Phase**: Ready for Phase 1
 
-## Context
+## Phase 0 Results Summary
 
-### Prior Work Completed
-- ✅ Deep analysis of hal-9000 and agentic repositories
-- ✅ Designed "claudy" foundation (simple CLI wrapper)
-- ✅ 18 design documents created in hal-9000_active Memory Bank
-- ✅ Corrected authentication model (session-based inheritance)
-- ✅ Complete implementation roadmap (6 weeks, phased approach)
+### Validation Spike Outcomes
 
-### Design Documents
-All stored in Memory Bank project: `hal-9000_active`
-- CLAUDY_MASTER_INDEX.md (navigation + implementation checklist)
-- CLAUDY_DESIGN_SYNTHESIS.md (consolidated design)
-- claudy-authentication-revised.md (session-based auth)
-- claudy-feature-exposure-design.md (progressive discovery)
-- 14 additional supporting documents
+| Spike | Result | Finding |
+|-------|--------|---------|
+| P0-1: MCP HTTP Transport | **NO-GO** | All 3 servers use stdio only |
+| P0-2: HTTP-to-stdio Proxy | SKIPPED | Not viable per P0-1 |
+| P0-3: Network Namespace | **GO** | `--network=container:parent` validated |
+| P0-4: Worker Image | **GO** | 469MB without git (under 500MB) |
 
-### Key Decisions
-1. **Foundation**: Simple bash wrapper opening Claude in tmux inside container
-2. **Authentication**: Copy host ~/.claude/.session.json to container
-3. **Profiles**: Auto-detect project type (Java/Python/Node/base)
-4. **Feature Exposure**: Progressive discovery, zero config by default
-5. **Container Security**: No permission dialogs needed (container = sandbox)
+### Decision: MODIFIED GO
 
-## Current Phase: Phase 1 - Core Foundation (Weeks 1-2)
+**Key Architecture Change**: MCP servers must run on HOST (not in containers).
 
-### Deliverables
-- [ ] claudy bash script (core launcher)
-- [ ] hal-9000 profile selection and auto-detection
-- [ ] Session management (per-project isolation)
-- [ ] Basic error handling and help system
-- [ ] Installation scripts
-- [ ] Cross-platform testing (macOS, Linux, WSL2)
+**Original Plan** (Not Viable):
+```
+Parent Container → MCP Servers (HTTP) → Workers
+```
 
-### Next Immediate Steps
-1. Create project management infrastructure (.pm/)
-2. Create epic bead for claudy implementation
-3. Create week-1 task beads
-4. Begin claudy script implementation
-5. Document testing approach
+**Modified Architecture** (Viable):
+```
+Host: MCP Servers (stdio) + Parent Container → Workers
+```
 
-## Known Constraints
-- Must maintain simplicity (frictionless developer experience)
-- No permission dialogs
-- Session-based auth (not API keys as primary)
-- Fast startup (<5s including container launch)
-- Zero configuration to start
+### Why This Works
 
-## Success Criteria
-- User can: `cd ~/project && claudy` and start working
-- Auto-detects project type (Java/Python/Node/base)
-- Handles re-authentication seamlessly
-- Multi-project session isolation
-- Works on macOS, Linux (Ubuntu/Debian/Fedora), WSL2
+1. **MCP servers stay on host**: Existing npx configuration works
+2. **Parent/workers containerized**: Network namespace sharing validated
+3. **Worker image 469MB**: 79% reduction from 2.85GB achieved
+4. **Simpler architecture**: Less complexity, lower risk
+
+## Ready for Phase 1
+
+### Available Work
+
+```bash
+bd ready  # Shows Phase 1 tasks
+```
+
+| Bead | Task | Status |
+|------|------|--------|
+| hal-9000-f6t.1 | Phase 1: Parent Container Foundation | Ready |
+| hal-9000-f6t.1.1 | P1-1: Create Dockerfile.parent | Ready |
+
+### Phase 1 Scope (Modified)
+
+**Removed** (based on P0-1 findings):
+- P1-3: MCP Server HTTP Configuration (not needed)
+- P1-5: MCP server startup in container (not needed)
+
+**Retained**:
+- P1-1: Create Dockerfile.parent
+- P1-2: Worker spawn scripts
+- P1-4: Parent coordinator (simplified)
+
+### Worker Image Artifacts
+
+Created during P0-4:
+- `plugins/hal-9000/docker/Dockerfile.worker-minimal` (with git, 588MB)
+- `plugins/hal-9000/docker/Dockerfile.worker-ultramin` (no git, 469MB)
+
+## Key Commands
+
+```bash
+# Check Phase 1 status
+bd show hal-9000-f6t.1 --children
+
+# Start Phase 1
+bd update hal-9000-f6t.1 --status in_progress
+bd update hal-9000-f6t.1.1 --status in_progress
+
+# View Go/No-Go decision
+cat .pm/spikes/p0-go-no-go-decision.md
+
+# View spike results
+ls -la .pm/spikes/
+```
+
+## Files Created This Session
+
+| File | Purpose |
+|------|---------|
+| `.pm/plans/dind-orchestration-plan.md` | Full architecture plan |
+| `.pm/plans/dind-orchestration-plan-AUDIT.md` | Plan audit report |
+| `.pm/spikes/p0-1-mcp-transport-research.md` | MCP HTTP research (NO-GO) |
+| `.pm/spikes/p0-3-network-namespace-poc.md` | Network namespace PoC (GO) |
+| `.pm/spikes/p0-4-worker-image-prototype.md` | Worker image sizing (GO) |
+| `.pm/spikes/p0-go-no-go-decision.md` | Consolidated decision |
+| `.beads/beads.db` | 54 beads with dependencies |
+
+## Critical Findings
+
+### From Plan Auditors
+- MCP transport assumption incorrect (stdio only, need host-based servers)
+- Worker image 300MB unrealistic (469MB achievable without git)
+- Existing hal9000.sh infrastructure should be leveraged
+
+### From Substantive Critic
+- 12 weeks unrealistic (now estimated 10-11 weeks with simplified scope)
+- Consider Docker Compose as simpler alternative (still valid fallback)
+
+## Timeline Update
+
+| Original | After Audit | After P0 | Reason |
+|----------|-------------|----------|--------|
+| 12 weeks | 13 weeks | 10-11 weeks | Removed MCP containerization |
 
 ---
-**Next Review**: After Phase 1 week 1 completion
+**Last Updated**: 2026-01-25
+**Next Action**: Begin Phase 1 implementation with modified scope

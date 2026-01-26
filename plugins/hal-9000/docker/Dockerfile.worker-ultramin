@@ -1,0 +1,42 @@
+# Dockerfile.worker-ultramin
+# Phase 0 Validation Spike P0-4: Ultra-minimal worker image
+# Objective: Attempt to get under 500MB target
+#
+# Build: docker build -f Dockerfile.worker-ultramin -t hal9000-worker-ultramin .
+
+FROM debian:bookworm-slim
+
+LABEL maintainer="hal-9000"
+LABEL description="Ultra-minimal worker image - stripped down (validation spike)"
+LABEL version="0.1.0-spike"
+
+# Minimal dependencies - no git (saves ~55MB from git + perl dependency)
+# Workers will mount git repos from host or use stateless operations
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    locales \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/share/doc/* /usr/share/man/* \
+    && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
+    && locale-gen
+
+# Set locale
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+# Add Claude CLI location to PATH
+ENV PATH="/root/.local/bin:${PATH}"
+
+# Install Claude CLI (native binary)
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
+# Create minimal workspace
+RUN mkdir -p /workspace
+
+WORKDIR /workspace
+
+# Verify Claude CLI installation
+RUN claude --version
+
+CMD ["bash"]
