@@ -1,0 +1,92 @@
+# HAL-9000 Parent Container (DinD Orchestrator)
+# Lightweight container for spawning and managing Claude worker containers
+#
+# Architecture (based on P0 validation spikes):
+# - MCP servers run on HOST with stdio transport (not in containers)
+# - Parent container owns network namespace, spawns workers
+# - Workers use --network=container:parent to access localhost services
+#
+# Build: docker build -f Dockerfile.parent -t ghcr.io/hellblazer/hal-9000:parent .
+# Run: docker run -d --name hal9000-parent \
+#        -v /var/run/docker.sock:/var/run/docker.sock \
+#        -v ~/.hal9000:/root/.hal9000 \
+#        ghcr.io/hellblazer/hal-9000:parent
+
+FROM debian:bookworm-slim
+
+LABEL maintainer="hal-9000"
+LABEL description="HAL-9000 parent container - DinD orchestrator for Claude workers"
+LABEL version="1.0.0"
+LABEL architecture="dind-parent"
+LABEL build_date="2026-01-25"
+
+# Install minimal dependencies for orchestration
+# - tmux: Session management for workers
+# - curl: Health checks and API calls
+# - jq: JSON processing for configuration
+# - procps: Process monitoring (ps, top)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tmux \
+    curl \
+    jq \
+    procps \
+    ca-certificates \
+    locales \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/* \
+    && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
+    && locale-gen
+
+# Install Docker CLI (latest version for API compatibility)
+# Using official Docker repository for up-to-date client
+RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian bookworm stable" > /etc/apt/sources.list.d/docker.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends docker-ce-cli \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set locale for proper Unicode support
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV TERM=xterm-256color
+
+# Create directory structure
+# /root/.hal9000 - Persistent state directory (mounted volume)
+#   /sessions    - Worker session metadata
+#   /logs        - Container logs
+#   /config      - Configuration files
+RUN mkdir -p \
+    /root/.hal9000/sessions \
+    /root/.hal9000/logs \
+    /root/.hal9000/config \
+    /workspace \
+    /scripts
+
+# Copy orchestration scripts
+COPY parent-entrypoint.sh /scripts/parent-entrypoint.sh
+COPY spawn-worker.sh /scripts/spawn-worker.sh
+COPY coordinator.sh /scripts/coordinator.sh
+COPY init-volumes.sh /scripts/init-volumes.sh
+COPY setup-dashboard.sh /scripts/setup-dashboard.sh
+COPY tmux-dashboard.conf /scripts/tmux-dashboard.conf
+
+# Make scripts executable
+RUN chmod +x /scripts/*.sh
+
+# Environment variables
+ENV HAL9000_HOME=/root/.hal9000
+ENV HAL9000_SESSIONS_DIR=/root/.hal9000/sessions
+ENV HAL9000_LOGS_DIR=/root/.hal9000/logs
+ENV WORKER_IMAGE=ghcr.io/hellblazer/hal-9000:worker
+
+WORKDIR /workspace
+
+# Health check - verify Docker socket accessible
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD docker ps >/dev/null 2>&1 || exit 1
+
+# Default entrypoint
+ENTRYPOINT ["/scripts/parent-entrypoint.sh"]
+
+# Default command (can be overridden)
+CMD ["coordinator"]
