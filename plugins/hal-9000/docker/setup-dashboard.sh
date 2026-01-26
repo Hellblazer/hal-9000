@@ -15,6 +15,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Colors
 readonly GREEN='\033[0;32m'
 readonly CYAN='\033[0;36m'
@@ -36,43 +38,60 @@ setup_dashboard() {
     tmux -L "$TMUX_SOCKET" new-session -d -s "$SESSION_NAME" -n "dashboard"
 
     # Load custom config if available
-    if [[ -f /scripts/tmux-dashboard.conf ]]; then
-        tmux -L "$TMUX_SOCKET" source-file /scripts/tmux-dashboard.conf
+    local config_file=""
+    if [[ -f "${SCRIPT_DIR:-}/tmux-dashboard.conf" ]]; then
+        config_file="${SCRIPT_DIR}/tmux-dashboard.conf"
+    elif [[ -f /scripts/tmux-dashboard.conf ]]; then
+        config_file="/scripts/tmux-dashboard.conf"
+    elif [[ -f ./tmux-dashboard.conf ]]; then
+        config_file="./tmux-dashboard.conf"
     fi
 
-    # Split into panes
+    if [[ -n "$config_file" ]]; then
+        tmux -L "$TMUX_SOCKET" source-file "$config_file"
+    fi
+
+    # Split into panes with explicit window targeting
+    local win="$SESSION_NAME:dashboard"
+
     # First, split horizontally (left/right)
-    tmux -L "$TMUX_SOCKET" split-window -h -t "$SESSION_NAME:dashboard"
+    tmux -L "$TMUX_SOCKET" split-window -h -t "$win"
+    sleep 0.1
 
     # Split right side vertically (top-right / bottom-right)
-    tmux -L "$TMUX_SOCKET" split-window -v -t "$SESSION_NAME:dashboard.1"
+    tmux -L "$TMUX_SOCKET" split-window -v -t "$win.1"
+    sleep 0.1
 
-    # Split bottom horizontally for command prompt
-    tmux -L "$TMUX_SOCKET" split-window -v -t "$SESSION_NAME:dashboard.0"
+    # Split left side vertically for command prompt
+    tmux -L "$TMUX_SOCKET" split-window -v -t "$win.0"
+    sleep 0.1
 
-    # Set up each pane
+    # After all splits, pane layout is:
+    # .0 = top-left, .1 = bottom-left, .2 = top-right, .3 = bottom-right
+
+    # Set up each pane (with error handling for non-interactive environments)
     # Pane 0 (top-left): Status overview
-    tmux -L "$TMUX_SOCKET" send-keys -t "$SESSION_NAME:dashboard.0" \
-        'watch -n 5 "/scripts/coordinator.sh status 2>/dev/null || echo No coordinator"' Enter
+    tmux -L "$TMUX_SOCKET" send-keys -t "$win.0" \
+        'watch -n 5 "/scripts/coordinator.sh status 2>/dev/null || echo No coordinator"' Enter 2>/dev/null || true
 
     # Pane 1 (bottom-left): Command prompt
-    tmux -L "$TMUX_SOCKET" send-keys -t "$SESSION_NAME:dashboard.1" \
-        'echo "HAL-9000 Command Prompt"; echo "Type commands or use prefix+w to spawn worker"' Enter
+    tmux -L "$TMUX_SOCKET" send-keys -t "$win.1" \
+        'echo "HAL-9000 Command Prompt"; echo "Type commands or use prefix+w to spawn worker"' Enter 2>/dev/null || true
 
     # Pane 2 (top-right): Worker list
-    tmux -L "$TMUX_SOCKET" send-keys -t "$SESSION_NAME:dashboard.2" \
-        'watch -n 2 "docker ps --filter name=hal9000-worker --format \"table {{.Names}}\t{{.Status}}\t{{.RunningFor}}\" 2>/dev/null || echo No workers"' Enter
+    tmux -L "$TMUX_SOCKET" send-keys -t "$win.2" \
+        'watch -n 2 "docker ps --filter name=hal9000-worker --format \"table {{.Names}}\t{{.Status}}\t{{.RunningFor}}\" 2>/dev/null || echo No workers"' Enter 2>/dev/null || true
 
     # Pane 3 (bottom-right): Docker stats
-    tmux -L "$TMUX_SOCKET" send-keys -t "$SESSION_NAME:dashboard.3" \
-        'docker stats --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" $(docker ps --filter name=hal9000 -q 2>/dev/null) 2>/dev/null || watch -n 5 "echo Waiting for containers..."' Enter
+    tmux -L "$TMUX_SOCKET" send-keys -t "$win.3" \
+        'docker stats --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" $(docker ps --filter name=hal9000 -q 2>/dev/null) 2>/dev/null || watch -n 5 "echo Waiting for containers..."' Enter 2>/dev/null || true
 
-    # Resize panes for better layout
-    tmux -L "$TMUX_SOCKET" resize-pane -t "$SESSION_NAME:dashboard.0" -y 15
-    tmux -L "$TMUX_SOCKET" resize-pane -t "$SESSION_NAME:dashboard.1" -y 5
+    # Resize panes for better layout (ignore errors if panes don't exist)
+    tmux -L "$TMUX_SOCKET" resize-pane -t "$win.0" -y 15 2>/dev/null || true
+    tmux -L "$TMUX_SOCKET" resize-pane -t "$win.1" -y 5 2>/dev/null || true
 
     # Select command prompt pane
-    tmux -L "$TMUX_SOCKET" select-pane -t "$SESSION_NAME:dashboard.1"
+    tmux -L "$TMUX_SOCKET" select-pane -t "$win.1" 2>/dev/null || true
 
     log_success "Dashboard ready!"
     log_info "Attach with: tmux -L $TMUX_SOCKET attach -t $SESSION_NAME"
