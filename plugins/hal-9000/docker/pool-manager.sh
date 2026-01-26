@@ -49,6 +49,11 @@ MAX_WARM_WORKERS="${MAX_WARM_WORKERS:-5}"
 IDLE_TIMEOUT="${IDLE_TIMEOUT:-300}"  # 5 minutes
 CHECK_INTERVAL="${CHECK_INTERVAL:-30}"  # 30 seconds
 
+# Resource limits for workers
+WORKER_MEMORY="${WORKER_MEMORY:-4g}"
+WORKER_CPUS="${WORKER_CPUS:-2}"
+WORKER_PIDS_LIMIT="${WORKER_PIDS_LIMIT:-100}"
+
 # ============================================================================
 # ARGUMENT PARSING
 # ============================================================================
@@ -79,6 +84,9 @@ Environment Variables:
   MAX_WARM_WORKERS  Same as --max-warm
   IDLE_TIMEOUT      Same as --idle-timeout
   WORKER_IMAGE      Docker image for workers
+  WORKER_MEMORY     Memory limit per worker (default: 4g)
+  WORKER_CPUS       CPU limit per worker (default: 2)
+  WORKER_PIDS_LIMIT Process limit per worker (default: 100)
 
 Examples:
   pool-manager.sh start --min-warm 3
@@ -185,11 +193,14 @@ create_warm_worker() {
 
     log_info "Creating warm worker: $worker_name"
 
-    # Create worker container in detached mode
+    # Create worker container in detached mode with resource limits
     local container_id
     container_id=$(docker run -d \
         --name "$worker_name" \
         --network "container:${PARENT_CONTAINER}" \
+        --memory "$WORKER_MEMORY" \
+        --cpus "$WORKER_CPUS" \
+        --pids-limit "$WORKER_PIDS_LIMIT" \
         -v hal9000-chromadb:/data/chromadb \
         -v hal9000-memorybank:/data/membank \
         -v hal9000-plugins:/data/plugins \
@@ -207,7 +218,12 @@ create_warm_worker() {
     "container_id": "${container_id:0:12}",
     "created_at": "$(date -Iseconds)",
     "status": "warm",
-    "last_used": null
+    "last_used": null,
+    "resource_limits": {
+        "memory": "$WORKER_MEMORY",
+        "cpus": "$WORKER_CPUS",
+        "pids_limit": "$WORKER_PIDS_LIMIT"
+    }
 }
 EOF
 
@@ -507,6 +523,11 @@ show_status() {
     log_info "    Min warm: $MIN_WARM_WORKERS"
     log_info "    Max warm: $MAX_WARM_WORKERS"
     log_info "    Idle timeout: ${IDLE_TIMEOUT}s"
+    echo ""
+    log_info "  Resource Limits:"
+    log_info "    Memory: $WORKER_MEMORY"
+    log_info "    CPUs: $WORKER_CPUS"
+    log_info "    PIDs: $WORKER_PIDS_LIMIT"
     echo ""
 
     # List warm workers

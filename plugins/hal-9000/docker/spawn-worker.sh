@@ -41,6 +41,11 @@ WORKER_IMAGE="${WORKER_IMAGE:-ghcr.io/hellblazer/hal-9000:worker}"
 PROJECT_DIR=""
 PARENT_CONTAINER="${HAL9000_PARENT:-hal9000-parent}"
 
+# Resource limits (can be overridden via environment or arguments)
+WORKER_MEMORY="${WORKER_MEMORY:-4g}"
+WORKER_CPUS="${WORKER_CPUS:-2}"
+WORKER_PIDS_LIMIT="${WORKER_PIDS_LIMIT:-100}"
+
 # ============================================================================
 # ARGUMENT PARSING
 # ============================================================================
@@ -57,6 +62,10 @@ Options:
   -i, --image IMAGE     Worker image (default: $WORKER_IMAGE)
   --rm                  Remove container on exit (default)
   --no-rm               Keep container after exit
+  --memory SIZE         Memory limit (default: $WORKER_MEMORY)
+  --cpus N              CPU limit (default: $WORKER_CPUS)
+  --pids-limit N        Process limit (default: $WORKER_PIDS_LIMIT)
+  --no-limits           Disable resource limits
   -h, --help            Show this help
 
 Examples:
@@ -64,14 +73,22 @@ Examples:
   spawn-worker.sh /path/to/project          # Worker with project mounted
   spawn-worker.sh -d -n my-worker           # Background worker with custom name
   spawn-worker.sh --no-rm -n persistent     # Keep container after exit
+  spawn-worker.sh --memory 8g --cpus 4      # Worker with custom resource limits
 
 Network:
   Worker shares parent's network namespace via --network=container:$PARENT_CONTAINER
   This allows workers to access localhost:PORT services (e.g., MCP servers on host)
+
+Resource Limits:
+  Default limits prevent runaway processes from affecting the host system.
+  Use environment variables to set defaults: WORKER_MEMORY, WORKER_CPUS, WORKER_PIDS_LIMIT
 EOF
 }
 
 parse_args() {
+    # Track whether to apply limits (can be disabled with --no-limits)
+    APPLY_LIMITS=true
+
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -n|--name)
@@ -92,6 +109,22 @@ parse_args() {
                 ;;
             --no-rm)
                 REMOVE_ON_EXIT=false
+                shift
+                ;;
+            --memory)
+                WORKER_MEMORY="$2"
+                shift 2
+                ;;
+            --cpus)
+                WORKER_CPUS="$2"
+                shift 2
+                ;;
+            --pids-limit)
+                WORKER_PIDS_LIMIT="$2"
+                shift 2
+                ;;
+            --no-limits)
+                APPLY_LIMITS=false
                 shift
                 ;;
             -h|--help)
@@ -223,6 +256,16 @@ spawn_worker() {
         docker_args+=(-e CHROMADB_API_KEY)
     fi
 
+    # Resource limits (unless disabled)
+    if [[ "$APPLY_LIMITS" == "true" ]]; then
+        docker_args+=(--memory "$WORKER_MEMORY")
+        docker_args+=(--cpus "$WORKER_CPUS")
+        docker_args+=(--pids-limit "$WORKER_PIDS_LIMIT")
+        log_info "Resource limits: memory=$WORKER_MEMORY, cpus=$WORKER_CPUS, pids=$WORKER_PIDS_LIMIT"
+    else
+        log_warn "Resource limits disabled"
+    fi
+
     # Working directory
     docker_args+=(-w /workspace)
 
@@ -263,7 +306,13 @@ record_session_metadata() {
     "project_dir": "$PROJECT_DIR",
     "created_at": "$(date -Iseconds)",
     "detached": $DETACH,
-    "remove_on_exit": $REMOVE_ON_EXIT
+    "remove_on_exit": $REMOVE_ON_EXIT,
+    "resource_limits": {
+        "enabled": $APPLY_LIMITS,
+        "memory": "$WORKER_MEMORY",
+        "cpus": "$WORKER_CPUS",
+        "pids_limit": "$WORKER_PIDS_LIMIT"
+    }
 }
 EOF
 }

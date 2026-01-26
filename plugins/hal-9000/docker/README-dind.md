@@ -192,6 +192,33 @@ Options:
   -i, --image IMAGE     Worker image
   --rm                  Remove on exit (default)
   --no-rm               Keep container after exit
+  --memory SIZE         Memory limit (default: 4g)
+  --cpus N              CPU limit (default: 2)
+  --pids-limit N        Process limit (default: 100)
+  --no-limits           Disable resource limits
+```
+
+#### Resource Limits
+
+Workers have default resource limits to prevent runaway processes:
+
+| Resource | Default | Description |
+|----------|---------|-------------|
+| Memory | 4g | Maximum memory usage |
+| CPUs | 2 | CPU cores allocation |
+| PIDs | 100 | Maximum processes |
+
+Override via environment variables or arguments:
+
+```bash
+# Via environment
+WORKER_MEMORY=8g WORKER_CPUS=4 spawn-worker.sh /path/to/project
+
+# Via arguments
+spawn-worker.sh --memory 8g --cpus 4 --pids-limit 200 /path/to/project
+
+# Disable all limits
+spawn-worker.sh --no-limits /path/to/project
 ```
 
 ### coordinator.sh

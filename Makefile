@@ -55,6 +55,11 @@ help:
 	@echo "  $(YELLOW)make test-claudy-errors$(NC)       Error handling tests"
 	@echo "  $(YELLOW)make test-claudy-cleanup$(NC)      Session cleanup tests"
 	@echo ""
+	@echo "$(GREEN)DinD Testing:$(NC)"
+	@echo "  $(YELLOW)make test-dind$(NC)                 Run all DinD tests"
+	@echo "  $(YELLOW)make test-pool-manager$(NC)         Pool manager tests"
+	@echo "  $(YELLOW)make test-resource-limits$(NC)      Resource limits tests"
+	@echo ""
 	@echo "$(GREEN)Build Targets:$(NC)"
 	@echo "  $(YELLOW)make build-base$(NC)        Build base image"
 	@echo "  $(YELLOW)make build-python$(NC)      Build Python profile"
@@ -219,6 +224,23 @@ test-claudy-cleanup:
 	@echo "$(GREEN)✓ Cleanup test structure in place$(NC)"
 
 ##############################################################################
+# DIND TESTS
+##############################################################################
+
+test-dind: test-pool-manager test-resource-limits
+	@echo "$(GREEN)✓ All DinD tests passed$(NC)"
+
+test-pool-manager:
+	@echo "$(YELLOW)Running pool manager tests...$(NC)"
+	$(QUIET)./scripts/build/test-pool-manager.sh all
+	@echo "$(GREEN)✓ Pool manager tests passed$(NC)"
+
+test-resource-limits:
+	@echo "$(YELLOW)Running resource limits tests...$(NC)"
+	$(QUIET)./scripts/build/test-resource-limits.sh all
+	@echo "$(GREEN)✓ Resource limits tests passed$(NC)"
+
+##############################################################################
 # BUILD TARGETS
 ##############################################################################
 
@@ -359,5 +381,6 @@ version:
 .PHONY: validate validate-bash validate-json validate-markdown validate-shellcheck
 .PHONY: test test-claudy test-claudy-syntax test-claudy-unit test-claudy-config
 .PHONY: test-claudy-errors test-claudy-integration test-claudy-docker test-claudy-cleanup
+.PHONY: test-dind test-pool-manager test-resource-limits
 .PHONY: build build-base build-python build-node build-java build-test-image
 .PHONY: package ci lint shellcheck-detailed install-dev-tools watch version
