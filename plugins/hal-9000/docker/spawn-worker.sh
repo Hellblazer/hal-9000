@@ -194,9 +194,33 @@ spawn_worker() {
         docker_args+=(-v "${claude_home}:/root/.claude")
     fi
 
+    # Mount shared data volumes (if they exist)
+    if docker volume inspect "hal9000-chromadb" >/dev/null 2>&1; then
+        docker_args+=(-v "hal9000-chromadb:/data/chromadb")
+        log_info "Mounting shared ChromaDB volume"
+    fi
+
+    if docker volume inspect "hal9000-memorybank" >/dev/null 2>&1; then
+        docker_args+=(-v "hal9000-memorybank:/data/membank")
+        log_info "Mounting shared Memory Bank volume"
+    fi
+
+    if docker volume inspect "hal9000-plugins" >/dev/null 2>&1; then
+        docker_args+=(-v "hal9000-plugins:/data/plugins")
+        log_info "Mounting shared Plugins volume"
+    fi
+
     # Pass through API key if set
     if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
         docker_args+=(-e ANTHROPIC_API_KEY)
+    fi
+
+    # Pass through ChromaDB cloud credentials if set
+    if [[ -n "${CHROMADB_TENANT:-}" ]]; then
+        docker_args+=(-e CHROMADB_TENANT)
+    fi
+    if [[ -n "${CHROMADB_API_KEY:-}" ]]; then
+        docker_args+=(-e CHROMADB_API_KEY)
     fi
 
     # Working directory
