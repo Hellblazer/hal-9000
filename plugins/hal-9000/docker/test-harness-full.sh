@@ -70,26 +70,23 @@ test_hal9000_install() {
 
     cd /hal-9000-src
 
-    # Create input sequence for all installer prompts (host-only mode)
+    # Create input sequence for all installer prompts
     # Using printf to ensure precise control over newlines
     #
     # Prompt sequence for fresh install:
-    # 1. Mode selection: 2 (host only)
+    # 1. "Proceed with optional system tool installation?" -> y
     # 2. ChromaDB client type: 3 (persistent - local file storage)
     # 3. ChromaDB data directory: (empty for default ~/.chromadb)
-    #    NOTE: ChromaDB CREATES new config on fresh install (no merge prompt!)
     # 4. Memory bank directory: (empty for default ~/memory-bank)
-    # 5. Memory bank auto-merge: y
-    # 6. Sequential thinking auto-merge: y
-    # 7. Install tmux config: y
-    # 8. Install CLAUDE.md: y
-    # Plus extra y's for any unexpected prompts
+    # 5. Sequential thinking - no prompts needed
+    # 6. beads - installed via brew or skipped
+    # 7. claude-code-tools - installed via uv
+    # Plus extra y's for any merge/config prompts
     #
     # Note: On fresh install, ChromaDB creates config file without merge prompt.
     # Subsequent MCP servers see existing config and ask to merge.
-    # PATH update prompt is skipped because Dockerfile sets PATH.
 
-    printf '%s\n' "2" "3" "" "" "y" "y" "y" "y" "y" "y" "y" > /tmp/install-inputs.txt
+    printf '%s\n' "y" "3" "" "y" "" "y" "y" "y" "y" "y" "y" "y" > /tmp/install-inputs.txt
 
     # Run installer with proper input sequence
     if timeout 600 ./install.sh < /tmp/install-inputs.txt 2>&1 | tee /tmp/install.log; then
