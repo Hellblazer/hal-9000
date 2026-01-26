@@ -224,3 +224,9 @@ Worker sessions are recorded in `~/.hal9000/sessions/`:
 Pool manager state stored in `~/.hal9000/pool/`:
 - `pool-manager.pid` - Daemon process ID
 - `workers/*.json` - Individual worker state files
+
+---
+
+**Navigation**: [Overview](README.md) | [Installation](INSTALLATION.md) | [Configuration](CONFIGURATION.md) | [Architecture](ARCHITECTURE.md) | [Migration](MIGRATION.md) | [Troubleshooting](TROUBLESHOOTING.md) | [Development](DEVELOPMENT.md)
+
+**Quick Links**: [Environment Variables](#environment-variables) | [CLI Options](#claudy-cli-options) | [Volume Configuration](#volume-configuration)

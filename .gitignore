@@ -70,6 +70,9 @@ plugins/*/tests/pytest.ini
 plugins/*/tests/unit/
 plugins/*/tests/integration/
 
+# Build artifacts
+dist/
+
 # Python cache directories
 __pycache__/
 *.pyc

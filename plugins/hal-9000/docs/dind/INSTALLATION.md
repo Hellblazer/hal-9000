@@ -165,3 +165,9 @@ docker rmi ghcr.io/hellblazer/hal-9000:worker
 - [Configuration Guide](CONFIGURATION.md) - Customize settings
 - [Migration Guide](MIGRATION.md) - Upgrade from v0.5.x
 - [Architecture](ARCHITECTURE.md) - Understand the system
+
+---
+
+**Navigation**: [Overview](README.md) | [Installation](INSTALLATION.md) | [Configuration](CONFIGURATION.md) | [Architecture](ARCHITECTURE.md) | [Migration](MIGRATION.md) | [Troubleshooting](TROUBLESHOOTING.md) | [Development](DEVELOPMENT.md)
+
+**Quick Links**: [Quick Start](#quick-start) | [Prerequisites](#prerequisites) | [Uninstallation](#uninstallation)

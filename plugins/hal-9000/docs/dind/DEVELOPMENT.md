@@ -330,3 +330,9 @@ docker push ghcr.io/hellblazer/hal-9000:worker-v0.6.1
 4. Submit pull request
 
 See the main [CONTRIBUTING.md](../../CONTRIBUTING.md) for detailed guidelines.
+
+---
+
+**Navigation**: [Overview](README.md) | [Installation](INSTALLATION.md) | [Configuration](CONFIGURATION.md) | [Architecture](ARCHITECTURE.md) | [Migration](MIGRATION.md) | [Troubleshooting](TROUBLESHOOTING.md) | [Development](DEVELOPMENT.md)
+
+**Quick Links**: [Development Setup](#development-setup) | [Running Tests](#running-tests) | [Development Workflow](#development-workflow) | [Contributing](#contributing)

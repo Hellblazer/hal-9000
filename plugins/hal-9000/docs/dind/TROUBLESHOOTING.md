@@ -448,3 +448,9 @@ When reporting issues, include:
 5. Steps to reproduce
 
 File issues at: https://github.com/Hellblazer/hal-9000/issues
+
+---
+
+**Navigation**: [Overview](README.md) | [Installation](INSTALLATION.md) | [Configuration](CONFIGURATION.md) | [Architecture](ARCHITECTURE.md) | [Migration](MIGRATION.md) | [Troubleshooting](TROUBLESHOOTING.md) | [Development](DEVELOPMENT.md)
+
+**Quick Links**: [Quick Diagnostics](#quick-diagnostics) | [Common Errors](#common-errors) | [Network Issues](#network-issues) | [Recovery Procedures](#recovery-procedures)

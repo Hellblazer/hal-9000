@@ -259,3 +259,9 @@ User Request
 - Cold start takes 2-5 seconds
 - Warm claim takes <100ms
 - Better user experience
+
+---
+
+**Navigation**: [Overview](README.md) | [Installation](INSTALLATION.md) | [Configuration](CONFIGURATION.md) | [Architecture](ARCHITECTURE.md) | [Migration](MIGRATION.md) | [Troubleshooting](TROUBLESHOOTING.md) | [Development](DEVELOPMENT.md)
+
+**Quick Links**: [Component Overview](#component-overview) | [Parent Container](#parent-container) | [Worker Containers](#worker-containers) | [Performance](#performance-characteristics)

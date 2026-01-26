@@ -235,3 +235,9 @@ A: Depends on data size. Typically 1-5 minutes for normal workloads.
 
 ### Q: Can I migrate individual sessions?
 A: The migration is all-or-nothing for shared data (ChromaDB, Memory Bank).
+
+---
+
+**Navigation**: [Overview](README.md) | [Installation](INSTALLATION.md) | [Configuration](CONFIGURATION.md) | [Architecture](ARCHITECTURE.md) | [Migration](MIGRATION.md) | [Troubleshooting](TROUBLESHOOTING.md) | [Development](DEVELOPMENT.md)
+
+**Quick Links**: [Migration Methods](#migration-methods) | [Verification](#verification) | [FAQ](#migration-faq)
