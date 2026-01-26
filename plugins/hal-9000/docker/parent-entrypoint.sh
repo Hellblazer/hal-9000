@@ -6,8 +6,16 @@
 # 2. Initialize state directories
 # 3. Start tmux server for session management
 # 4. Launch coordinator or execute passed command
+#
+# Startup Optimization (P6-4):
+# - Parallel initialization: ChromaDB starts in background while other init runs
+# - Lazy image pull: Skip if image exists or SKIP_IMAGE_PULL=true
+# - Pre-warming: Pool manager runs in background after core services ready
 
 set -euo pipefail
+
+# Startup timing
+STARTUP_START=$(date +%s%N 2>/dev/null || date +%s)
 
 # Colors for output
 readonly RED='\033[0;31m'
@@ -72,17 +80,33 @@ init_tmux_server() {
 pull_worker_image() {
     local image="${WORKER_IMAGE:-ghcr.io/hellblazer/hal-9000:worker}"
 
+    # Skip if SKIP_IMAGE_PULL is set (optimization for local dev)
+    if [[ "${SKIP_IMAGE_PULL:-false}" == "true" ]]; then
+        log_info "Skipping worker image pull (SKIP_IMAGE_PULL=true)"
+        return 0
+    fi
+
     log_info "Checking worker image: $image"
 
-    if ! docker image inspect "$image" >/dev/null 2>&1; then
-        log_info "Pulling worker image..."
-        if docker pull "$image"; then
-            log_success "Worker image pulled"
-        else
-            log_warn "Could not pull worker image (will try local build)"
-        fi
-    else
+    if docker image inspect "$image" >/dev/null 2>&1; then
         log_success "Worker image available locally"
+        return 0
+    fi
+
+    # Image not available - pull in background if LAZY_IMAGE_PULL is set
+    if [[ "${LAZY_IMAGE_PULL:-false}" == "true" ]]; then
+        log_info "Pulling worker image in background..."
+        docker pull "$image" >> "${HAL9000_LOGS_DIR:-/root/.hal9000/logs}/image-pull.log" 2>&1 &
+        log_info "Image pull started in background (check logs for status)"
+        return 0
+    fi
+
+    # Synchronous pull
+    log_info "Pulling worker image..."
+    if docker pull "$image"; then
+        log_success "Worker image pulled"
+    else
+        log_warn "Could not pull worker image (will try local build)"
     fi
 }
 
@@ -90,40 +114,55 @@ pull_worker_image() {
 # CHROMADB SERVER
 # ============================================================================
 
-start_chromadb_server() {
-    log_info "Starting ChromaDB server..."
+# Global to track ChromaDB startup state
+CHROMADB_PID=""
+CHROMADB_PORT="${CHROMADB_PORT:-8000}"
+
+start_chromadb_server_async() {
+    log_info "Starting ChromaDB server (async)..."
 
     local host="${CHROMADB_HOST:-0.0.0.0}"
-    local port="${CHROMADB_PORT:-8000}"
     local data_dir="${CHROMADB_DATA_DIR:-/data/chromadb}"
 
     # Ensure data directory exists
     mkdir -p "$data_dir"
 
-    # Start ChromaDB server in background
+    # Start ChromaDB server in background (non-blocking)
     chroma run \
         --host "$host" \
-        --port "$port" \
+        --port "$CHROMADB_PORT" \
         --path "$data_dir" \
         >> "${HAL9000_LOGS_DIR:-/root/.hal9000/logs}/chromadb.log" 2>&1 &
 
-    local chromadb_pid=$!
-    echo "$chromadb_pid" > "${HAL9000_HOME}/chromadb.pid"
+    CHROMADB_PID=$!
+    echo "$CHROMADB_PID" > "${HAL9000_HOME}/chromadb.pid"
 
-    # Wait for server to be ready
-    local max_wait=30
+    log_info "ChromaDB starting in background (PID: $CHROMADB_PID)"
+}
+
+wait_for_chromadb() {
+    local max_wait="${1:-30}"
     local waited=0
+
+    log_info "Waiting for ChromaDB to be ready..."
+
     while [[ $waited -lt $max_wait ]]; do
-        if curl -s "http://localhost:${port}/api/v2/heartbeat" >/dev/null 2>&1; then
-            log_success "ChromaDB server started on port $port (PID: $chromadb_pid)"
+        if curl -s "http://localhost:${CHROMADB_PORT}/api/v2/heartbeat" >/dev/null 2>&1; then
+            log_success "ChromaDB ready on port $CHROMADB_PORT (waited: ${waited}s)"
             return 0
         fi
         sleep 1
         waited=$((waited + 1))
     done
 
-    log_error "ChromaDB server failed to start within ${max_wait}s"
+    log_error "ChromaDB failed to start within ${max_wait}s"
     return 1
+}
+
+start_chromadb_server() {
+    # Legacy synchronous start (for compatibility)
+    start_chromadb_server_async
+    wait_for_chromadb 30
 }
 
 stop_chromadb_server() {
@@ -237,19 +276,55 @@ start_pool_manager() {
 }
 
 # ============================================================================
+# STARTUP TIMING
+# ============================================================================
+
+log_startup_time() {
+    local phase="$1"
+    local now
+    now=$(date +%s%N 2>/dev/null || date +%s)
+
+    # Calculate elapsed time
+    local elapsed_ns=$((now - STARTUP_START))
+    local elapsed_ms=$((elapsed_ns / 1000000))
+
+    log_info "Startup timing: $phase completed in ${elapsed_ms}ms"
+}
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
 main() {
     log_info "HAL-9000 Parent Container starting..."
 
-    # Run initialization
+    # Phase 1: Critical initialization (must be synchronous)
     init_directories
     verify_docker_socket
+    log_startup_time "Phase 1 (critical init)"
+
+    # Phase 2: Parallel service startup
+    # Start ChromaDB in background immediately (async)
+    start_chromadb_server_async
+
+    # While ChromaDB is starting, do other initialization in parallel
     init_tmux_server
-    start_chromadb_server
     pull_worker_image
+    log_startup_time "Phase 2 (parallel init)"
+
+    # Phase 3: Wait for async services
+    wait_for_chromadb 30
+    log_startup_time "Phase 3 (service ready)"
+
+    # Phase 4: Background services (non-blocking)
     start_pool_manager
+    log_startup_time "Phase 4 (complete)"
+
+    # Log total startup time
+    local now
+    now=$(date +%s%N 2>/dev/null || date +%s)
+    local total_ms=$(( (now - STARTUP_START) / 1000000 ))
+    log_success "Parent container ready in ${total_ms}ms"
 
     # Handle command
     case "${1:-coordinator}" in

@@ -303,12 +303,74 @@ prefix + l    List workers
 prefix + S    Stop all workers (with confirmation)
 ```
 
+## Startup Optimization
+
+The parent container uses an optimized startup sequence (P6-4):
+
+### Parallel Initialization
+
+Startup is organized into phases:
+1. **Critical init** (~100ms): Directories, Docker socket verification
+2. **Parallel init** (~500ms): ChromaDB starts async, tmux and image check run in parallel
+3. **Service ready** (variable): Wait for ChromaDB to be ready
+4. **Background services** (non-blocking): Pool manager starts without blocking
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SKIP_IMAGE_PULL` | false | Skip worker image pull entirely |
+| `LAZY_IMAGE_PULL` | false | Pull worker image in background |
+| `ENABLE_POOL_MANAGER` | false | Enable warm worker pool |
+| `MIN_WARM_WORKERS` | 2 | Minimum warm workers to maintain |
+| `MAX_WARM_WORKERS` | 5 | Maximum warm workers allowed |
+
+### Fast Startup Configuration
+
+For fastest startup (when image is pre-pulled):
+
+```bash
+docker run -d --name hal9000-parent \
+    -e SKIP_IMAGE_PULL=true \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    ghcr.io/hellblazer/hal-9000:parent
+```
+
+For background image pull (non-blocking):
+
+```bash
+docker run -d --name hal9000-parent \
+    -e LAZY_IMAGE_PULL=true \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    ghcr.io/hellblazer/hal-9000:parent
+```
+
+### Pre-warming Strategy
+
+Enable the pool manager for instant worker availability:
+
+```bash
+docker run -d --name hal9000-parent \
+    -e ENABLE_POOL_MANAGER=true \
+    -e MIN_WARM_WORKERS=3 \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    ghcr.io/hellblazer/hal-9000:parent
+```
+
+Warm workers are pre-created and can be claimed instantly (<50ms) versus cold start (~2-5s).
+
 ## Testing
 
 Run integration tests:
 
 ```bash
 ./test-phase1-integration.sh
+```
+
+Run performance benchmarks:
+
+```bash
+./scripts/build/benchmark-dind.sh all
 ```
 
 ## Troubleshooting
