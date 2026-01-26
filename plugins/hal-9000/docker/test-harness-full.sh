@@ -70,37 +70,42 @@ test_hal9000_install() {
 
     cd /hal-9000-src
 
-    # Create input sequence for all installer prompts
-    # Using printf to ensure precise control over newlines
-    #
-    # Prompt sequence for fresh install:
-    # 1. "Proceed with optional system tool installation?" -> y
-    # 2. ChromaDB client type: 3 (persistent - local file storage)
-    # 3. ChromaDB data directory: "" (empty for default ~/.chromadb)
-    #    Note: On fresh install, ChromaDB CREATES config (no merge prompt)
-    # 4. Memory bank directory: "" (empty for default ~/memory-bank)
-    # 5. Memory bank merge: y (since config now exists from chromadb)
-    # 6. Sequential thinking merge: y (since config exists)
-    # Plus extra y's for any unexpected prompts
-    #
-    # Note: beads requires brew (skipped in CI), claude-code-tools via uv
-
-    printf '%s\n' "y" "3" "" "" "y" "y" "y" "y" "y" "y" "y" "y" > /tmp/install-inputs.txt
-
-    # Run installer with proper input sequence
-    if timeout 600 ./install.sh < /tmp/install-inputs.txt 2>&1 | tee /tmp/install.log; then
-        pass "Installation completed"
-        verbose "See /tmp/install.log for details"
+    # v3.0.0+: claudy-focused architecture
+    # MCP servers are pre-installed in Docker images, not via install.sh
+    # Check for install-claudy.sh (new) or install-legacy.sh (old)
+    if [ -f "./install-claudy.sh" ]; then
+        skip "Claudy mode - MCP servers pre-installed in Docker images"
+        return 0
+    elif [ -f "./install-legacy.sh" ]; then
+        skip "Legacy installer available but not tested (use claudy instead)"
+        return 0
+    elif [ -f "./install.sh" ]; then
+        # Legacy path for older versions
+        printf '%s\n' "y" "3" "" "" "y" "y" "y" "y" "y" "y" "y" "y" > /tmp/install-inputs.txt
+        if timeout 600 ./install.sh < /tmp/install-inputs.txt 2>&1 | tee /tmp/install.log; then
+            pass "Installation completed"
+            verbose "See /tmp/install.log for details"
+        else
+            fail "Installation failed"
+            echo "--- Last 50 lines of install log ---"
+            tail -50 /tmp/install.log
+            return 1
+        fi
     else
-        fail "Installation failed"
-        echo "--- Last 50 lines of install log ---"
-        tail -50 /tmp/install.log
-        return 1
+        skip "No installer found (claudy mode - Docker has everything)"
+        return 0
     fi
 }
 
 test_mcp_servers_installed() {
     log "Testing MCP server installation..."
+
+    # v3.0.0+: claudy mode - MCP servers are in worker Docker image, not host
+    if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
+        skip "Claudy mode - MCP servers are pre-installed in Docker worker image"
+        return 0
+    fi
+
     local all_good=true
 
     # Check Python-based MCP servers
@@ -125,6 +130,13 @@ test_mcp_servers_installed() {
 
 test_chromadb_thoroughly() {
     log "Testing ChromaDB MCP server..."
+
+    # v3.0.0+: claudy mode - skip host-based tests
+    if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
+        skip "Claudy mode - ChromaDB runs in parent container"
+        return 0
+    fi
+
     local all_good=true
 
     # Test 1: Check chroma-mcp binary exists and is executable
@@ -213,6 +225,13 @@ test_chromadb_thoroughly() {
 
 test_memory_bank_thoroughly() {
     log "Testing Memory Bank MCP server thoroughly..."
+
+    # v3.0.0+: claudy mode - skip host-based tests
+    if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
+        skip "Claudy mode - Memory Bank runs in worker container"
+        return 0
+    fi
+
     local all_good=true
 
     # Test 1: Check memory bank directory was created
@@ -246,6 +265,13 @@ test_memory_bank_thoroughly() {
 
 test_sequential_thinking_thoroughly() {
     log "Testing Sequential Thinking MCP server thoroughly..."
+
+    # v3.0.0+: claudy mode - skip host-based tests
+    if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
+        skip "Claudy mode - Sequential Thinking runs in worker container"
+        return 0
+    fi
+
     local all_good=true
 
     # Check Claude config has sequential-thinking entry
@@ -271,6 +297,13 @@ test_sequential_thinking_thoroughly() {
 
 test_claude_config_complete() {
     log "Testing Claude configuration completeness..."
+
+    # v3.0.0+: claudy mode - config is in worker container
+    if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
+        skip "Claudy mode - Claude config is in worker container"
+        return 0
+    fi
+
     local all_good=true
 
     CLAUDE_CONFIG=$(get_claude_config)
@@ -427,6 +460,12 @@ test_hal9000_container() {
 test_chromadb_mcp_responds() {
     log "Testing ChromaDB MCP server responds to JSON-RPC..."
 
+    # v3.0.0+: claudy mode - skip host-based tests
+    if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
+        skip "Claudy mode - ChromaDB MCP runs in Docker"
+        return 0
+    fi
+
     local chroma_path="$HOME/.local/bin/chroma-mcp"
     if [ ! -x "$chroma_path" ]; then
         chroma_path=$(which chroma-mcp 2>/dev/null || echo "")
@@ -454,6 +493,12 @@ test_chromadb_mcp_responds() {
 test_sequential_thinking_mcp_responds() {
     log "Testing Sequential Thinking MCP server responds..."
 
+    # v3.0.0+: claudy mode - skip host-based tests
+    if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
+        skip "Claudy mode - Sequential Thinking runs in Docker"
+        return 0
+    fi
+
     # Send initialize request via npx
     # Note: MCP servers print a status line before JSON, so filter for JSON lines
     local response
@@ -472,6 +517,12 @@ test_sequential_thinking_mcp_responds() {
 
 test_memory_bank_mcp_responds() {
     log "Testing Memory Bank MCP server responds..."
+
+    # v3.0.0+: claudy mode - skip host-based tests
+    if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
+        skip "Claudy mode - Memory Bank runs in Docker"
+        return 0
+    fi
 
     export MEMORY_BANK_ROOT="$HOME/memory-bank"
     mkdir -p "$MEMORY_BANK_ROOT"
