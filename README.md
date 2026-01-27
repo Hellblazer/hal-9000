@@ -24,21 +24,22 @@ claudy
 
 ## Marketplace Support
 
-claudy provides first-class support for the Anthropic Claude Code marketplace. Install MCP servers, agents, and commands that persist across all sessions:
+claudy supports Claude Code plugins. Install agents, commands, and tools that persist across all sessions:
 
 ```bash
-# Add a marketplace
-claude plugin marketplace add https://github.com/example/my-marketplace
+# Add a marketplace (use owner/repo format)
+claudy plugin marketplace add anthropics/skills
 
-# Install plugins
-claude plugin install memory-bank
-claude plugin install chromadb
+# Install a plugin
+claudy plugin install document-skills
 
 # List installed plugins
-claude plugin list
+claudy plugin list
 ```
 
-All installations are stored in a persistent `CLAUDE_HOME` volume shared by all workers.
+All installations are stored in a persistent Docker volume shared by all workers.
+
+> **Note**: Foundation MCP servers (ChromaDB, Memory Bank, Sequential Thinking) are **pre-installed** in the container - no marketplace installation needed.
 
 ## What's Included
 
