@@ -14,9 +14,9 @@
 #
 # The worker container:
 # - Shares parent's network namespace (--network=container:PARENT)
-# - Can access localhost services (MCP servers on host)
+# - Mounts shared CLAUDE_HOME volume (marketplace installations persist)
 # - Mounts project directory at /workspace
-# - Has Claude CLI pre-installed
+# - Users install MCP servers via: claude marketplace add/install
 
 set -euo pipefail
 
@@ -54,7 +54,10 @@ show_help() {
     cat <<EOF
 Usage: spawn-worker.sh [options] [project_dir]
 
-Spawn a Claude worker container that shares parent's network namespace.
+Spawn a Claude worker container with marketplace support.
+
+Workers share a persistent CLAUDE_HOME volume, so marketplace installations
+(MCP servers, agents, commands) persist across all workers and sessions.
 
 Options:
   -n, --name NAME       Worker name (default: hal9000-worker-TIMESTAMP)
@@ -72,16 +75,17 @@ Examples:
   spawn-worker.sh                           # Interactive worker in /workspace
   spawn-worker.sh /path/to/project          # Worker with project mounted
   spawn-worker.sh -d -n my-worker           # Background worker with custom name
-  spawn-worker.sh --no-rm -n persistent     # Keep container after exit
-  spawn-worker.sh --memory 8g --cpus 4      # Worker with custom resource limits
+
+Marketplace:
+  Workers support Anthropic marketplace. Install plugins that persist:
+    claude marketplace add https://marketplace.url
+    claude marketplace install plugin-name
+
+  Installations are stored in shared CLAUDE_HOME volume.
 
 Network:
   Worker shares parent's network namespace via --network=container:$PARENT_CONTAINER
-  This allows workers to access localhost:PORT services (e.g., MCP servers on host)
-
-Resource Limits:
-  Default limits prevent runaway processes from affecting the host system.
-  Use environment variables to set defaults: WORKER_MEMORY, WORKER_CPUS, WORKER_PIDS_LIMIT
+  This allows access to parent's services (e.g., ChromaDB on localhost:8000)
 EOF
 }
 
@@ -206,26 +210,32 @@ spawn_worker() {
         log_info "Mounting project: $PROJECT_DIR -> /workspace"
     fi
 
-    # Mount Claude home for session persistence
+    # Mount shared CLAUDE_HOME volume for marketplace persistence
+    # All workers share the same CLAUDE_HOME so marketplace installations persist
     # Detect Docker-in-Docker mode (running inside a container)
     local in_container=false
     if [[ -f "/.dockerenv" ]] || grep -q docker /proc/1/cgroup 2>/dev/null; then
         in_container=true
     fi
 
+    # Use a single shared volume for all workers
+    local claude_volume="hal9000-claude-home"
+
     if [[ "$in_container" == "true" ]]; then
         # Inside container - use named volumes (host paths won't work)
-        local volume_name="hal9000-claude-${WORKER_NAME}"
-        docker volume create "$volume_name" >/dev/null 2>&1 || true
-        docker_args+=(-v "${volume_name}:/root/.claude")
-        log_info "DinD mode: using named volume $volume_name"
+        docker volume create "$claude_volume" >/dev/null 2>&1 || true
+        docker_args+=(-v "${claude_volume}:/root/.claude")
+        log_info "DinD mode: using shared volume $claude_volume"
     else
-        # Running on host - use host directory
+        # Running on host - use host directory (shared across all workers)
         local hal9000_home="${HAL9000_HOME:-$HOME/.hal9000}"
-        local claude_home="${hal9000_home}/workers/${WORKER_NAME}"
+        local claude_home="${hal9000_home}/claude"
         mkdir -p "$claude_home" 2>/dev/null || true
         docker_args+=(-v "${claude_home}:/root/.claude")
+        log_info "Host mode: using shared directory $claude_home"
     fi
+
+    log_info "Marketplace installations will persist in CLAUDE_HOME"
 
     # Mount shared data volumes (if they exist)
     if docker volume inspect "hal9000-chromadb" >/dev/null 2>&1; then

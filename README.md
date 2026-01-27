@@ -1,10 +1,10 @@
 # claudy - Containerized Claude
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
+[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Container Registry](https://img.shields.io/badge/ghcr.io-hellblazer%2Fhal--9000-blue?logo=docker)](https://github.com/Hellblazer/hal-9000/pkgs/container/hal-9000)
 
-Run Claude Code in isolated Docker containers with MCP servers pre-installed.
+Run Claude Code in isolated Docker containers with full marketplace support.
 
 ## Quick Start
 
@@ -22,15 +22,35 @@ claudy daemon start
 claudy
 ```
 
+## Marketplace Support
+
+claudy provides first-class support for the Anthropic Claude Code marketplace. Install MCP servers, agents, and commands that persist across all sessions:
+
+```bash
+# Add a marketplace
+claude marketplace add https://github.com/example/my-marketplace
+
+# Install plugins
+claude marketplace install memory-bank
+claude marketplace install chromadb
+
+# List installed plugins
+claude marketplace list
+```
+
+All installations are stored in a persistent `CLAUDE_HOME` volume shared by all workers.
+
 ## What's Included
 
-Every container comes with:
+Every container provides:
 
 - **Claude CLI** - Native binary, auto-updates
-- **ChromaDB** - Vector database (shared across containers)
-- **Memory Bank** - Persistent memory across sessions
-- **Sequential Thinking** - Step-by-step reasoning
-- **tmux-cli** - Terminal automation tools
+- **Node.js 20 LTS** - For npm-based MCP servers
+- **Python + uv** - For Python MCP servers
+- **ChromaDB Server** - Vector database (in parent container)
+- **Persistent CLAUDE_HOME** - Marketplace installations persist
+
+MCP servers, agents, and commands are installed via marketplace, not pre-baked.
 
 ## Usage
 
@@ -63,29 +83,36 @@ claudy pool scale 3        # Maintain 3 warm workers
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│                  Host Machine                    │
-│                                                  │
-│  ┌──────────────────────────────────────────┐   │
-│  │         Parent Container                  │   │
-│  │  ┌────────────────────────────────────┐  │   │
-│  │  │       ChromaDB Server              │  │   │
-│  │  │       (localhost:8000)             │  │   │
-│  │  └────────────────────────────────────┘  │   │
-│  └──────────────────────────────────────────┘   │
-│                      │                           │
-│         ┌────────────┼────────────┐              │
-│         ▼            ▼            ▼              │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐         │
-│  │ Worker 1 │ │ Worker 2 │ │ Worker 3 │         │
-│  │ Claude   │ │ Claude   │ │ Claude   │         │
-│  │ MCP      │ │ MCP      │ │ MCP      │         │
-│  └──────────┘ └──────────┘ └──────────┘         │
-└─────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                     Host Machine                         │
+│                                                          │
+│  ┌────────────────────────────────────────────────────┐ │
+│  │              Parent Container                       │ │
+│  │  ┌──────────────────────────────────────────────┐  │ │
+│  │  │           ChromaDB Server                     │  │ │
+│  │  │           (localhost:8000)                    │  │ │
+│  │  └──────────────────────────────────────────────┘  │ │
+│  └────────────────────────────────────────────────────┘ │
+│                         │                                │
+│            ┌────────────┼────────────┐                   │
+│            ▼            ▼            ▼                   │
+│     ┌──────────┐ ┌──────────┐ ┌──────────┐              │
+│     │ Worker 1 │ │ Worker 2 │ │ Worker 3 │              │
+│     │ Claude   │ │ Claude   │ │ Claude   │              │
+│     └──────────┘ └──────────┘ └──────────┘              │
+│            │            │            │                   │
+│            └────────────┴────────────┘                   │
+│                         │                                │
+│            ┌────────────────────────┐                    │
+│            │  Shared CLAUDE_HOME    │                    │
+│            │  (marketplace installs)│                    │
+│            └────────────────────────┘                    │
+└──────────────────────────────────────────────────────────┘
 ```
 
 - **Parent**: Runs ChromaDB server, manages workers
-- **Workers**: Run Claude with MCP servers, share parent's network
+- **Workers**: Run Claude with marketplace-installed MCP servers
+- **CLAUDE_HOME**: Shared volume for all marketplace installations
 
 ## Requirements
 
@@ -100,7 +127,6 @@ claudy pool scale 3        # Maintain 3 warm workers
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-api03-...  # Required
 export CLAUDE_HOME=~/.claude               # Claude config (default)
-export MEMORY_BANK_ROOT=~/memory-bank      # Memory storage (default)
 ```
 
 ### Profiles

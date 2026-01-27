@@ -1,28 +1,28 @@
 # HAL-9000 Worker Container
-# Full Claude Code environment with MCP servers pre-installed
+# Minimal Claude Code environment - marketplace-ready
 #
-# Architecture:
-# - Workers share parent's network namespace (--network=container:parent)
-# - ChromaDB MCP client connects to parent's server on localhost:8000
-# - Memory Bank and Sequential Thinking run locally in worker
+# Philosophy:
+# - Minimal base with Claude CLI + tooling for marketplace installs
+# - CLAUDE_HOME mounted as persistent volume from parent
+# - Users install MCP servers, agents, commands via marketplace
+# - Everything persists in CLAUDE_HOME volume
 #
 # Build: docker build -f Dockerfile.worker -t ghcr.io/hellblazer/hal-9000:worker .
 
 FROM debian:bookworm-slim
 
 LABEL maintainer="hal-9000"
-LABEL description="HAL-9000 worker - Claude CLI with MCP servers pre-installed"
-LABEL version="2.0.0"
+LABEL description="HAL-9000 worker - Minimal Claude CLI, marketplace-ready"
+LABEL version="3.0.0"
 LABEL architecture="dind-worker"
-LABEL mcp_servers="memory-bank-mcp:0.2.2, sequential-thinking:2025.12.18, chroma-mcp:0.2.6"
 LABEL build_date="2026-01-26"
 
 # Install system dependencies
-# - curl: Claude CLI installation and health checks
+# - curl: Claude CLI installation and marketplace operations
 # - git: Development workflows
 # - tmux: Session management
-# - python3: ChromaDB MCP client
-# - nodejs: MCP npm packages
+# - python3 + venv: Python MCP servers from marketplace
+# - nodejs: npm MCP servers from marketplace
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
@@ -44,7 +44,7 @@ ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 ENV TERM=xterm-256color
 
-# Install Node.js 20 LTS for MCP servers
+# Install Node.js 20 LTS (required for npm-based MCP servers)
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
@@ -55,22 +55,12 @@ RUN curl -fsSL https://claude.ai/install.sh | bash
 # Add Claude CLI to PATH
 ENV PATH="/root/.local/bin:${PATH}"
 
-# Install uv (fast Python package installer)
+# Install uv (fast Python package installer for Python MCP servers)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Pre-install MCP server npm packages globally
-RUN npm install -g \
-    @allpepper/memory-bank-mcp@0.2.2 \
-    @modelcontextprotocol/server-sequential-thinking@2025.12.18
-
-# Pre-install chroma-mcp (ChromaDB MCP client)
-RUN uv tool install chroma-mcp==0.2.6
-
-# Pre-install claude-code-tools (tmux-cli, vault, env-safe)
-RUN uv tool install claude-code-tools
-
 # Create directory structure
-RUN mkdir -p /workspace /root/.claude /root/memory-bank /scripts
+# CLAUDE_HOME will be mounted as persistent volume from parent
+RUN mkdir -p /workspace /root/.claude /scripts
 
 # Copy entrypoint script
 COPY docker/worker-entrypoint.sh /scripts/worker-entrypoint.sh
@@ -79,20 +69,16 @@ RUN chmod +x /scripts/worker-entrypoint.sh
 # Environment variables
 ENV CLAUDE_HOME=/root/.claude
 ENV WORKSPACE=/workspace
-ENV MEMORY_BANK_ROOT=/root/memory-bank
 
 WORKDIR /workspace
 
-# Verify installations
+# Verify core installations
 RUN echo "Verifying installations..." \
     && claude --version \
     && node --version \
     && npm --version \
-    && mcp-server-memory-bank --version > /dev/null 2>&1 || echo "✓ mcp-server-memory-bank available" \
-    && mcp-server-sequential-thinking --version > /dev/null 2>&1 || echo "✓ mcp-server-sequential-thinking available" \
-    && chroma-mcp --help > /dev/null 2>&1 \
-    && tmux-cli --help > /dev/null 2>&1 \
-    && echo "✓ Claude CLI, MCP servers, and tools installed"
+    && uv --version \
+    && echo "✓ Claude CLI and package managers ready"
 
 # Health check - verify Claude CLI accessible
 HEALTHCHECK --interval=60s --timeout=10s --start-period=5s --retries=3 \
