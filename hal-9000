@@ -118,6 +118,9 @@ USAGE:
   hal-9000 <claude-command> [args...]      # Run claude command in container
   hal-9000 daemon <command>                # Manage orchestrator
   hal-9000 pool <command>                  # Manage worker pool
+  hal-9000 sessions                        # List running sessions
+  hal-9000 attach [session]                # Attach to existing session
+  hal-9000 kill <session>                  # Stop a session
 
 CLAUDE COMMANDS (passthrough to container):
   hal-9000 plugin list                     # List installed plugins
@@ -142,6 +145,14 @@ POOL COMMANDS:
   hal-9000 pool status     Show pool status (warm/busy workers)
   hal-9000 pool scale <n>  Scale to n warm workers
   hal-9000 pool cleanup    Force cleanup of idle workers
+
+SESSION COMMANDS:
+  hal-9000 sessions        List running hal-9000 sessions
+  hal-9000 attach [name]   Attach to an existing session (auto-selects if only one)
+  hal-9000 kill <name>     Stop and remove a session
+
+  Sessions persist after detaching. Use Ctrl-b d to detach from tmux.
+  Each session has two windows: Claude (Ctrl-b 0) and Shell (Ctrl-b 1).
 
 OPTIONS:
   --setup                Interactive setup for API key (first-time setup)
@@ -174,10 +185,18 @@ EXAMPLES:
   hal-9000                                    # Current dir, auto-detect profile
   hal-9000 --profile python                   # Force Python profile
   hal-9000 ~/projects/myapp                   # Specific directory
-  hal-9000 --shell -d                         # Detached shell session
+  hal-9000 --shell                            # Start with shell instead of Claude
   hal-9000 plugin install memory-bank         # Install plugin (persists)
   hal-9000 mcp list                           # List MCP servers
   hal-9000 --diagnose                         # Check setup
+
+SESSION EXAMPLES:
+  hal-9000 ~/project                          # Start new session
+  # Inside session: Ctrl-b d                  # Detach (session keeps running)
+  hal-9000 sessions                           # List running sessions
+  hal-9000 attach                             # Reattach (auto-selects if one)
+  hal-9000 attach hal-9000-myapp-abc123       # Reattach to specific session
+  hal-9000 kill hal-9000-myapp-abc123         # Stop a session
 
 DAEMON EXAMPLES:
   hal-9000 daemon start                       # Start the orchestrator
@@ -919,6 +938,85 @@ METADATA
 }
 
 #==============================================================================
+# Session management
+#==============================================================================
+
+# List running hal-9000 sessions
+list_sessions() {
+    info "Running hal-9000 sessions:"
+    echo ""
+
+    local sessions
+    sessions=$(docker ps --filter "label=hal9000.session=true" --format "table {{.Names}}\t{{.Status}}\t{{.Label \"hal9000.project\"}}" 2>/dev/null)
+
+    if [[ -z "$sessions" ]] || [[ "$sessions" == "NAMES"* && $(echo "$sessions" | wc -l) -eq 1 ]]; then
+        info "  No running sessions"
+        echo ""
+        info "Start a new session with: hal-9000 /path/to/project"
+    else
+        echo "$sessions"
+    fi
+}
+
+# Attach to an existing session
+attach_session() {
+    local session_name="${1:-}"
+
+    if [[ -z "$session_name" ]]; then
+        # If no session specified, list and pick
+        local sessions
+        sessions=$(docker ps --filter "label=hal9000.session=true" --format "{{.Names}}" 2>/dev/null)
+
+        if [[ -z "$sessions" ]]; then
+            error "No running sessions. Start one with: hal-9000 /path/to/project"
+        fi
+
+        local count
+        count=$(echo "$sessions" | wc -l | tr -d ' ')
+
+        if [[ "$count" -eq 1 ]]; then
+            session_name="$sessions"
+            info "Attaching to: $session_name"
+        else
+            info "Multiple sessions running. Specify one:"
+            echo "$sessions" | while read -r s; do
+                echo "  hal-9000 attach $s"
+            done
+            exit 1
+        fi
+    fi
+
+    # Check if session exists
+    if ! docker ps --format '{{.Names}}' | grep -q "^${session_name}$"; then
+        error "Session not found: $session_name"
+    fi
+
+    info "Attaching to session: $session_name"
+    info "  Detach with: Ctrl-b d"
+    echo ""
+
+    docker exec -it "$session_name" tmux attach-session
+}
+
+# Kill a session
+kill_session() {
+    local session_name="${1:-}"
+
+    if [[ -z "$session_name" ]]; then
+        error "Usage: hal-9000 kill <session-name>"
+    fi
+
+    if ! docker ps --format '{{.Names}}' | grep -q "^${session_name}$"; then
+        error "Session not found: $session_name"
+    fi
+
+    info "Stopping session: $session_name"
+    docker stop "$session_name" >/dev/null 2>&1
+    docker rm "$session_name" >/dev/null 2>&1
+    success "Session stopped: $session_name"
+}
+
+#==============================================================================
 # Container launching
 #==============================================================================
 
@@ -928,10 +1026,24 @@ launch_container_session() {
     local project_dir="$3"
     local shell_mode="$4"
     local api_key="$5"
+    local detach="${6:-false}"
     local abs_project_path
 
     abs_project_path=$(cd "$project_dir" && pwd)
     local container_image="${CONTAINER_IMAGE_BASE}:${profile}"
+
+    # Check if session already exists
+    if docker ps --format '{{.Names}}' | grep -q "^${session_name}$"; then
+        info "Session already running: $session_name"
+        if [[ "$detach" == "true" ]]; then
+            info "Use 'hal-9000 attach $session_name' to attach"
+            return 0
+        else
+            info "Attaching..."
+            attach_session "$session_name"
+            return $?
+        fi
+    fi
 
     # Verify image exists or fall back to base
     if ! docker inspect "$container_image" &> /dev/null; then
@@ -945,13 +1057,15 @@ launch_container_session() {
     info "  Directory: $abs_project_path"
 
     # Build docker run command
+    # NO --rm: container persists for reattachment
     # Uses shared Docker volumes for CLAUDE_HOME and memory bank
-    # All workers share these volumes, so plugins persist across sessions
     local docker_args=(
         docker run
-        --rm
-        -it
+        -d
         --name "$session_name"
+        --label "hal9000.session=true"
+        --label "hal9000.project=$abs_project_path"
+        --label "hal9000.profile=$profile"
         -v "$abs_project_path:/workspace"
         -v "${CLAUDE_HOME_VOLUME}:/root/.claude"
         -v "${MEMORY_BANK_VOLUME}:/root/memory-bank"
@@ -969,19 +1083,49 @@ launch_container_session() {
         docker_args+=(-e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
         info "  Auth: API key (from environment)"
     else
-        info "  Auth: Interactive login required"
+        info "  Auth: Subscription (from volume) or interactive login"
     fi
 
-    # Add image
+    # Add image and tmux command
+    # tmux starts with two windows: Claude (0) and Shell (1)
     docker_args+=(-w "/workspace" "$container_image")
 
-    # Run shell or Claude (using tmux inside container for session persistence)
+    # Start container with tmux running Claude and a shell window
+    # Container runs with tmux in foreground to keep it alive
+    # We create tmux session, then keep the container running
     if [[ "$shell_mode" == "true" ]]; then
-        info "Starting bash shell in tmux..."
-        "${docker_args[@]}" tmux new-session -s shell
+        # Shell mode: just shell in tmux window 0
+        docker_args+=(bash -c "tmux new-session -d -s main -n shell && while tmux has-session -t main 2>/dev/null; do sleep 1; done")
     else
-        info "Starting Claude CLI in tmux..."
-        "${docker_args[@]}" tmux new-session -s claude "claude"
+        # Normal mode: Claude in window 0, shell in window 1
+        docker_args+=(bash -c "tmux new-session -d -s main -n claude 'claude' && tmux new-window -t main -n shell && while tmux has-session -t main 2>/dev/null; do sleep 1; done")
+    fi
+
+    # Start the container
+    info "Starting container..."
+    if ! "${docker_args[@]}" >/dev/null; then
+        error "Failed to start container"
+    fi
+
+    # Give container a moment to start tmux
+    sleep 0.5
+
+    if [[ "$detach" == "true" ]]; then
+        # Detached mode: don't attach, just report
+        success "Session started in background: $session_name"
+        echo ""
+        info "Attach with: hal-9000 attach $session_name"
+        info "Or simply: hal-9000 attach (if only one session)"
+    else
+        # Attach to the tmux session
+        info "Attaching to tmux session..."
+        info "  Detach: Ctrl-b d"
+        info "  Switch windows: Ctrl-b n/p"
+        info "  Claude: Ctrl-b 0"
+        info "  Shell: Ctrl-b 1"
+        echo ""
+
+        docker exec -it "$session_name" tmux attach-session -t main
     fi
 }
 
@@ -1010,6 +1154,24 @@ main() {
     if [[ "${1:-}" == "pool" ]]; then
         shift
         handle_pool_command "$@"
+        exit 0
+    fi
+
+    # Handle session management subcommands
+    if [[ "${1:-}" == "sessions" ]]; then
+        list_sessions
+        exit 0
+    fi
+
+    if [[ "${1:-}" == "attach" ]]; then
+        shift
+        attach_session "$@"
+        exit 0
+    fi
+
+    if [[ "${1:-}" == "kill" ]]; then
+        shift
+        kill_session "$@"
         exit 0
     fi
 
@@ -1124,7 +1286,7 @@ main() {
         success "Session ready: $session_name"
 
         # Launch container
-        launch_container_session "$session_name" "$profile" "$project_dir" "$shell_mode" "$api_key" || error "Failed to launch container"
+        launch_container_session "$session_name" "$profile" "$project_dir" "$shell_mode" "$api_key" "$detach" || error "Failed to launch container"
     fi
 }
 
