@@ -98,7 +98,11 @@ run_claude_command() {
 # Check if arg is a claude subcommand that should be passed through
 is_claude_subcommand() {
     local arg="${1:-}"
-    [[ "$arg" =~ ^($CLAUDE_SUBCOMMANDS)$ ]]
+    # Match known subcommands (mcp, plugin, doctor, etc.)
+    [[ "$arg" =~ ^($CLAUDE_SUBCOMMANDS)$ ]] && return 0
+    # Match Claude slash commands like /login, /help, /status
+    [[ "$arg" =~ ^/ ]] && [[ ! -d "$arg" ]] && return 0
+    return 1
 }
 
 #==============================================================================
