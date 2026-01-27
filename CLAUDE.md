@@ -297,31 +297,157 @@ git tag -a v1.4.0 -m "Release v1.4.0 - Session Persistence
 git push origin v1.4.0
 ```
 
-### 7. Verify Release
+### 7. Update GitHub Release
 
 ```bash
-# Confirm tag exists
-git tag --list | grep v1.4.0
+# Update release with comprehensive notes
+gh release edit vX.Y.Z \
+  --notes-file RELEASE_NOTES_vX.Y.Z.md \
+  --latest
 
-# Verify images are in registry (can take a few minutes to become available)
-# Check GitHub Container Registry:
-# https://github.com/Hellblazer/hal-9000/pkgs/container/hal-9000
+# Attach installer script as asset
+gh release upload vX.Y.Z install-hal-9000.sh --clobber
+
+# Verify release
+gh release view vX.Y.Z --json assets
 ```
 
-### Release Checklist
+### 8. COMPREHENSIVE VERIFICATION (CRITICAL!)
 
+**Run the automated verification script**:
+```bash
+scripts/release/verify-release.sh X.Y.Z
+```
+
+This script validates **9 critical areas**:
+1. **Version Synchronization** - README, CLI, plugin, marketplace all match
+2. **JSON Configuration** - marketplace.json and plugin.json are valid
+3. **Docker Images** - All 4 profiles exist and are functional
+4. **Installation Script** - Installer exists, is executable, has valid syntax
+5. **Release Notes** - Complete documentation with all required sections
+6. **Git Repository** - Working tree clean, tag exists
+7. **Marketplace** - All required fields present
+8. **Documentation** - README, CLAUDE.md, CONTRIBUTING.md exist
+9. **Installer URL** - GitHub raw URL is accessible
+
+**Expected Output**: `100% - Ready for production`
+
+**If verification fails**: Fix reported issues and re-run until 100%.
+
+### 9. End-to-End Testing
+
+After verification passes, run **real-world usage tests**:
+
+```bash
+# Test 1: Fresh install from URL
+curl -fsSL https://raw.githubusercontent.com/Hellblazer/hal-9000/main/install-hal-9000.sh | bash
+hal-9000 --version  # Should show X.Y.Z
+
+# Test 2: Container startup with base profile
+hal-9000 /tmp/test-project
+# Should: launch container, run Claude
+# Verify: Claude loads, Docker CLI works, MCP servers available
+
+# Test 3: Session persistence
+hal-9000 /tmp/project1
+# Login if needed
+exit
+hal-9000 /tmp/project2
+# Should: no re-login required (session persists)
+
+# Test 4: All profile images work
+docker run --rm ghcr.io/hellblazer/hal-9000:base claude --version
+docker run --rm ghcr.io/hellblazer/hal-9000:python python3 --version
+docker run --rm ghcr.io/hellblazer/hal-9000:node node --version
+docker run --rm ghcr.io/hellblazer/hal-9000:java java --version
+
+# Test 5: Marketplace plugin installation (optional)
+hal-9000 plugin marketplace add Hellblazer/hal-9000
+hal-9000 plugin install hal-9000
+```
+
+### 10. Final Release Commit
+
+After ALL verification and testing passes:
+
+```bash
+# Commit any final documentation updates
+git add -A
+git commit -m "docs: Final release notes and verification for vX.Y.Z"
+git push origin main
+```
+
+### Release Checklist (Production-Ready)
+
+**Version Synchronization**:
 - [ ] Decided on version number (X.Y.Z)
 - [ ] Updated README.md version badge
 - [ ] Updated hal-9000 script SCRIPT_VERSION
-- [ ] Verified both versions match
+- [ ] Updated marketplace.json version
+- [ ] Updated plugin.json version
+- [ ] Verified ALL versions match
+
+**Build & Push**:
 - [ ] Built Docker images (`make build`)
-- [ ] Images built successfully (4 profiles)
+- [ ] All 4 profiles built successfully
 - [ ] Pushed all images to ghcr.io
-- [ ] Created release commit with clear message
-- [ ] Created annotated git tag with changelog
-- [ ] Pushed tag to remote (`git push origin vX.Y.Z`)
-- [ ] Verified tag exists in repository
-- [ ] Confirmed images available in registry
+- [ ] Images available in registry
+
+**Release Artifacts**:
+- [ ] Created RELEASE_NOTES_vX.Y.Z.md
+- [ ] Created release commit with changelog
+- [ ] Created annotated git tag with notes
+- [ ] Pushed tag to remote
+- [ ] Updated GitHub release with notes
+- [ ] Attached installer script as asset
+
+**Verification** (CRITICAL):
+- [ ] Ran `scripts/release/verify-release.sh` → **100%**
+- [ ] Version verification passed
+- [ ] JSON configuration valid
+- [ ] Docker images functional
+- [ ] Installer script works
+- [ ] Release notes complete
+- [ ] Git artifacts correct
+
+**End-to-End Testing**:
+- [ ] Fresh install from URL works
+- [ ] Container startup successful
+- [ ] Session persistence works
+- [ ] All 4 profile images functional
+- [ ] Marketplace plugin installs (optional)
+
+**Final Checks**:
+- [ ] GitHub release page reviewed
+- [ ] Release notes readable on GitHub
+- [ ] Installer asset downloadable
+- [ ] Docker images pullable from registry
+
+## Post-Release
+
+After successful release:
+
+1. **Announce**: Update documentation, notify users
+2. **Monitor**: Watch for issues in first 24-48 hours
+3. **Archive**: Save release verification output for records
+
+## Release Verification Script
+
+The script `scripts/release/verify-release.sh` is your **single source of truth** for release readiness.
+
+**Usage**:
+```bash
+./scripts/release/verify-release.sh 1.4.0
+```
+
+**Returns**:
+- Exit 0 if 100% verified (ready for production)
+- Exit 1 if any checks fail (NOT ready)
+
+**Integration**:
+- Run before creating GitHub release
+- Run after any version changes
+- Run as final gate before announcement
 
 ## Common Issues
 
