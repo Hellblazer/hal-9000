@@ -52,7 +52,7 @@ download_hal9000() {
     local hal9000_url="$GITHUB_RAW/hal-9000"
     local temp_script="$TEMP_DIR/hal-9000"
 
-    info "Downloading hal-9000 from GitHub..."
+    info "Downloading hal-9000 from GitHub..." >&2
 
     if ! curl -fsSL "$hal9000_url" -o "$temp_script" 2>/dev/null; then
         error "Failed to download hal-9000. Check your internet connection."
@@ -66,9 +66,9 @@ download_hal9000() {
     # Make it executable
     chmod +x "$temp_script"
 
-    success "hal-9000 downloaded successfully"
+    success "hal-9000 downloaded successfully" >&2
 
-    # Return the path to the downloaded script
+    # Return the path to the downloaded script (only stdout, no messages)
     echo "$temp_script"
 }
 
