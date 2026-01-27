@@ -1,9 +1,9 @@
 #!/bin/bash
-# claudy unit tests - profile detection, session naming, help system
+# hal-9000 unit tests - profile detection, session naming, help system
 set -euo pipefail
 
-CLAUDY_SCRIPT="./claudy"
-TEST_TEMP_DIR="/tmp/claudy-unit-tests"
+HAL9000_SCRIPT="./hal-9000"
+TEST_TEMP_DIR="/tmp/hal-9000-unit-tests"
 FAILED=0
 
 # Colors
@@ -30,11 +30,11 @@ test_result() {
     fi
 }
 
-# Source claudy functions for testing (extract functions from script)
-source_claudy_functions() {
-    # Source the claudy script to get functions
+# Source hal-9000 functions for testing (extract functions from script)
+source_hal-9000_functions() {
+    # Source the hal-9000 script to get functions
     # Extract and source only the functions (skip main execution)
-    source <(grep -E "^(detect_profile|get_session_name|show_help)\(\)|^[a-z_]+\(\)" "$CLAUDY_SCRIPT" | head -100)
+    source <(grep -E "^(detect_profile|get_session_name|show_help)\(\)|^[a-z_]+\(\)" "$HAL9000_SCRIPT" | head -100)
 }
 
 ##############################################################################
@@ -47,7 +47,7 @@ test_detect_java() {
 
     # Source the function and test it
     local result=$(bash -c "
-        source '$CLAUDY_SCRIPT'
+        source '$HAL9000_SCRIPT'
         detect_profile '$TEST_TEMP_DIR/java'
     ")
 
@@ -64,7 +64,7 @@ test_detect_python() {
     touch "$TEST_TEMP_DIR/python/pyproject.toml"
 
     local result=$(bash -c "
-        source '$CLAUDY_SCRIPT'
+        source '$HAL9000_SCRIPT'
         detect_profile '$TEST_TEMP_DIR/python'
     ")
 
@@ -81,7 +81,7 @@ test_detect_node() {
     touch "$TEST_TEMP_DIR/node/package.json"
 
     local result=$(bash -c "
-        source '$CLAUDY_SCRIPT'
+        source '$HAL9000_SCRIPT'
         detect_profile '$TEST_TEMP_DIR/node'
     ")
 
@@ -97,7 +97,7 @@ test_detect_base() {
     mkdir -p "$TEST_TEMP_DIR/base"
 
     local result=$(bash -c "
-        source '$CLAUDY_SCRIPT'
+        source '$HAL9000_SCRIPT'
         detect_profile '$TEST_TEMP_DIR/base'
     ")
 
@@ -113,16 +113,16 @@ test_session_naming() {
     mkdir -p "$TEST_TEMP_DIR/myproject"
 
     local result=$(bash -c "
-        source '$CLAUDY_SCRIPT'
+        source '$HAL9000_SCRIPT'
         get_session_name '$TEST_TEMP_DIR/myproject'
     ")
 
-    # Should be in format claudy-myproject-<hash>
-    if [[ "$result" =~ ^claudy-myproject-[a-f0-9]{8}$ ]]; then
-        test_result "Session naming format (claudy-{project}-{hash})" 0
+    # Should be in format hal-9000-myproject-<hash>
+    if [[ "$result" =~ ^hal-9000-myproject-[a-f0-9]{8}$ ]]; then
+        test_result "Session naming format (hal-9000-{project}-{hash})" 0
     else
         echo "    Got: '$result'" >&2
-        test_result "Session naming format (claudy-{project}-{hash})" 1
+        test_result "Session naming format (hal-9000-{project}-{hash})" 1
     fi
 }
 
@@ -130,12 +130,12 @@ test_session_deterministic() {
     mkdir -p "$TEST_TEMP_DIR/testproj"
 
     local result1=$(bash -c "
-        source '$CLAUDY_SCRIPT'
+        source '$HAL9000_SCRIPT'
         get_session_name '$TEST_TEMP_DIR/testproj'
     ")
 
     local result2=$(bash -c "
-        source '$CLAUDY_SCRIPT'
+        source '$HAL9000_SCRIPT'
         get_session_name '$TEST_TEMP_DIR/testproj'
     ")
 
@@ -148,7 +148,7 @@ test_session_deterministic() {
 }
 
 test_help_system() {
-    local result=$($CLAUDY_SCRIPT --help 2>&1 | grep -c "USAGE:" || true)
+    local result=$($HAL9000_SCRIPT --help 2>&1 | grep -c "USAGE:" || true)
 
     if [ "$result" -gt 0 ]; then
         test_result "Help system (--help output)" 0
@@ -158,7 +158,7 @@ test_help_system() {
 }
 
 test_version_system() {
-    local result=$($CLAUDY_SCRIPT --version 2>&1 | grep -c "claudy version" || true)
+    local result=$($HAL9000_SCRIPT --version 2>&1 | grep -c "hal-9000 version" || true)
 
     if [ "$result" -gt 0 ]; then
         test_result "Version system (--version output)" 0

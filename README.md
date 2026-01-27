@@ -1,4 +1,4 @@
-# claudy - Containerized Claude
+# hal-9000 - Containerized Claude
 
 [![Version](https://img.shields.io/badge/version-0.7.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
@@ -9,32 +9,32 @@ Run Claude Code in isolated Docker containers with full marketplace support.
 ## Quick Start
 
 ```bash
-# Install claudy
-curl -fsSL https://raw.githubusercontent.com/Hellblazer/hal-9000/main/install-claudy.sh | bash
+# Install hal-9000
+curl -fsSL https://raw.githubusercontent.com/Hellblazer/hal-9000/main/install-hal-9000.sh | bash
 
 # Set API key
 export ANTHROPIC_API_KEY=sk-ant-api03-...
 
 # Start the daemon (first time)
-claudy daemon start
+hal-9000 daemon start
 
 # Launch Claude in current directory
-claudy
+hal-9000
 ```
 
 ## Marketplace Support
 
-claudy supports Claude Code plugins. Install agents, commands, and tools that persist across all sessions:
+hal-9000 supports Claude Code plugins. Install agents, commands, and tools that persist across all sessions:
 
 ```bash
 # Add a marketplace (use owner/repo format)
-claudy plugin marketplace add anthropics/skills
+hal-9000 plugin marketplace add anthropics/skills
 
 # Install a plugin
-claudy plugin install document-skills
+hal-9000 plugin install document-skills
 
 # List installed plugins
-claudy plugin list
+hal-9000 plugin list
 ```
 
 All installations are stored in a persistent Docker volume shared by all workers.
@@ -62,17 +62,17 @@ Additional MCP servers can be installed via marketplace.
 ### Basic
 
 ```bash
-claudy                     # Launch in current directory
-claudy /path/to/project    # Launch in specific directory
-claudy --shell             # Start bash instead of Claude
+hal-9000                     # Launch in current directory
+hal-9000 /path/to/project    # Launch in specific directory
+hal-9000 --shell             # Start bash instead of Claude
 ```
 
 ### Daemon Management
 
 ```bash
-claudy daemon start        # Start orchestrator + ChromaDB
-claudy daemon status       # Check status
-claudy daemon stop         # Stop everything
+hal-9000 daemon start        # Start orchestrator + ChromaDB
+hal-9000 daemon status       # Check status
+hal-9000 daemon stop         # Stop everything
 ```
 
 ### Worker Pool (Optional)
@@ -80,9 +80,9 @@ claudy daemon stop         # Stop everything
 Pre-warm containers for instant startup:
 
 ```bash
-claudy pool start          # Start pool manager
-claudy pool status         # View warm/busy workers
-claudy pool scale 3        # Maintain 3 warm workers
+hal-9000 pool start          # Start pool manager
+hal-9000 pool status         # View warm/busy workers
+hal-9000 pool scale 3        # Maintain 3 warm workers
 ```
 
 ## Architecture
@@ -129,17 +129,17 @@ export ANTHROPIC_API_KEY=sk-ant-api03-...  # Required for API access
 
 ### Docker Volumes
 
-claudy uses shared Docker volumes for persistence across sessions:
+hal-9000 uses shared Docker volumes for persistence across sessions:
 - `hal9000-claude-home` - CLAUDE_HOME (plugins, settings, agents)
 - `hal9000-memory-bank` - Memory bank for cross-session context
 
 ### Profiles
 
 ```bash
-claudy --profile base      # Minimal (default)
-claudy --profile python    # + Python tools
-claudy --profile node      # + Node.js tools
-claudy --profile java      # + Java/Maven tools
+hal-9000 --profile base      # Minimal (default)
+hal-9000 --profile python    # + Python tools
+hal-9000 --profile node      # + Node.js tools
+hal-9000 --profile java      # + Java/Maven tools
 ```
 
 ## Companion Tools
@@ -150,8 +150,8 @@ Custom agents, slash commands, and hooks for enhanced Claude workflows:
 
 ```bash
 # Install the plugin
-claudy plugin marketplace add Hellblazer/hal-9000
-claudy plugin install hal-9000
+hal-9000 plugin marketplace add Hellblazer/hal-9000
+hal-9000 plugin install hal-9000
 ```
 
 **Includes**:
@@ -190,8 +190,8 @@ aod-broadcast "cmd"      # Send to all
 ## Troubleshooting
 
 ```bash
-claudy --diagnose              # Show diagnostic info
-claudy daemon status           # Check daemon health
+hal-9000 --diagnose              # Show diagnostic info
+hal-9000 daemon status           # Check daemon health
 docker logs hal9000-parent     # View parent logs
 ```
 
@@ -199,7 +199,7 @@ docker logs hal9000-parent     # View parent logs
 
 **"Parent container not running"**
 ```bash
-claudy daemon start
+hal-9000 daemon start
 ```
 
 **"Cannot connect to Docker"**
@@ -210,7 +210,7 @@ docker ps
 
 **"ChromaDB not responding"**
 ```bash
-claudy daemon restart
+hal-9000 daemon restart
 ```
 
 ## Documentation

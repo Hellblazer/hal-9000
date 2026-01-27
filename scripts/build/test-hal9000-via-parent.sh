@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-claudy-via-parent.sh - Test claudy --via-parent functionality
+# test-hal-9000-via-parent.sh - Test hal-9000 --via-parent functionality
 #
 # Tests worker spawning via parent container:
 # - Parent must be running for via-parent to work
@@ -11,7 +11,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-CLAUDY="$REPO_ROOT/claudy"
+HAL9000="$REPO_ROOT/hal-9000"
 
 # Colors
 readonly GREEN='\033[0;32m'
@@ -66,7 +66,7 @@ setup_test_project() {
 ensure_daemon_running() {
     if ! docker ps --format '{{.Names}}' | grep -q "^${PARENT_CONTAINER}$"; then
         log_info "Starting daemon..."
-        "$CLAUDY" daemon start 2>&1 || {
+        "$HAL9000" daemon start 2>&1 || {
             log_fail "Could not start daemon"
             return 1
         }
@@ -94,9 +94,9 @@ check_prerequisites() {
         exit 1
     fi
 
-    # Check claudy exists
-    if [[ ! -x "$CLAUDY" ]]; then
-        log_fail "claudy not found or not executable: $CLAUDY"
+    # Check hal-9000 exists
+    if [[ ! -x "$HAL9000" ]]; then
+        log_fail "hal-9000 not found or not executable: $HAL9000"
         exit 1
     fi
 
@@ -131,7 +131,7 @@ test_via_parent_requires_daemon() {
 
     # Try to use --via-parent - should fail or prompt
     local output
-    output=$(echo "n" | "$CLAUDY" --via-parent --name "$TEST_WORKER" --detach "$TEST_PROJECT_DIR" 2>&1) || true
+    output=$(echo "n" | "$HAL9000" --via-parent --name "$TEST_WORKER" --detach "$TEST_PROJECT_DIR" 2>&1) || true
 
     if echo "$output" | grep -qE "Parent container not running|Cannot launch via parent"; then
         log_pass "via-parent correctly requires daemon"
@@ -147,7 +147,7 @@ test_via_parent_spawns_worker() {
     ensure_daemon_running || return 1
 
     # Spawn worker via parent, using --no-rm via docker exec directly
-    # (claudy doesn't have --no-rm flag, so we call spawn-worker.sh directly)
+    # (hal-9000 doesn't have --no-rm flag, so we call spawn-worker.sh directly)
     docker exec hal9000-parent /scripts/spawn-worker.sh \
         -n "$TEST_WORKER" \
         -d \
@@ -261,22 +261,22 @@ test_worker_has_project_mounted() {
     docker rm -f "$TEST_WORKER" 2>/dev/null || true
 }
 
-test_claudy_via_parent_flag() {
-    log_test "claudy --via-parent flag works"
+test_hal-9000_via_parent_flag() {
+    log_test "hal-9000 --via-parent flag works"
 
     ensure_daemon_running || return 1
 
-    # Test that claudy --via-parent runs and calls spawn-worker.sh
+    # Test that hal-9000 --via-parent runs and calls spawn-worker.sh
     # Note: with --rm (default), the container exits immediately
     # so we just test that the command runs successfully
     local output
-    output=$("$CLAUDY" --via-parent --name "${TEST_WORKER}-flag" --detach "$TEST_PROJECT_DIR" 2>&1) || true
+    output=$("$HAL9000" --via-parent --name "${TEST_WORKER}-flag" --detach "$TEST_PROJECT_DIR" 2>&1) || true
 
     # Should have spawned (even if container exited with --rm)
     if echo "$output" | grep -q "Worker spawned"; then
-        log_pass "claudy --via-parent flag works"
+        log_pass "hal-9000 --via-parent flag works"
     else
-        log_fail "claudy --via-parent flag failed"
+        log_fail "hal-9000 --via-parent flag failed"
         echo "Output: $output"
     fi
 
@@ -291,7 +291,7 @@ main() {
     local test_filter="${1:-all}"
 
     echo "=========================================="
-    echo "  Claudy Via-Parent Tests"
+    echo "  hal-9000 Via-Parent Tests"
     echo "=========================================="
     echo ""
 
@@ -305,7 +305,7 @@ main() {
             test_worker_shares_network
             test_worker_has_shared_volumes
             test_worker_has_project_mounted
-            test_claudy_via_parent_flag
+            test_hal-9000_via_parent_flag
             ;;
         *)
             # Run specific test

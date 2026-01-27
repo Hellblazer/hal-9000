@@ -1,9 +1,9 @@
 #!/bin/bash
-# claudy configuration tests - Docker volume handling
+# hal-9000 configuration tests - Docker volume handling
 set -euo pipefail
 
-CLAUDY_SCRIPT="./claudy"
-TEST_TEMP_DIR="/tmp/claudy-config-tests"
+HAL9000_SCRIPT="./hal-9000"
+TEST_TEMP_DIR="/tmp/hal-9000-config-tests"
 FAILED=0
 
 # Colors
@@ -38,7 +38,7 @@ test_result() {
 
 test_volume_documentation() {
     # Test that help mentions Docker volumes
-    local help_output=$($CLAUDY_SCRIPT --help 2>&1)
+    local help_output=$($HAL9000_SCRIPT --help 2>&1)
 
     if echo "$help_output" | grep -q "hal9000-claude-home"; then
         test_result "Help documents hal9000-claude-home volume" 0
@@ -55,7 +55,7 @@ test_volume_documentation() {
 
 test_command_passthrough() {
     # Test that help shows command passthrough examples
-    local help_output=$($CLAUDY_SCRIPT --help 2>&1)
+    local help_output=$($HAL9000_SCRIPT --help 2>&1)
 
     if echo "$help_output" | grep -q "plugin install"; then
         test_result "Help shows plugin install passthrough" 0
@@ -72,7 +72,7 @@ test_command_passthrough() {
 
 test_diagnose_shows_volumes() {
     # Test that --diagnose shows volume information
-    local diag_output=$($CLAUDY_SCRIPT --diagnose 2>&1) || true
+    local diag_output=$($HAL9000_SCRIPT --diagnose 2>&1) || true
 
     if echo "$diag_output" | grep -q "Docker Volumes"; then
         test_result "Diagnose shows Docker Volumes section" 0
@@ -83,7 +83,7 @@ test_diagnose_shows_volumes() {
 
 test_api_key_env() {
     # Test that help mentions ANTHROPIC_API_KEY
-    local help_output=$($CLAUDY_SCRIPT --help 2>&1)
+    local help_output=$($HAL9000_SCRIPT --help 2>&1)
 
     if echo "$help_output" | grep -q "ANTHROPIC_API_KEY"; then
         test_result "Help documents ANTHROPIC_API_KEY" 0
@@ -94,7 +94,7 @@ test_api_key_env() {
 
 test_no_legacy_options() {
     # Test that removed options are not present
-    local help_output=$($CLAUDY_SCRIPT --help 2>&1)
+    local help_output=$($HAL9000_SCRIPT --help 2>&1)
 
     if echo "$help_output" | grep -q "\-\-claude-home"; then
         test_result "Removed option --claude-home NOT in help" 1
@@ -111,7 +111,7 @@ test_no_legacy_options() {
 
 test_version() {
     # Test that version is 0.7.0+
-    local version=$($CLAUDY_SCRIPT --version 2>&1 | head -1)
+    local version=$($HAL9000_SCRIPT --version 2>&1 | head -1)
 
     if echo "$version" | grep -qE "0\.[7-9]|[1-9]\.[0-9]"; then
         test_result "Version is 0.7.0+: $version" 0

@@ -174,13 +174,13 @@ stateDiagram-v2
 ```mermaid
 sequenceDiagram
     participant User
-    participant claudy
+    participant hal-9000
     participant Parent
     participant Pool as Pool Manager
     participant Worker
 
-    User->>claudy: claudy /path
-    claudy->>Parent: Request session
+    User->>hal-9000: hal-9000 /path
+    hal-9000->>Parent: Request session
     Parent->>Pool: Check warm workers
     alt Warm worker available
         Pool->>Worker: Claim warm worker

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-claudy-rollback.sh - Test rollback script
+# test-hal-9000-rollback.sh - Test rollback script
 #
 # Tests:
 # - Help shows usage

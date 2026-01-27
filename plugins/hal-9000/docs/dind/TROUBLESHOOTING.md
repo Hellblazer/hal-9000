@@ -6,7 +6,7 @@ Run these commands to quickly identify issues:
 
 ```bash
 # Check daemon status
-claudy daemon status
+hal-9000 daemon status
 
 # View parent container logs
 docker logs hal9000-parent --tail 50
@@ -38,7 +38,7 @@ docker ps -a --filter "name=hal9000-parent"
 docker start hal9000-parent
 
 # If doesn't exist, start daemon
-claudy daemon start
+hal-9000 daemon start
 ```
 
 ### Error: "Cannot connect to Docker daemon"
@@ -79,14 +79,14 @@ ChromaDB server failed to start within 30s
    lsof -i :8000
 
    # Use different port
-   CHROMADB_PORT=8080 claudy daemon restart
+   CHROMADB_PORT=8080 hal-9000 daemon restart
    ```
 
 2. **Corrupted data**:
    ```bash
    # Backup and reset ChromaDB data
    docker run --rm -v hal9000-chromadb:/data alpine mv /data /data.bak
-   claudy daemon restart
+   hal-9000 daemon restart
    ```
 
 3. **Insufficient memory**:
@@ -114,7 +114,7 @@ docker inspect <worker-name> --format '{{.HostConfig.NetworkMode}}'
 
 # If not, respawn worker
 docker rm -f <worker-name>
-claudy --via-parent /path/to/project
+hal-9000 --via-parent /path/to/project
 ```
 
 ### Error: "Resource limit exceeded"
@@ -178,7 +178,7 @@ docker exec <worker-name> curl http://localhost:8000/api/v2/heartbeat
 **Solution**:
 ```bash
 # Restart parent container
-claudy daemon restart
+hal-9000 daemon restart
 
 # Respawn workers after restart
 ```
@@ -197,7 +197,7 @@ netstat -an | grep 8000
 **Solution**:
 ```bash
 # Use a different port
-CHROMADB_PORT=8080 claudy daemon restart
+CHROMADB_PORT=8080 hal-9000 daemon restart
 
 # Update workers to use new port
 export CHROMADB_URL=http://localhost:8080
@@ -285,12 +285,12 @@ docker run --rm -v hal9000-chromadb:/data alpine find /data -type f -mtime +30 -
 
 ### Warm Workers Not Created
 
-**Symptoms**: `claudy pool status` shows 0 warm workers.
+**Symptoms**: `hal-9000 pool status` shows 0 warm workers.
 
 **Diagnosis**:
 ```bash
 # Check if pool manager is running
-claudy pool status
+hal-9000 pool status
 
 # Check logs
 cat ~/.hal9000/logs/pool-manager.log
@@ -299,11 +299,11 @@ cat ~/.hal9000/logs/pool-manager.log
 **Solution**:
 ```bash
 # Restart pool manager
-claudy pool stop
-claudy pool start
+hal-9000 pool stop
+hal-9000 pool start
 
 # Create warm workers manually
-claudy pool warm
+hal-9000 pool warm
 ```
 
 ### Workers Not Claimed
@@ -321,8 +321,8 @@ ls -la ~/.hal9000/pool/workers/
 rm -rf ~/.hal9000/pool/workers/*.json
 
 # Restart pool
-claudy pool stop
-claudy pool start
+hal-9000 pool stop
+hal-9000 pool start
 ```
 
 ### Idle Workers Not Cleaned Up
@@ -332,7 +332,7 @@ claudy pool start
 **Diagnosis**:
 ```bash
 # Check pool status
-claudy pool status
+hal-9000 pool status
 
 # Check idle timeout
 echo $IDLE_TIMEOUT
@@ -341,11 +341,11 @@ echo $IDLE_TIMEOUT
 **Solution**:
 ```bash
 # Force cleanup
-claudy pool cleanup
+hal-9000 pool cleanup
 
 # Restart with shorter timeout
-IDLE_TIMEOUT=60 claudy pool stop
-claudy pool start
+IDLE_TIMEOUT=60 hal-9000 pool stop
+hal-9000 pool start
 ```
 
 ## Recovery Procedures
@@ -356,7 +356,7 @@ If everything is broken, start fresh:
 
 ```bash
 # Stop everything
-claudy daemon stop
+hal-9000 daemon stop
 docker ps -a --filter "name=hal9000" --format "{{.Names}}" | xargs -r docker rm -f
 
 # Remove volumes (WARNING: deletes data)
@@ -367,7 +367,7 @@ docker rmi ghcr.io/hellblazer/hal-9000:parent
 docker rmi ghcr.io/hellblazer/hal-9000:worker
 
 # Fresh start
-claudy daemon start
+hal-9000 daemon start
 ```
 
 ### Restore from Backup
@@ -411,7 +411,7 @@ docker ps -a --filter "name=hal9000-worker" --format "{{.Names}}" | xargs -r doc
 docker ps -a --filter "name=hal9000-warm" --format "{{.Names}}" | xargs -r docker rm -f
 
 # Start fresh
-claudy daemon start
+hal-9000 daemon start
 ```
 
 ## Getting Help
@@ -430,7 +430,7 @@ cp ~/.hal9000/logs/* $DEBUG_DIR/
 # Collect state
 docker ps -a > $DEBUG_DIR/containers.txt
 docker volume ls > $DEBUG_DIR/volumes.txt
-claudy daemon status > $DEBUG_DIR/status.txt 2>&1
+hal-9000 daemon status > $DEBUG_DIR/status.txt 2>&1
 
 # Create archive
 tar czf hal9000-debug.tar.gz -C /tmp $(basename $DEBUG_DIR)
@@ -441,9 +441,9 @@ echo "Debug bundle: hal9000-debug.tar.gz"
 
 When reporting issues, include:
 
-1. Output of `claudy daemon status`
+1. Output of `hal-9000 daemon status`
 2. Output of `docker version`
-3. Output of `claudy --version`
+3. Output of `hal-9000 --version`
 4. Relevant log snippets
 5. Steps to reproduce
 

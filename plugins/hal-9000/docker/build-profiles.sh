@@ -19,7 +19,7 @@ readonly YELLOW='\033[1;33m'
 readonly NC='\033[0m'
 
 # Available profiles
-# DinD profiles (claudy) - these are the primary images
+# DinD profiles (hal-9000) - these are the primary images
 readonly DIND_PROFILES=(
     "parent:Dockerfile.parent"
     "worker:Dockerfile.worker"
@@ -51,7 +51,7 @@ ${GREEN}Options:${NC}
   --no-cache      Build without using cache
   --help          Show this help
 
-${GREEN}Profiles (DinD/claudy):${NC}
+${GREEN}Profiles (DinD/hal-9000):${NC}
   parent          Orchestrator with ChromaDB server
   worker          Claude CLI + MCP servers pre-installed
 

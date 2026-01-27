@@ -11,7 +11,7 @@
 #   --force               Skip confirmations
 #   -h, --help            Show this help
 #
-# This script reverts from claudy v0.6.x (DinD) back to v0.5.x (single-container)
+# This script reverts from hal-9000 v0.6.x (DinD) back to v0.5.x (single-container)
 
 set -euo pipefail
 
@@ -45,7 +45,7 @@ show_help() {
     cat <<EOF
 Usage: rollback-dind.sh [options]
 
-Rollback from claudy v0.6.x (DinD) to v0.5.x (single-container) architecture.
+Rollback from hal-9000 v0.6.x (DinD) to v0.5.x (single-container) architecture.
 
 Options:
   --backup PATH         Restore from specific backup directory
@@ -60,8 +60,8 @@ What this does:
   3. Restores local directories from backup
 
 After rollback:
-  - Claudy v0.7.0+ still uses Docker volumes for CLAUDE_HOME
-  - To fully rollback, install claudy v0.5.x from git history
+  - hal-9000 v0.7.0+ still uses Docker volumes for CLAUDE_HOME
+  - To fully rollback, install hal-9000 v0.5.x from git history
   - Data from volumes is NOT automatically restored to local dirs
   - Manual volume data export available with --keep-volumes
 
@@ -360,8 +360,8 @@ show_post_rollback_info() {
     echo ""
     log_info "Your system has been reverted to single-container mode."
     echo ""
-    log_info "To use claudy after rollback:"
-    log_info "  claudy /path/to/project"
+    log_info "To use hal-9000 after rollback:"
+    log_info "  hal-9000 /path/to/project"
     echo ""
     if [[ "$KEEP_VOLUMES" == "true" ]]; then
         log_info "Docker volumes were preserved. To re-migrate later:"

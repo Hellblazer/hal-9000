@@ -1,18 +1,18 @@
-# claudy Docker Integration
+# hal-9000 Docker Integration
 
 **Status**: ✅ IMPLEMENTED
 **Date**: 2026-01-25
-**Feature**: Docker CLI access inside claudy containers
+**Feature**: Docker CLI access inside hal-9000 containers
 
 ## Overview
 
-claudy provides seamless Docker access inside containers by mounting the host Docker daemon socket. This allows users to build, run, and manage Docker images/containers as if they were on the host machine.
+hal-9000 provides seamless Docker access inside containers by mounting the host Docker daemon socket. This allows users to build, run, and manage Docker images/containers as if they were on the host machine.
 
 ## Use Cases
 
 **Example 1: Building a Docker image**
 ```bash
-$ cd ~/git/my-app && claudy
+$ cd ~/git/my-app && hal-9000
 # Inside container:
 $ docker build -t my-app:latest .
 $ docker run -it my-app:latest
@@ -20,7 +20,7 @@ $ docker run -it my-app:latest
 
 **Example 2: Using Docker Compose**
 ```bash
-$ cd ~/git/microservices && claudy
+$ cd ~/git/microservices && hal-9000
 # Inside container:
 $ docker compose up -d
 $ docker compose logs -f
@@ -28,7 +28,7 @@ $ docker compose logs -f
 
 **Example 3: Running containers for dependencies**
 ```bash
-$ cd ~/git/api && claudy
+$ cd ~/git/api && hal-9000
 # Inside container:
 $ docker run -d --name postgres postgres:latest
 $ npm test
@@ -43,7 +43,7 @@ graph TB
     subgraph Host["Host Machine"]
         Daemon["Docker daemon"]
         Socket["/var/run/docker.sock"]
-        Claudy["claudy (script)"]
+        hal-9000["hal-9000 (script)"]
 
         subgraph Container["Container"]
             DockerCLI["Docker CLI<br/>(client only)"]
@@ -52,7 +52,7 @@ graph TB
     end
 
     Daemon --> Socket
-    Claudy -->|docker run -v .../docker.sock| Container
+    hal-9000 -->|docker run -v .../docker.sock| Container
     DockerCLI -->|connects to| Socket
 ```
 
@@ -92,7 +92,7 @@ Verification:
 RUN docker --version  # Verify installation
 ```
 
-#### 2. claudy Script
+#### 2. hal-9000 Script
 Added socket mount to container startup:
 ```bash
 docker run \
@@ -102,7 +102,7 @@ docker run \
 ```
 
 #### 3. Documentation
-- README-CLAUDY.md: Docker integration section
+- README-HAL9000.md: Docker integration section
 - This document: Comprehensive guide
 
 ### File Changes
@@ -111,14 +111,14 @@ plugins/hal-9000/docker/Dockerfile.hal9000
   - Line 27: Added docker.io package
   - Line 73: Verify docker --version
 
-claudy
+hal-9000
   - Line 332: Mount /var/run/docker.sock
 
-README-CLAUDY.md
+README-HAL9000.md
   - Docker Integration section
   - Architecture section updated
 
-.pm/CLAUDY-DOCKER-INTEGRATION.md
+.pm/HAL9000-DOCKER-INTEGRATION.md
   - This comprehensive guide
 ```
 
@@ -151,7 +151,7 @@ README-CLAUDY.md
 
 ### Best Practices
 
-1. **Trust your projects** - Only use claudy with projects you trust
+1. **Trust your projects** - Only use hal-9000 with projects you trust
 2. **Use read-only mounts** - Consider mounting projects as read-only if needed
 3. **Verify images** - Build images from trusted sources
 4. **Clean up** - Regularly prune unused containers/images
@@ -196,8 +196,8 @@ wsl docker --version
 ### Manual Test
 
 ```bash
-# 1. Start claudy with a project
-cd ~/git/a-demo && claudy
+# 1. Start hal-9000 with a project
+cd ~/git/a-demo && hal-9000
 
 # 2. Inside container, verify Docker works
 docker --version
@@ -207,23 +207,23 @@ docker images          # Should list host images
 # 3. Build a test image
 cat > Dockerfile << EOF
 FROM alpine:latest
-RUN echo "Hello from claudy!"
+RUN echo "Hello from hal-9000!"
 EOF
 
-docker build -t test-claudy:latest .
+docker build -t test-hal-9000:latest .
 
 # 4. Run the image
-docker run test-claudy:latest
+docker run test-hal-9000:latest
 
 # 5. Verify it appears on host
-docker ps -a | grep test-claudy
+docker ps -a | grep test-hal-9000
 ```
 
 ### Test Scenarios
 
 **Scenario 1: Simple build**
 ```bash
-cd ~/git/simple-docker-app && claudy
+cd ~/git/simple-docker-app && hal-9000
 # Inside:
 docker build -t my-app .
 docker run my-app
@@ -231,7 +231,7 @@ docker run my-app
 
 **Scenario 2: Multi-container project**
 ```bash
-cd ~/git/microservices && claudy
+cd ~/git/microservices && hal-9000
 # Inside:
 docker compose up -d
 docker compose ps
@@ -240,7 +240,7 @@ docker compose logs
 
 **Scenario 3: Using existing images**
 ```bash
-cd ~/git/backend && claudy
+cd ~/git/backend && hal-9000
 # Inside:
 docker run -d --name db postgres:15
 docker run --link db -p 3000:3000 my-app
@@ -264,7 +264,7 @@ docker build -f plugins/hal-9000/docker/Dockerfile.hal9000 \
 
 **Solution**:
 1. Verify socket exists on host: `ls -la /var/run/docker.sock`
-2. Check claudy is mounting it: `grep "docker.sock" claudy`
+2. Check hal-9000 is mounting it: `grep "docker.sock" hal-9000`
 3. Run `docker ps` to verify host daemon is running
 
 ### Issue: Permission denied when running docker
@@ -330,7 +330,7 @@ docker ps  # Should work now
 - Security model matches standard Docker usage
 - All platforms supported (Linux, macOS, Windows/WSL2)
 
-**Usage**: Just type `docker` commands inside claudy - they work like on the host!
+**Usage**: Just type `docker` commands inside hal-9000 - they work like on the host!
 
 ---
 
@@ -340,4 +340,4 @@ docker ps  # Should work now
 **Documentation**: Complete
 
 **Commit**: (pending - see changes below)
-**Ticket**: ART-902 (Docker integration for claudy)
+**Ticket**: ART-902 (Docker integration for hal-9000)

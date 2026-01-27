@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-claudy-migration.sh - Test migration script
+# test-hal-9000-migration.sh - Test migration script
 #
 # Tests:
 # - Dry run mode works
@@ -184,7 +184,7 @@ test_shows_post_migration_info() {
         log_fail "No completion message"
     fi
 
-    if echo "$output" | grep -q "claudy daemon status"; then
+    if echo "$output" | grep -q "hal-9000 daemon status"; then
         log_pass "Shows next steps"
     else
         log_fail "No next steps shown"

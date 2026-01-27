@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 MIGRATE="$REPO_ROOT/scripts/migrate-to-dind.sh"
 ROLLBACK="$REPO_ROOT/scripts/rollback-dind.sh"
-CLAUDY="$REPO_ROOT/claudy"
+HAL9000="$REPO_ROOT/hal-9000"
 
 # Colors
 readonly GREEN='\033[0;32m'
@@ -76,8 +76,8 @@ check_prerequisites() {
         exit 1
     fi
 
-    if [[ ! -x "$CLAUDY" ]]; then
-        log_fail "claudy not found: $CLAUDY"
+    if [[ ! -x "$HAL9000" ]]; then
+        log_fail "hal-9000 not found: $HAL9000"
         exit 1
     fi
 

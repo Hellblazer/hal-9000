@@ -1,4 +1,4 @@
-# Claudy Phase 1 - Testing Plan
+# hal-9000 Phase 1 - Testing Plan
 
 **Status**: Not yet fully executed
 **Priority**: High (blocks Phase 1 completion)
@@ -57,16 +57,16 @@ mkdir -p /tmp/test-base
 **Test 1: Deterministic Naming**
 ```bash
 # Same project path = same session name
-NAME1=$(./claudy --name test-project /tmp/test-project 2>&1 | grep "session:")
-NAME2=$(./claudy --name test-project /tmp/test-project 2>&1 | grep "session:")
+NAME1=$(./hal-9000 --name test-project /tmp/test-project 2>&1 | grep "session:")
+NAME2=$(./hal-9000 --name test-project /tmp/test-project 2>&1 | grep "session:")
 # Result: PASS (names match)
 ```
 
 **Test 2: Hash Collision**
 ```bash
 # Different paths = different session names
-./claudy /tmp/project1
-./claudy /tmp/project2
+./hal-9000 /tmp/project1
+./hal-9000 /tmp/project2
 # Result: PASS (different names)
 ```
 
@@ -80,13 +80,13 @@ NAME2=$(./claudy --name test-project /tmp/test-project 2>&1 | grep "session:")
 - Docker installed
 
 **Steps**:
-1. Run: `./install-claudy.sh`
-2. Verify: `which claudy` returns `/usr/local/bin/claudy`
-3. Verify: `claudy --version` works
-4. Verify: `claudy --verify` succeeds
-5. Run: `./install-claudy.sh verify`
-6. Run: `./install-claudy.sh uninstall`
-7. Verify: `which claudy` fails
+1. Run: `./install-hal-9000.sh`
+2. Verify: `which hal-9000` returns `/usr/local/bin/hal-9000`
+3. Verify: `hal-9000 --version` works
+4. Verify: `hal-9000 --verify` succeeds
+5. Run: `./install-hal-9000.sh verify`
+6. Run: `./install-hal-9000.sh uninstall`
+7. Verify: `which hal-9000` fails
 
 **Expected**: All steps succeed, no errors
 
@@ -96,14 +96,14 @@ NAME2=$(./claudy --name test-project /tmp/test-project 2>&1 | grep "session:")
 - ~/.hal9000 directory writable
 
 **Steps**:
-1. Run: `./claudy --verify /tmp/test-project`
+1. Run: `./hal-9000 --verify /tmp/test-project`
 2. Check: `ls -la ~/.hal9000/claude/`
-3. Check: `ls -la ~/.hal9000/claude/claudy-test-project-*/`
+3. Check: `ls -la ~/.hal9000/claude/hal-9000-test-project-*/`
 4. Verify structure:
 
    ```mermaid
    graph LR
-       subgraph session["~/.hal9000/claude/claudy-test-project-HASH/"]
+       subgraph session["~/.hal9000/claude/hal-9000-test-project-HASH/"]
            claude[".claude/"]
            sessionjson[".session.json"]
            workspace[".workspace/"]
@@ -119,8 +119,8 @@ NAME2=$(./claudy --name test-project /tmp/test-project 2>&1 | grep "session:")
 
 **Steps**:
 1. Save original token: `cp ~/.claude/.session.json /tmp/token-backup.json`
-2. Run: `./claudy --verify /tmp/test-project`
-3. Check: `ls ~/.hal9000/claude/claudy-test-project-*/`
+2. Run: `./hal-9000 --verify /tmp/test-project`
+3. Check: `ls ~/.hal9000/claude/hal-9000-test-project-*/`
 4. Verify: `.session.json` was copied
 5. Verify: `chmod 600` was applied
 
@@ -134,8 +134,8 @@ NAME2=$(./claudy --name test-project /tmp/test-project 2>&1 | grep "session:")
 
 **Steps**:
 ```bash
-ls -la ~/.hal9000/claude/claudy-*/
-ls -la ~/.hal9000/claude/claudy-*/.session.json
+ls -la ~/.hal9000/claude/hal-9000-*/
+ls -la ~/.hal9000/claude/hal-9000-*/.session.json
 ```
 
 **Expected**:
@@ -153,8 +153,8 @@ ls -la ~/.hal9000/claude/claudy-*/.session.json
 
 **Test Steps**:
 1. `cd ~/project`
-2. `./claudy --verify`
-3. `./claudy --diagnose`
+2. `./hal-9000 --verify`
+3. `./hal-9000 --diagnose`
 4. Check: All prerequisites verified
 
 **Expected**: All checks pass
@@ -202,21 +202,21 @@ ls -la ~/.hal9000/claude/claudy-*/.session.json
 **Test: Complete User Flow**
 
 **Prerequisites**:
-- Install claudy
+- Install hal-9000
 - Project directory with pom.xml (Java)
 - Docker with hal-9000:java image available or fallback to base
 
 **Steps**:
 1. Create test project:
    ```bash
-   mkdir ~/test-claudy-e2e
-   cd ~/test-claudy-e2e
+   mkdir ~/test-hal-9000-e2e
+   cd ~/test-hal-9000-e2e
    touch pom.xml
    ```
 
-2. Run claudy:
+2. Run hal-9000:
    ```bash
-   claudy
+   hal-9000
    ```
 
 3. Verify:
@@ -230,12 +230,12 @@ ls -la ~/.hal9000/claude/claudy-*/.session.json
 4. Test session reattach:
    ```bash
    tmux list-sessions
-   tmux attach -t claudy-*
+   tmux attach -t hal-9000-*
    ```
 
 5. Clean up:
    ```bash
-   claudy --cleanup
+   hal-9000 --cleanup
    ```
 
 **Expected**: All steps succeed, user can interact with Claude
@@ -246,7 +246,7 @@ ls -la ~/.hal9000/claude/claudy-*/.session.json
 
 **Steps**:
 1. Rename docker binary (simulate missing)
-2. Run: `./claudy --verify`
+2. Run: `./hal-9000 --verify`
 
 **Expected**: Clear error message, suggests installation
 
@@ -254,7 +254,7 @@ ls -la ~/.hal9000/claude/claudy-*/.session.json
 
 **Steps**:
 1. Rename ~/.claude/.session.json
-2. Run: `./claudy`
+2. Run: `./hal-9000`
 
 **Expected**: Warning but continues, suggests /login
 
@@ -262,14 +262,14 @@ ls -la ~/.hal9000/claude/claudy-*/.session.json
 
 **Steps**:
 1. Stop Docker daemon
-2. Run: `./claudy`
+2. Run: `./hal-9000`
 
 **Expected**: Clear error message, suggests starting Docker
 
 ### Test: Invalid Project Directory
 
 **Steps**:
-1. Run: `./claudy /nonexistent/path`
+1. Run: `./hal-9000 /nonexistent/path`
 
 **Expected**: Error: "Directory not found"
 
@@ -277,7 +277,7 @@ ls -la ~/.hal9000/claude/claudy-*/.session.json
 
 **Steps**:
 1. Create read-only directory
-2. Run: `./claudy --name test /readonly`
+2. Run: `./hal-9000 --name test /readonly`
 
 **Expected**: Error with recovery suggestion
 
@@ -314,5 +314,5 @@ ls -la ~/.hal9000/claude/claudy-*/.session.json
 ---
 
 **Ticket**: ART-880-TESTING
-**Related**: .pm/BEADS.md (CLAUDY-IMPL-2-4)
+**Related**: .pm/BEADS.md (HAL9000-IMPL-2-4)
 **Updated**: 2026-01-25

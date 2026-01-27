@@ -70,14 +70,14 @@ test_hal9000_install() {
 
     cd /hal-9000-src
 
-    # v3.0.0+: claudy-focused architecture
+    # v3.0.0+: hal-9000-focused architecture
     # MCP servers are pre-installed in Docker images, not via install.sh
-    # Check for install-claudy.sh (new) or install-legacy.sh (old)
-    if [ -f "./install-claudy.sh" ]; then
-        skip "Claudy mode - MCP servers pre-installed in Docker images"
+    # Check for install-hal-9000.sh (new) or install-legacy.sh (old)
+    if [ -f "./install-hal-9000.sh" ]; then
+        skip "hal-9000 mode - MCP servers pre-installed in Docker images"
         return 0
     elif [ -f "./install-legacy.sh" ]; then
-        skip "Legacy installer available but not tested (use claudy instead)"
+        skip "Legacy installer available but not tested (use hal-9000 instead)"
         return 0
     elif [ -f "./install.sh" ]; then
         # Legacy path for older versions
@@ -92,7 +92,7 @@ test_hal9000_install() {
             return 1
         fi
     else
-        skip "No installer found (claudy mode - Docker has everything)"
+        skip "No installer found (hal-9000 mode - Docker has everything)"
         return 0
     fi
 }
@@ -100,9 +100,9 @@ test_hal9000_install() {
 test_mcp_servers_installed() {
     log "Testing MCP server installation..."
 
-    # v3.0.0+: claudy mode - MCP servers are in worker Docker image, not host
+    # v3.0.0+: hal-9000 mode - MCP servers are in worker Docker image, not host
     if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
-        skip "Claudy mode - MCP servers are pre-installed in Docker worker image"
+        skip "hal-9000 mode - MCP servers are pre-installed in Docker worker image"
         return 0
     fi
 
@@ -131,9 +131,9 @@ test_mcp_servers_installed() {
 test_chromadb_thoroughly() {
     log "Testing ChromaDB MCP server..."
 
-    # v3.0.0+: claudy mode - skip host-based tests
+    # v3.0.0+: hal-9000 mode - skip host-based tests
     if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
-        skip "Claudy mode - ChromaDB runs in parent container"
+        skip "hal-9000 mode - ChromaDB runs in parent container"
         return 0
     fi
 
@@ -226,9 +226,9 @@ test_chromadb_thoroughly() {
 test_memory_bank_thoroughly() {
     log "Testing Memory Bank MCP server thoroughly..."
 
-    # v3.0.0+: claudy mode - skip host-based tests
+    # v3.0.0+: hal-9000 mode - skip host-based tests
     if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
-        skip "Claudy mode - Memory Bank runs in worker container"
+        skip "hal-9000 mode - Memory Bank runs in worker container"
         return 0
     fi
 
@@ -266,9 +266,9 @@ test_memory_bank_thoroughly() {
 test_sequential_thinking_thoroughly() {
     log "Testing Sequential Thinking MCP server thoroughly..."
 
-    # v3.0.0+: claudy mode - skip host-based tests
+    # v3.0.0+: hal-9000 mode - skip host-based tests
     if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
-        skip "Claudy mode - Sequential Thinking runs in worker container"
+        skip "hal-9000 mode - Sequential Thinking runs in worker container"
         return 0
     fi
 
@@ -298,9 +298,9 @@ test_sequential_thinking_thoroughly() {
 test_claude_config_complete() {
     log "Testing Claude configuration completeness..."
 
-    # v3.0.0+: claudy mode - config is in worker container
+    # v3.0.0+: hal-9000 mode - config is in worker container
     if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
-        skip "Claudy mode - Claude config is in worker container"
+        skip "hal-9000 mode - Claude config is in worker container"
         return 0
     fi
 
@@ -410,9 +410,9 @@ test_commands_installed() {
 test_tmux_cli_installed() {
     log "Testing tmux-cli installation..."
 
-    # v3.0.0+: claudy mode - tools are in Docker
+    # v3.0.0+: hal-9000 mode - tools are in Docker
     if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
-        skip "Claudy mode - tmux-cli is in Docker worker image"
+        skip "hal-9000 mode - tmux-cli is in Docker worker image"
         return 0
     fi
 
@@ -466,9 +466,9 @@ test_hal9000_container() {
 test_chromadb_mcp_responds() {
     log "Testing ChromaDB MCP server responds to JSON-RPC..."
 
-    # v3.0.0+: claudy mode - skip host-based tests
+    # v3.0.0+: hal-9000 mode - skip host-based tests
     if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
-        skip "Claudy mode - ChromaDB MCP runs in Docker"
+        skip "hal-9000 mode - ChromaDB MCP runs in Docker"
         return 0
     fi
 
@@ -499,9 +499,9 @@ test_chromadb_mcp_responds() {
 test_sequential_thinking_mcp_responds() {
     log "Testing Sequential Thinking MCP server responds..."
 
-    # v3.0.0+: claudy mode - skip host-based tests
+    # v3.0.0+: hal-9000 mode - skip host-based tests
     if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
-        skip "Claudy mode - Sequential Thinking runs in Docker"
+        skip "hal-9000 mode - Sequential Thinking runs in Docker"
         return 0
     fi
 
@@ -524,9 +524,9 @@ test_sequential_thinking_mcp_responds() {
 test_memory_bank_mcp_responds() {
     log "Testing Memory Bank MCP server responds..."
 
-    # v3.0.0+: claudy mode - skip host-based tests
+    # v3.0.0+: hal-9000 mode - skip host-based tests
     if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
-        skip "Claudy mode - Memory Bank runs in Docker"
+        skip "hal-9000 mode - Memory Bank runs in Docker"
         return 0
     fi
 
@@ -551,9 +551,9 @@ test_memory_bank_mcp_responds() {
 test_tmux_cli_functional() {
     log "Testing tmux-cli functionality..."
 
-    # v3.0.0+: claudy mode - tools are in Docker
+    # v3.0.0+: hal-9000 mode - tools are in Docker
     if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
-        skip "Claudy mode - tmux-cli is in Docker worker image"
+        skip "hal-9000 mode - tmux-cli is in Docker worker image"
         return 0
     fi
 
@@ -597,9 +597,9 @@ test_tmux_cli_functional() {
 test_vault_functional() {
     log "Testing vault functionality..."
 
-    # v3.0.0+: claudy mode - tools are in Docker
+    # v3.0.0+: hal-9000 mode - tools are in Docker
     if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
-        skip "Claudy mode - vault is in Docker worker image"
+        skip "hal-9000 mode - vault is in Docker worker image"
         return 0
     fi
 
@@ -623,9 +623,9 @@ test_vault_functional() {
 test_env_safe_functional() {
     log "Testing env-safe functionality..."
 
-    # v3.0.0+: claudy mode - tools are in Docker
+    # v3.0.0+: hal-9000 mode - tools are in Docker
     if [ -f "/hal-9000-src/install-legacy.sh" ] && [ ! -f "/hal-9000-src/install.sh" ]; then
-        skip "Claudy mode - env-safe is in Docker worker image"
+        skip "hal-9000 mode - env-safe is in Docker worker image"
         return 0
     fi
 

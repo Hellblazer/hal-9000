@@ -7,17 +7,17 @@ This directory contains Dockerfiles and scripts for the Docker-in-Docker parent/
 
 ## Quick Start
 
-The easiest way to use DinD is through the `claudy` CLI (v0.7.0+):
+The easiest way to use DinD is through the `hal-9000` CLI (v0.7.0+):
 
 ```bash
 # Start the daemon (parent container with ChromaDB)
-claudy daemon start
+hal-9000 daemon start
 
 # Spawn a worker for your project
-claudy --via-parent /path/to/project
+hal-9000 --via-parent /path/to/project
 
 # Check status
-claudy daemon status
+hal-9000 daemon status
 ```
 
 For more detailed instructions, see the [installation guide](../docs/dind/INSTALLATION.md).

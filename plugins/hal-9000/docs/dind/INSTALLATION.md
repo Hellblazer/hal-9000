@@ -17,16 +17,16 @@ docker ps
 
 ## Installation Methods
 
-### Method 1: Using Claudy (Recommended)
+### Method 1: Using hal-9000 (Recommended)
 
-If you already have claudy installed:
+If you already have hal-9000 installed:
 
 ```bash
-# Update claudy to v0.7.0+
-./install-claudy.sh
+# Update hal-9000 to v0.7.0+
+./install-hal-9000.sh
 
 # Verify version
-claudy --version
+hal-9000 --version
 # Should show 0.7.0 or later
 ```
 
@@ -76,8 +76,8 @@ docker volume create hal9000-plugins
 ### 2. Start the Daemon
 
 ```bash
-# Using claudy
-claudy daemon start
+# Using hal-9000
+hal-9000 daemon start
 
 # Or manually
 docker run -d --name hal9000-parent \
@@ -91,7 +91,7 @@ docker run -d --name hal9000-parent \
 
 ```bash
 # Check daemon status
-claudy daemon status
+hal-9000 daemon status
 
 # Expected output:
 # HAL-9000 Daemon Status
@@ -119,18 +119,18 @@ For faster session startup:
 
 ```bash
 # Start daemon with pool manager
-claudy daemon stop
-ENABLE_POOL_MANAGER=true claudy daemon start
+hal-9000 daemon stop
+ENABLE_POOL_MANAGER=true hal-9000 daemon start
 
 # Or restart with pool
-claudy pool start
+hal-9000 pool start
 ```
 
 ## Uninstallation
 
 ```bash
 # Stop daemon
-claudy daemon stop
+hal-9000 daemon stop
 
 # Remove containers
 docker rm -f hal9000-parent
@@ -157,7 +157,7 @@ docker rmi ghcr.io/hellblazer/hal-9000:worker
 
 ### Windows (WSL2)
 - Requires Docker Desktop with WSL2 backend
-- Run claudy from within WSL2 terminal
+- Run hal-9000 from within WSL2 terminal
 - Ensure Docker integration enabled in WSL2 settings
 
 ## Next Steps

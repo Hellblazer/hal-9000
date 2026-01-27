@@ -121,9 +121,9 @@ make benchmark-dind
        plugins/hal-9000/docker/
 
    # Test changes
-   claudy daemon stop
-   claudy daemon start
-   claudy --via-parent /tmp/test
+   hal-9000 daemon stop
+   hal-9000 daemon start
+   hal-9000 --via-parent /tmp/test
    ```
 
 4. **Run tests**
@@ -170,7 +170,7 @@ docker exec <worker-name> curl http://localhost:8000/api/v2/heartbeat
 
 ```bash
 # Check pool status
-claudy pool status
+hal-9000 pool status
 
 # View pool manager logs
 cat ~/.hal9000/logs/pool-manager.log
@@ -217,9 +217,9 @@ cat ~/.hal9000/logs/pool-manager.log
 
 4. **Add tests in `scripts/build/test-my-script.sh`**
 
-### Adding a New Claudy Subcommand
+### Adding a New hal-9000 Subcommand
 
-1. **Add handler function in `claudy`**
+1. **Add handler function in `hal-9000`**
    ```bash
    handle_my_command() {
        # Implementation
@@ -311,7 +311,7 @@ main "$@"
 ### Version Bump
 
 1. Update version in relevant files:
-   - `claudy` (VERSION variable)
+   - `hal-9000` (VERSION variable)
    - `Dockerfile.*` labels
    - Documentation
 

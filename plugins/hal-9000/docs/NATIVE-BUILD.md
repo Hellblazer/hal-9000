@@ -86,9 +86,9 @@ RUN npm install -g \
 
 **Action**: Verify MCP server distribution method
 
-### MEDIUM: claudy Script References Claude Installation
+### MEDIUM: hal-9000 Script References Claude Installation
 
-**File**: `claudy` (our implementation)
+**File**: `hal-9000` (our implementation)
 **Status**: ✅ COMPATIBLE
 
 **Analysis**:
@@ -101,15 +101,15 @@ RUN npm install -g \
 - Native build at `~/.local/bin/claude` ✓
 - npm build at `/usr/local/lib/node_modules/.bin/claude` ✓
 
-### MEDIUM: install-claudy.sh Assumes PATH
+### MEDIUM: install-hal-9000.sh Assumes PATH
 
-**File**: `install-claudy.sh`
+**File**: `install-hal-9000.sh`
 **Status**: ⚠️ MINOR ISSUE
 
 **Current**:
 ```bash
-if ! command -v claudy &> /dev/null; then
-    warn "claudy not in PATH. You may need to restart your terminal."
+if ! command -v hal-9000 &> /dev/null; then
+    warn "hal-9000 not in PATH. You may need to restart your terminal."
 fi
 ```
 
@@ -128,7 +128,7 @@ fi
 
 ### Inside Container (Important!)
 
-When claudy mounts `~/.claude` into container, the native build binary location (`~/.local/bin/claude`) is **NOT** mounted. This is correct because:
+When hal-9000 mounts `~/.claude` into container, the native build binary location (`~/.local/bin/claude`) is **NOT** mounted. This is correct because:
 
 1. Binary runs on **host**, not in container
 2. Configuration (`~/.claude/`) is what matters inside container ✅
@@ -193,10 +193,10 @@ Use native build **inside container**:
 
 ### HIGH (Testing Phase)
 
-**ISSUE**: claudy needs native build testing
+**ISSUE**: hal-9000 needs native build testing
 
 **ACTION REQUIRED**:
-1. [ ] Test claudy with native build installed locally
+1. [ ] Test hal-9000 with native build installed locally
 2. [ ] Verify session token copying works
 3. [ ] Verify container launch works
 4. [ ] Update TESTING-PLAN.md
@@ -246,12 +246,12 @@ RUN uv pip install claude-mcp-servers  # Or equivalent
 - [ ] `claude --version` works inside container
 - [ ] `claude /login` works (authentication)
 - [ ] Session token copying works with native build
-- [ ] claudy script works end-to-end
+- [ ] hal-9000 script works end-to-end
 - [ ] Cross-platform testing (macOS, Linux, WSL2)
 
 ## Documentation Updates Needed
 
-1. **README-CLAUDY.md**: Add native build info
+1. **README-HAL9000.md**: Add native build info
 2. **Dockerfile comments**: Explain why native build
 3. **Installation docs**: Update for native build era
 4. **TESTING-PLAN.md**: Test native build compatibility
@@ -267,7 +267,7 @@ RUN uv pip install claude-mcp-servers  # Or equivalent
 | Area | Status | Action |
 |------|--------|--------|
 | Compatibility | ⚠️ CRITICAL | Update Dockerfile immediately |
-| claudy script | ✅ OK | No changes needed |
+| hal-9000 script | ✅ OK | No changes needed |
 | Testing | ⏳ PENDING | Add native build tests |
 | Documentation | ⚠️ NEEDED | Update for native build |
 | MCP servers | ⏳ VERIFY | Compatibility check needed |
@@ -275,7 +275,7 @@ RUN uv pip install claude-mcp-servers  # Or equivalent
 ---
 
 **Ticket**: ART-900 (Native build compatibility)
-**Related**: CLAUDY-IMPL-2-4 (Cross-platform testing)
+**Related**: HAL9000-IMPL-2-4 (Cross-platform testing)
 **Blocking**: Phase 1 completion
 **Priority**: CRITICAL
 

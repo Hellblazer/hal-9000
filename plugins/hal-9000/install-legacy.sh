@@ -150,18 +150,18 @@ fi
 echo -e "${GREEN}✓ aod (Army of Darkness) installed${NC}"
 echo "Commands: aod, aod-list, aod-attach, aod-stop, aod-cleanup, aod-send, aod-broadcast"
 
-# Install claudy (containerized Claude launcher)
+# Install hal-9000 (containerized Claude launcher)
 echo ""
 echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}  Installing claudy (Containerized Claude)${NC}"
+echo -e "${BLUE}  Installing hal-9000 (Containerized Claude)${NC}"
 echo -e "${BLUE}════════════════════════════════════════════════════${NC}"
 echo ""
 
-echo "Installing claudy script to $INSTALL_BIN..."
-cp "$SCRIPT_DIR/../claudy" "$INSTALL_BIN/claudy"
-chmod +x "$INSTALL_BIN/claudy"
-echo -e "${GREEN}✓ claudy installed${NC}"
-echo "Usage: cd your-project && claudy"
+echo "Installing hal-9000 script to $INSTALL_BIN..."
+cp "$SCRIPT_DIR/../hal-9000" "$INSTALL_BIN/hal-9000"
+chmod +x "$INSTALL_BIN/hal-9000"
+echo -e "${GREEN}✓ hal-9000 installed${NC}"
+echo "Usage: cd your-project && hal-9000"
 
 ##############################################################################
 # OPTIONAL: tmux configuration
@@ -217,7 +217,7 @@ echo "  • MCP Server dependencies (ChromaDB, Memory Bank, Sequential Thinking)
 echo "  • beads (bd) - Issue tracking"
 echo "  • claude-code-tools (tmux-cli, vault, env-safe, find-session)"
 echo "  • aod (Army of Darkness) - Multi-branch development"
-echo "  • claudy - Containerized Claude launcher"
+echo "  • hal-9000 - Containerized Claude launcher"
 if [[ "$install_tmux" =~ ^[Yy]$ ]]; then
     echo "  • tmux configuration"
 fi
@@ -231,8 +231,8 @@ echo ""
 
 echo "🚀 Next Steps:"
 echo "  1. Restart Claude Code to load MCP servers"
-echo "  2. Test: tmux-cli --help, aod --help, claudy --help, bd --help"
-echo "  3. Try: cd your-project && claudy"
+echo "  2. Test: tmux-cli --help, aod --help, hal-9000 --help, bd --help"
+echo "  3. Try: cd your-project && hal-9000"
 echo ""
 
 echo "📚 Documentation:"

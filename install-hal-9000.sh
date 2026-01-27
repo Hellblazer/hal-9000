@@ -1,14 +1,14 @@
 #!/bin/bash
-# install-claudy.sh - Installation script for claudy
-# Installs claudy to system PATH and verifies the installation
+# install-hal-9000.sh - Installation script for hal-9000
+# Installs hal-9000 to system PATH and verifies the installation
 
 set -Eeuo pipefail
 
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-readonly CLAUDY_SOURCE="$SCRIPT_DIR/claudy"
+readonly HAL9000_SOURCE="$SCRIPT_DIR/hal-9000"
 readonly INSTALL_PREFIX="${INSTALL_PREFIX:-/usr/local}"
 readonly INSTALL_DIR="$INSTALL_PREFIX/bin"
-readonly CLAUDY_DEST="$INSTALL_DIR/claudy"
+readonly HAL9000_DEST="$INSTALL_DIR/hal-9000"
 
 # Colors for output
 readonly GREEN='\033[0;32m'
@@ -41,14 +41,14 @@ error() {
 check_prerequisites() {
     info "Checking prerequisites..."
 
-    # Check if claudy source exists
-    if [[ ! -f "$CLAUDY_SOURCE" ]]; then
-        error "claudy script not found at $CLAUDY_SOURCE"
+    # Check if hal-9000 source exists
+    if [[ ! -f "$HAL9000_SOURCE" ]]; then
+        error "hal-9000 script not found at $HAL9000_SOURCE"
     fi
 
-    # Check if claudy is executable
-    if [[ ! -x "$CLAUDY_SOURCE" ]]; then
-        error "claudy is not executable. Run: chmod +x $CLAUDY_SOURCE"
+    # Check if hal-9000 is executable
+    if [[ ! -x "$HAL9000_SOURCE" ]]; then
+        error "hal-9000 is not executable. Run: chmod +x $HAL9000_SOURCE"
     fi
 
     # Check for write access to install directory
@@ -63,8 +63,8 @@ check_prerequisites() {
     success "Prerequisites checked"
 }
 
-install_claudy() {
-    info "Installing claudy to $CLAUDY_DEST..."
+install_hal-9000() {
+    info "Installing hal-9000 to $HAL9000_DEST..."
 
     # Check if installation requires sudo
     if [[ ! -w "$INSTALL_DIR" ]]; then
@@ -72,41 +72,41 @@ install_claudy() {
         if ! sudo -v &> /dev/null; then
             error "sudo access required but not available"
         fi
-        sudo cp "$CLAUDY_SOURCE" "$CLAUDY_DEST"
-        sudo chmod 755 "$CLAUDY_DEST"
+        sudo cp "$HAL9000_SOURCE" "$HAL9000_DEST"
+        sudo chmod 755 "$HAL9000_DEST"
     else
-        cp "$CLAUDY_SOURCE" "$CLAUDY_DEST"
-        chmod 755 "$CLAUDY_DEST"
+        cp "$HAL9000_SOURCE" "$HAL9000_DEST"
+        chmod 755 "$HAL9000_DEST"
     fi
 
-    success "claudy installed to $CLAUDY_DEST"
+    success "hal-9000 installed to $HAL9000_DEST"
 }
 
 verify_installation() {
     info "Verifying installation..."
 
-    # Check if claudy is in PATH
-    if ! command -v claudy &> /dev/null; then
-        warn "claudy not in PATH. You may need to restart your terminal."
+    # Check if hal-9000 is in PATH
+    if ! command -v hal-9000 &> /dev/null; then
+        warn "hal-9000 not in PATH. You may need to restart your terminal."
     else
-        success "claudy is in PATH"
+        success "hal-9000 is in PATH"
     fi
 
-    # Check if claudy is executable
-    if ! "$CLAUDY_DEST" --version &> /dev/null; then
-        error "claudy is not working. Try: $CLAUDY_DEST --verify"
+    # Check if hal-9000 is executable
+    if ! "$HAL9000_DEST" --version &> /dev/null; then
+        error "hal-9000 is not working. Try: $HAL9000_DEST --verify"
     fi
 
     local version
-    version=$("$CLAUDY_DEST" --version | head -1)
+    version=$("$HAL9000_DEST" --version | head -1)
     success "Installed: $version"
 
     # Run basic verification
     info "Running basic verification..."
-    if "$CLAUDY_DEST" --verify 2>&1 | grep -q "Prerequisites verified"; then
+    if "$HAL9000_DEST" --verify 2>&1 | grep -q "Prerequisites verified"; then
         success "Verification passed"
     else
-        warn "Verification had warnings. Run: claudy --diagnose"
+        warn "Verification had warnings. Run: hal-9000 --diagnose"
     fi
 }
 
@@ -116,27 +116,27 @@ show_post_install() {
     echo -e "${GREEN}Installation Complete!${NC}"
     echo -e "${BLUE}════════════════════════════════════════${NC}"
     echo ""
-    echo "You can now use claudy:"
+    echo "You can now use hal-9000:"
     echo ""
     echo -e "${YELLOW}  Quick Start:${NC}"
     echo "    cd ~/your-project"
-    echo "    claudy"
+    echo "    hal-9000"
     echo ""
     echo -e "${YELLOW}  More Options:${NC}"
-    echo "    claudy --help              Show all options"
-    echo "    claudy --diagnose          Check your setup"
-    echo "    claudy --profile python    Force a specific profile"
+    echo "    hal-9000 --help              Show all options"
+    echo "    hal-9000 --diagnose          Check your setup"
+    echo "    hal-9000 --profile python    Force a specific profile"
     echo ""
     echo -e "${YELLOW}  Documentation:${NC}"
     echo "    https://github.com/hellblazer/hal-9000"
     echo ""
 }
 
-uninstall_claudy() {
-    info "Uninstalling claudy..."
+uninstall_hal-9000() {
+    info "Uninstalling hal-9000..."
 
-    if [[ ! -f "$CLAUDY_DEST" ]]; then
-        warn "claudy not found at $CLAUDY_DEST"
+    if [[ ! -f "$HAL9000_DEST" ]]; then
+        warn "hal-9000 not found at $HAL9000_DEST"
         return 0
     fi
 
@@ -146,12 +146,12 @@ uninstall_claudy() {
         if ! sudo -v &> /dev/null; then
             error "sudo access required but not available"
         fi
-        sudo rm -f "$CLAUDY_DEST"
+        sudo rm -f "$HAL9000_DEST"
     else
-        rm -f "$CLAUDY_DEST"
+        rm -f "$HAL9000_DEST"
     fi
 
-    success "claudy uninstalled"
+    success "hal-9000 uninstalled"
 }
 
 #==============================================================================
@@ -163,19 +163,19 @@ main() {
 
     case "$action" in
         install)
-            echo -e "${BLUE}claudy Installation${NC}"
-            echo "Destination: $CLAUDY_DEST"
+            echo -e "${BLUE}hal-9000 Installation${NC}"
+            echo "Destination: $HAL9000_DEST"
             echo ""
             check_prerequisites
-            install_claudy
+            install_hal-9000
             verify_installation
             show_post_install
             ;;
         uninstall)
-            echo -e "${BLUE}claudy Uninstallation${NC}"
-            echo "Target: $CLAUDY_DEST"
+            echo -e "${BLUE}hal-9000 Uninstallation${NC}"
+            echo "Target: $HAL9000_DEST"
             echo ""
-            uninstall_claudy
+            uninstall_hal-9000
             ;;
         verify)
             echo -e "${BLUE}Verifying Installation${NC}"
@@ -186,14 +186,14 @@ main() {
             echo "Usage: $0 [install|uninstall|verify]"
             echo ""
             echo "Commands:"
-            echo "  install    Install claudy to system (default)"
-            echo "  uninstall  Remove claudy from system"
+            echo "  install    Install hal-9000 to system (default)"
+            echo "  uninstall  Remove hal-9000 from system"
             echo "  verify     Check existing installation"
             echo ""
             echo "Examples:"
-            echo "  ./install-claudy.sh              # Install claudy"
-            echo "  ./install-claudy.sh verify       # Check installation"
-            echo "  ./install-claudy.sh uninstall    # Remove claudy"
+            echo "  ./install-hal-9000.sh              # Install hal-9000"
+            echo "  ./install-hal-9000.sh verify       # Check installation"
+            echo "  ./install-hal-9000.sh uninstall    # Remove hal-9000"
             exit 1
             ;;
     esac

@@ -43,64 +43,64 @@
 
 ```bash
 # Start with defaults
-claudy daemon start
+hal-9000 daemon start
 ```
 
 ### Fast Startup (Image Pre-pulled)
 
 ```bash
 # Skip image pull check for faster startup
-SKIP_IMAGE_PULL=true claudy daemon start
+SKIP_IMAGE_PULL=true hal-9000 daemon start
 ```
 
 ### High-Performance Workers
 
 ```bash
 # Increase resources for heavy workloads
-WORKER_MEMORY=8g WORKER_CPUS=4 WORKER_PIDS_LIMIT=200 claudy daemon start
+WORKER_MEMORY=8g WORKER_CPUS=4 WORKER_PIDS_LIMIT=200 hal-9000 daemon start
 ```
 
 ### Warm Worker Pool
 
 ```bash
 # Enable pool with 3 warm workers
-ENABLE_POOL_MANAGER=true MIN_WARM_WORKERS=3 claudy daemon start
+ENABLE_POOL_MANAGER=true MIN_WARM_WORKERS=3 hal-9000 daemon start
 ```
 
 ### Custom ChromaDB Port
 
 ```bash
 # Use different port (useful if 8000 is in use)
-CHROMADB_PORT=8080 claudy daemon start
+CHROMADB_PORT=8080 hal-9000 daemon start
 ```
 
-## Claudy CLI Options
+## hal-9000 CLI Options
 
 ### Daemon Commands
 
 ```bash
-claudy daemon start     # Start parent container
-claudy daemon stop      # Stop parent container
-claudy daemon status    # Check daemon health
-claudy daemon restart   # Restart parent container
+hal-9000 daemon start     # Start parent container
+hal-9000 daemon stop      # Stop parent container
+hal-9000 daemon status    # Check daemon health
+hal-9000 daemon restart   # Restart parent container
 ```
 
 ### Worker Spawn Options
 
 ```bash
-claudy --via-parent /path/to/project   # Spawn via parent
-claudy --via-parent --detach           # Spawn in background
-claudy --via-parent --name my-session  # Custom session name
+hal-9000 --via-parent /path/to/project   # Spawn via parent
+hal-9000 --via-parent --detach           # Spawn in background
+hal-9000 --via-parent --name my-session  # Custom session name
 ```
 
 ### Pool Commands
 
 ```bash
-claudy pool start      # Start pool manager
-claudy pool stop       # Stop pool manager
-claudy pool status     # Show pool status
-claudy pool scale 5    # Scale to 5 warm workers
-claudy pool cleanup    # Remove idle workers
+hal-9000 pool start      # Start pool manager
+hal-9000 pool stop       # Stop pool manager
+hal-9000 pool status     # Show pool status
+hal-9000 pool scale 5    # Scale to 5 warm workers
+hal-9000 pool cleanup    # Remove idle workers
 ```
 
 ### Resource Limits via CLI
@@ -183,18 +183,18 @@ WORKER_PIDS_LIMIT=50
 docker inspect hal9000-parent --format '{{json .Config.Env}}' | jq .
 
 # View pool status with configuration
-claudy pool status
+hal-9000 pool status
 ```
 
 ### Reset to Defaults
 
 ```bash
 # Stop and remove parent
-claudy daemon stop
+hal-9000 daemon stop
 docker rm -f hal9000-parent
 
 # Start with defaults
-claudy daemon start
+hal-9000 daemon start
 ```
 
 ## Configuration Files
@@ -229,4 +229,4 @@ Pool manager state stored in `~/.hal9000/pool/`:
 
 **Navigation**: [Overview](README.md) | [Installation](INSTALLATION.md) | [Configuration](CONFIGURATION.md) | [Architecture](ARCHITECTURE.md) | [Migration](MIGRATION.md) | [Troubleshooting](TROUBLESHOOTING.md) | [Development](DEVELOPMENT.md)
 
-**Quick Links**: [Environment Variables](#environment-variables) | [CLI Options](#claudy-cli-options) | [Volume Configuration](#volume-configuration)
+**Quick Links**: [Environment Variables](#environment-variables) | [CLI Options](#hal-9000-cli-options) | [Volume Configuration](#volume-configuration)

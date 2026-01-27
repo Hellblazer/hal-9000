@@ -1,11 +1,10 @@
 #!/bin/bash
-# claudy - Containerized Claude CLI launcher
+# hal-9000 - Containerized Claude CLI launcher
 # Opens Claude inside a tmux session within a hal-9000 container
-# See: .pm/BEADS.md (CLAUDY-IMPL-1-1) for implementation details
 
 set -Eeuo pipefail
 
-readonly SCRIPT_NAME="claudy"
+readonly SCRIPT_NAME="hal-9000"
 readonly SCRIPT_VERSION="0.7.0"
 readonly HAL9000_HOME="${HOME}/.hal9000"
 readonly PARENT_CONTAINER="hal9000-parent"
@@ -94,37 +93,37 @@ is_claude_subcommand() {
 
 show_help() {
     cat << 'EOF'
-claudy - Containerized Claude CLI
+hal-9000 - Containerized Claude CLI
 
 USAGE:
-  claudy [OPTIONS] [DIRECTORY]           # Interactive Claude session
-  claudy <claude-command> [args...]      # Run claude command in container
-  claudy daemon <command>                # Manage orchestrator
-  claudy pool <command>                  # Manage worker pool
+  hal-9000 [OPTIONS] [DIRECTORY]           # Interactive Claude session
+  hal-9000 <claude-command> [args...]      # Run claude command in container
+  hal-9000 daemon <command>                # Manage orchestrator
+  hal-9000 pool <command>                  # Manage worker pool
 
 CLAUDE COMMANDS (passthrough to container):
-  claudy plugin list                     # List installed plugins
-  claudy plugin install <name>           # Install a plugin
-  claudy plugin marketplace add <url>    # Add a marketplace
-  claudy mcp list                        # List MCP servers
-  claudy mcp add <server>                # Add MCP server
-  claudy doctor                          # Check Claude health
+  hal-9000 plugin list                     # List installed plugins
+  hal-9000 plugin install <name>           # Install a plugin
+  hal-9000 plugin marketplace add <url>    # Add a marketplace
+  hal-9000 mcp list                        # List MCP servers
+  hal-9000 mcp add <server>                # Add MCP server
+  hal-9000 doctor                          # Check Claude health
 
   All 'claude' subcommands work - they run inside a container with the
   shared CLAUDE_HOME volume, so changes persist across all sessions.
 
 DAEMON COMMANDS:
-  claudy daemon start    Start the orchestrator (parent container with ChromaDB)
-  claudy daemon stop     Stop the orchestrator
-  claudy daemon status   Show orchestrator status and worker count
-  claudy daemon restart  Restart the orchestrator
+  hal-9000 daemon start    Start the orchestrator (parent container with ChromaDB)
+  hal-9000 daemon stop     Stop the orchestrator
+  hal-9000 daemon status   Show orchestrator status and worker count
+  hal-9000 daemon restart  Restart the orchestrator
 
 POOL COMMANDS:
-  claudy pool start      Start the worker pool manager
-  claudy pool stop       Stop the worker pool manager
-  claudy pool status     Show pool status (warm/busy workers)
-  claudy pool scale <n>  Scale to n warm workers
-  claudy pool cleanup    Force cleanup of idle workers
+  hal-9000 pool start      Start the worker pool manager
+  hal-9000 pool stop       Stop the worker pool manager
+  hal-9000 pool status     Show pool status (warm/busy workers)
+  hal-9000 pool scale <n>  Scale to n warm workers
+  hal-9000 pool cleanup    Force cleanup of idle workers
 
 OPTIONS:
   --setup                Interactive setup for API key (first-time setup)
@@ -157,19 +156,19 @@ AUTHENTICATION (required):
   Add to ~/.bashrc or ~/.zshrc to persist.
 
 EXAMPLES:
-  claudy                                    # Current dir, auto-detect profile
-  claudy --profile python                   # Force Python profile
-  claudy ~/projects/myapp                   # Specific directory
-  claudy --shell -d                         # Detached shell session
-  claudy plugin install memory-bank         # Install plugin (persists)
-  claudy mcp list                           # List MCP servers
-  claudy --diagnose                         # Check setup
+  hal-9000                                    # Current dir, auto-detect profile
+  hal-9000 --profile python                   # Force Python profile
+  hal-9000 ~/projects/myapp                   # Specific directory
+  hal-9000 --shell -d                         # Detached shell session
+  hal-9000 plugin install memory-bank         # Install plugin (persists)
+  hal-9000 mcp list                           # List MCP servers
+  hal-9000 --diagnose                         # Check setup
 
 DAEMON EXAMPLES:
-  claudy daemon start                       # Start the orchestrator
-  claudy daemon status                      # Check status and workers
-  claudy daemon stop                        # Stop the orchestrator
-  claudy --via-parent ~/project             # Launch worker via parent (DinD mode)
+  hal-9000 daemon start                       # Start the orchestrator
+  hal-9000 daemon status                      # Check status and workers
+  hal-9000 daemon stop                        # Stop the orchestrator
+  hal-9000 --via-parent ~/project             # Launch worker via parent (DinD mode)
 
 ENVIRONMENT:
   ANTHROPIC_API_KEY      API key for Claude authentication
@@ -186,13 +185,13 @@ EOF
 }
 
 show_version() {
-    echo "claudy version $SCRIPT_VERSION"
+    echo "hal-9000 version $SCRIPT_VERSION"
     echo "hal-9000 plugin version 1.4.0+"
 }
 
 setup_auth() {
     echo ""
-    info "Claudy Authentication Setup"
+    info "hal-9000 Authentication Setup"
     echo ""
 
     # Check if already configured
@@ -262,7 +261,7 @@ setup_auth() {
             fi
 
             echo "" >> "$shell_rc"
-            echo "# Anthropic API key for Claude Code (added by claudy)" >> "$shell_rc"
+            echo "# Anthropic API key for Claude Code (added by hal-9000)" >> "$shell_rc"
             echo "export ANTHROPIC_API_KEY=\"$api_key_input\"" >> "$shell_rc"
 
             success "Added to $shell_rc"
@@ -276,7 +275,7 @@ setup_auth() {
             export ANTHROPIC_API_KEY="$api_key_input"
             success "API key set for current session"
             echo ""
-            info "Note: This won't persist. Run 'claudy --setup' again to save permanently."
+            info "Note: This won't persist. Run 'hal-9000 --setup' again to save permanently."
             ;;
         *)
             info "Setup cancelled"
@@ -285,11 +284,11 @@ setup_auth() {
     esac
 
     echo ""
-    success "Setup complete! You can now run: claudy"
+    success "Setup complete! You can now run: hal-9000"
 }
 
 show_diagnostics() {
-    info "Claudy Diagnostics"
+    info "hal-9000 Diagnostics"
     echo ""
 
     # Check Docker
@@ -297,7 +296,7 @@ show_diagnostics() {
         DOCKER_VERSION=$(docker --version)
         success "Docker: $DOCKER_VERSION"
     else
-        error "Docker not found. Install Docker to use claudy."
+        error "Docker not found. Install Docker to use hal-9000."
     fi
 
     # Check tmux
@@ -383,7 +382,7 @@ show_diagnostics() {
     if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
         info "Authentication options:"
         echo "  1. Set ANTHROPIC_API_KEY environment variable"
-        echo "  2. Run 'claudy --shell' then 'claude /login' inside container"
+        echo "  2. Run 'hal-9000 --shell' then 'claude /login' inside container"
         echo "  3. Run 'claude setup-token' on host for long-lived token"
     fi
 
@@ -450,7 +449,7 @@ daemon_status() {
         esac
     else
         warn "Parent container: Not found"
-        info "  Run 'claudy daemon start' to create"
+        info "  Run 'hal-9000 daemon start' to create"
     fi
 
     # Check for shared volumes
@@ -611,7 +610,7 @@ handle_daemon_command() {
             daemon_restart
             ;;
         ""|help)
-            echo "Usage: claudy daemon <command>"
+            echo "Usage: hal-9000 daemon <command>"
             echo ""
             echo "Commands:"
             echo "  start    Start the orchestrator (parent container with ChromaDB server)"
@@ -635,7 +634,7 @@ handle_pool_command() {
 
     # Handle help without requiring parent
     if [[ "$cmd" == "help" ]] || [[ -z "$cmd" ]]; then
-        echo "Usage: claudy pool <command> [options]"
+        echo "Usage: hal-9000 pool <command> [options]"
         echo ""
         echo "Manage the worker pool for fast container startup."
         echo ""
@@ -656,7 +655,7 @@ handle_pool_command() {
 
     # Check if parent is running for other commands
     if ! docker ps --format '{{.Names}}' | grep -q "^${PARENT_CONTAINER}$"; then
-        error "Parent container not running. Start with: claudy daemon start"
+        error "Parent container not running. Start with: hal-9000 daemon start"
     fi
 
     case "$cmd" in
@@ -712,7 +711,7 @@ launch_via_parent() {
         if [[ ! $REPLY =~ ^[Nn]$ ]]; then
             daemon_start
         else
-            error "Cannot launch via parent without orchestrator. Run 'claudy daemon start' first."
+            error "Cannot launch via parent without orchestrator. Run 'hal-9000 daemon start' first."
         fi
     fi
 
@@ -766,7 +765,7 @@ launch_via_parent() {
 }
 
 #==============================================================================
-# Profile detection (See: claudy-installation-setup.md)
+# Profile detection (See: hal-9000-installation-setup.md)
 #==============================================================================
 
 detect_profile() {
@@ -814,7 +813,7 @@ get_session_name() {
     # Clean basename for tmux (alphanumeric, hyphen, underscore only)
     basename=$(echo "$basename" | sed 's/[^a-zA-Z0-9_-]/-/g')
 
-    echo "claudy-${basename}-${hash}"
+    echo "hal-9000-${basename}-${hash}"
 }
 
 verify_prerequisites() {
@@ -843,13 +842,13 @@ verify_prerequisites() {
         echo ""
         info "Run the interactive setup:"
         echo ""
-        echo "  claudy --setup"
+        echo "  hal-9000 --setup"
         echo ""
         info "Or manually set your API key:"
         echo "  export ANTHROPIC_API_KEY=sk-ant-api03-..."
         echo "  Get key at: https://console.anthropic.com/settings/keys"
         echo ""
-        error "Run 'claudy --setup' to configure authentication"
+        error "Run 'hal-9000 --setup' to configure authentication"
     fi
 
     success "Prerequisites verified"
@@ -876,7 +875,7 @@ init_session() {
     mkdir -p "$session_dir"
 
     # Create session metadata
-    cat > "$session_dir/.claudy-session.json" << METADATA
+    cat > "$session_dir/.hal-9000-session.json" << METADATA
 {
   "name": "$session_name",
   "profile": "$profile",
@@ -884,7 +883,7 @@ init_session() {
   "created_at": "$(date -Iseconds)",
   "shell_mode": $shell_mode,
   "container_image": "${CONTAINER_IMAGE_BASE}:${profile}",
-  "claudy_version": "$SCRIPT_VERSION"
+  "hal-9000_version": "$SCRIPT_VERSION"
 }
 METADATA
 
@@ -929,8 +928,8 @@ launch_container_session() {
         -v "${CLAUDE_HOME_VOLUME}:/root/.claude"
         -v "${MEMORY_BANK_VOLUME}:/root/memory-bank"
         -v /var/run/docker.sock:/var/run/docker.sock
-        -e "CLAUDY_SESSION=$session_name"
-        -e "CLAUDY_PROJECT_DIR=$abs_project_path"
+        -e "HAL9000_SESSION=$session_name"
+        -e "HAL9000_PROJECT_DIR=$abs_project_path"
         -e "MEMORY_BANK_ROOT=/root/memory-bank"
     )
 

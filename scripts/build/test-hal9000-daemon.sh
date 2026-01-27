@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# test-claudy-daemon.sh - Test claudy daemon subcommands
+# test-hal-9000-daemon.sh - Test hal-9000 daemon subcommands
 #
 # Tests:
-# - claudy daemon help
-# - claudy daemon status (when not running)
-# - claudy daemon start
-# - claudy daemon status (when running)
-# - claudy daemon restart
-# - claudy daemon stop
+# - hal-9000 daemon help
+# - hal-9000 daemon status (when not running)
+# - hal-9000 daemon start
+# - hal-9000 daemon status (when running)
+# - hal-9000 daemon restart
+# - hal-9000 daemon stop
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-CLAUDY="$REPO_ROOT/claudy"
+HAL9000="$REPO_ROOT/hal-9000"
 
 # Colors
 readonly GREEN='\033[0;32m'
@@ -64,9 +64,9 @@ check_prerequisites() {
         exit 1
     fi
 
-    # Check claudy exists
-    if [[ ! -x "$CLAUDY" ]]; then
-        log_fail "claudy not found or not executable: $CLAUDY"
+    # Check hal-9000 exists
+    if [[ ! -x "$HAL9000" ]]; then
+        log_fail "hal-9000 not found or not executable: $HAL9000"
         exit 1
     fi
 
@@ -78,12 +78,12 @@ check_prerequisites() {
 # ============================================================================
 
 test_daemon_help() {
-    log_test "claudy daemon help shows usage"
+    log_test "hal-9000 daemon help shows usage"
 
     local output
-    output=$("$CLAUDY" daemon help 2>&1) || true
+    output=$("$HAL9000" daemon help 2>&1) || true
 
-    if echo "$output" | grep -q "Usage: claudy daemon"; then
+    if echo "$output" | grep -q "Usage: hal-9000 daemon"; then
         log_pass "daemon help shows usage"
     else
         log_fail "daemon help output incorrect"
@@ -92,14 +92,14 @@ test_daemon_help() {
 }
 
 test_daemon_status_not_running() {
-    log_test "claudy daemon status when not running"
+    log_test "hal-9000 daemon status when not running"
 
     # Ensure parent is not running
     docker stop "$PARENT_CONTAINER" 2>/dev/null || true
     docker rm "$PARENT_CONTAINER" 2>/dev/null || true
 
     local output
-    output=$("$CLAUDY" daemon status 2>&1) || true
+    output=$("$HAL9000" daemon status 2>&1) || true
 
     if echo "$output" | grep -q "Parent container: Not found"; then
         log_pass "daemon status shows not found when stopped"
@@ -110,7 +110,7 @@ test_daemon_status_not_running() {
 }
 
 test_daemon_start() {
-    log_test "claudy daemon start creates parent container"
+    log_test "hal-9000 daemon start creates parent container"
 
     # Check if parent image exists
     if ! docker image inspect "ghcr.io/hellblazer/hal-9000:parent" &>/dev/null; then
@@ -128,7 +128,7 @@ test_daemon_start() {
     fi
 
     # Start daemon
-    "$CLAUDY" daemon start 2>&1 || {
+    "$HAL9000" daemon start 2>&1 || {
         log_fail "daemon start failed"
         return 1
     }
@@ -143,16 +143,16 @@ test_daemon_start() {
 }
 
 test_daemon_status_running() {
-    log_test "claudy daemon status when running"
+    log_test "hal-9000 daemon status when running"
 
     # Ensure daemon is running
     if ! docker ps --format '{{.Names}}' | grep -q "^${PARENT_CONTAINER}$"; then
         log_info "Starting daemon for status test..."
-        "$CLAUDY" daemon start 2>&1 || true
+        "$HAL9000" daemon start 2>&1 || true
     fi
 
     local output
-    output=$("$CLAUDY" daemon status 2>&1) || true
+    output=$("$HAL9000" daemon status 2>&1) || true
 
     if echo "$output" | grep -q "Parent container: Running"; then
         log_pass "daemon status shows running"
@@ -168,7 +168,7 @@ test_daemon_chromadb_healthy() {
     # Ensure daemon is running
     if ! docker ps --format '{{.Names}}' | grep -q "^${PARENT_CONTAINER}$"; then
         log_info "Starting daemon for chromadb test..."
-        "$CLAUDY" daemon start 2>&1 || true
+        "$HAL9000" daemon start 2>&1 || true
         sleep 5  # Extra wait for ChromaDB
     fi
 
@@ -185,7 +185,7 @@ test_daemon_volumes_created() {
 
     # Start daemon to ensure volumes are created
     if ! docker ps --format '{{.Names}}' | grep -q "^${PARENT_CONTAINER}$"; then
-        "$CLAUDY" daemon start 2>&1 || true
+        "$HAL9000" daemon start 2>&1 || true
     fi
 
     local all_exist=true
@@ -204,11 +204,11 @@ test_daemon_volumes_created() {
 }
 
 test_daemon_restart() {
-    log_test "claudy daemon restart works"
+    log_test "hal-9000 daemon restart works"
 
     # Ensure daemon is running
     if ! docker ps --format '{{.Names}}' | grep -q "^${PARENT_CONTAINER}$"; then
-        "$CLAUDY" daemon start 2>&1 || true
+        "$HAL9000" daemon start 2>&1 || true
     fi
 
     # Get original container ID
@@ -218,7 +218,7 @@ test_daemon_restart() {
     # Restart (non-interactive - force stop)
     docker stop "$PARENT_CONTAINER" >/dev/null 2>&1 || true
     docker rm "$PARENT_CONTAINER" >/dev/null 2>&1 || true
-    "$CLAUDY" daemon start 2>&1 || true
+    "$HAL9000" daemon start 2>&1 || true
 
     # Get new container ID
     local new_id
@@ -234,11 +234,11 @@ test_daemon_restart() {
 }
 
 test_daemon_stop() {
-    log_test "claudy daemon stop works"
+    log_test "hal-9000 daemon stop works"
 
     # Ensure daemon is running
     if ! docker ps --format '{{.Names}}' | grep -q "^${PARENT_CONTAINER}$"; then
-        "$CLAUDY" daemon start 2>&1 || true
+        "$HAL9000" daemon start 2>&1 || true
     fi
 
     # Stop (use docker directly to avoid interactive prompt)
@@ -253,10 +253,10 @@ test_daemon_stop() {
 }
 
 test_version_updated() {
-    log_test "claudy version is 0.6.0+"
+    log_test "hal-9000 version is 0.6.0+"
 
     local version
-    version=$("$CLAUDY" --version 2>&1 | head -1) || version=""
+    version=$("$HAL9000" --version 2>&1 | head -1) || version=""
 
     if echo "$version" | grep -qE "0\.[6-9]|[1-9]\.[0-9]"; then
         log_pass "Version updated: $version"
@@ -266,10 +266,10 @@ test_version_updated() {
 }
 
 test_help_shows_daemon() {
-    log_test "claudy --help shows daemon commands"
+    log_test "hal-9000 --help shows daemon commands"
 
     local output
-    output=$("$CLAUDY" --help 2>&1) || true
+    output=$("$HAL9000" --help 2>&1) || true
 
     if echo "$output" | grep -q "DAEMON COMMANDS"; then
         log_pass "Help shows daemon commands section"
@@ -286,7 +286,7 @@ main() {
     local test_filter="${1:-all}"
 
     echo "=========================================="
-    echo "  Claudy Daemon Tests"
+    echo "  hal-9000 Daemon Tests"
     echo "=========================================="
     echo ""
 

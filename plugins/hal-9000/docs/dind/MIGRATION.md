@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide covers migrating from claudy v0.5.x (single-container mode) to v0.6.x (DinD mode).
+This guide covers migrating from hal-9000 v0.5.x (single-container mode) to v0.6.x (DinD mode).
 
 ## What Changes
 
@@ -38,8 +38,8 @@ The migration script will:
 ### Method 2: Manual Migration
 
 ```bash
-# 1. Stop any running claudy containers
-docker ps --filter "name=claudy-" --format "{{.Names}}" | xargs docker stop
+# 1. Stop any running hal-9000 containers
+docker ps --filter "name=hal-9000-" --format "{{.Names}}" | xargs docker stop
 
 # 2. Create backup
 BACKUP_DIR="$HOME/.hal9000-backup-$(date +%Y%m%d)"
@@ -62,10 +62,10 @@ docker run --rm \
     alpine cp -r /source/. /dest/
 
 # 5. Start DinD daemon
-claudy daemon start
+hal-9000 daemon start
 
 # 6. Verify
-claudy daemon status
+hal-9000 daemon status
 ```
 
 ### Method 3: Fresh Start
@@ -82,7 +82,7 @@ docker volume create hal9000-memorybank
 docker volume create hal9000-plugins
 
 # Start daemon
-claudy daemon start
+hal-9000 daemon start
 ```
 
 ## Rollback
@@ -104,7 +104,7 @@ If migration fails, you can rollback:
 
 ```bash
 # 1. Stop DinD daemon
-claudy daemon stop
+hal-9000 daemon stop
 
 # 2. Restore backup
 BACKUP_DIR="$HOME/.hal9000-backup-YYYYMMDD"  # Use your backup date
@@ -144,11 +144,11 @@ After migration, verify everything works:
 
 ```bash
 # 1. Check daemon status
-claudy daemon status
+hal-9000 daemon status
 # Should show: Container: running, ChromaDB: healthy
 
 # 2. Test worker spawn
-claudy --via-parent /tmp/test-project
+hal-9000 --via-parent /tmp/test-project
 # Should spawn worker successfully
 
 # 3. Verify ChromaDB data
@@ -211,7 +211,7 @@ rm -rf ~/.hal9000/chromadb ~/.hal9000/membank
 ## Migration FAQ
 
 ### Q: Can I use both modes simultaneously?
-A: No. Claudy v0.7.0+ uses the DinD architecture with shared Docker volumes.
+A: No. hal-9000 v0.7.0+ uses the DinD architecture with shared Docker volumes.
 
 ### Q: Is the migration reversible?
 A: Yes, if you keep the backup. Use the rollback script.

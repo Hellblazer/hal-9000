@@ -10,7 +10,7 @@
 #   --force             Continue even if pre-checks fail
 #   -h, --help          Show this help
 #
-# This script migrates from claudy v0.5.x (single container) to v0.6.x (DinD)
+# This script migrates from hal-9000 v0.5.x (single container) to v0.6.x (DinD)
 #
 # Changes:
 # - ChromaDB: local directory -> named volume (hal9000-chromadb)
@@ -50,7 +50,7 @@ show_help() {
     cat <<EOF
 Usage: migrate-to-dind.sh [options]
 
-Migrate from claudy v0.5.x (single container) to v0.6.x (DinD architecture).
+Migrate from hal-9000 v0.5.x (single container) to v0.6.x (DinD architecture).
 
 Options:
   --dry-run           Show what would be migrated without making changes
@@ -65,7 +65,7 @@ What gets migrated:
   - Sessions          -> unchanged (remain in ~/.hal9000/claude/)
 
 The migration:
-  1. Verifies prerequisites (Docker, claudy v0.6.x)
+  1. Verifies prerequisites (Docker, hal-9000 v0.6.x)
   2. Backs up existing data
   3. Creates named Docker volumes
   4. Copies data into volumes
@@ -73,9 +73,9 @@ The migration:
   6. Verifies migration success
 
 After migration:
-  - Use 'claudy daemon start' to start orchestrator
-  - Use 'claudy --via-parent' to spawn workers through parent
-  - Use 'claudy daemon status' to check health
+  - Use 'hal-9000 daemon start' to start orchestrator
+  - Use 'hal-9000 --via-parent' to spawn workers through parent
+  - Use 'hal-9000 daemon status' to check health
 EOF
 }
 
@@ -126,18 +126,18 @@ check_prerequisites() {
         log_success "Docker available"
     fi
 
-    # Check claudy version
-    local claudy="${REPO_ROOT}/claudy"
-    if [[ -x "$claudy" ]]; then
+    # Check hal-9000 version
+    local hal-9000="${REPO_ROOT}/hal-9000"
+    if [[ -x "$hal-9000" ]]; then
         local version
-        version=$("$claudy" --version 2>&1 | head -1) || version=""
+        version=$("$hal-9000" --version 2>&1 | head -1) || version=""
         if echo "$version" | grep -qE "0\.[6-9]|[1-9]\.[0-9]"; then
-            log_success "Claudy version OK: $version"
+            log_success "hal-9000 version OK: $version"
         else
-            log_warn "Claudy version might be old: $version"
+            log_warn "hal-9000 version might be old: $version"
         fi
     else
-        log_error "Claudy not found at $claudy"
+        log_error "hal-9000 not found at $hal-9000"
         failed=true
     fi
 
@@ -347,12 +347,12 @@ start_daemon() {
     log_info "Starting DinD daemon..."
 
     if [[ "$DRY_RUN" == "true" ]]; then
-        log_info "[DRY RUN] Would start daemon with: claudy daemon start"
+        log_info "[DRY RUN] Would start daemon with: hal-9000 daemon start"
         return 0
     fi
 
-    local claudy="${REPO_ROOT}/claudy"
-    "$claudy" daemon start 2>&1 || {
+    local hal-9000="${REPO_ROOT}/hal-9000"
+    "$hal-9000" daemon start 2>&1 || {
         log_error "Failed to start daemon"
         return 1
     }
@@ -436,8 +436,8 @@ show_post_migration_info() {
     log_info "  $BACKUP_DIR"
     echo ""
     log_info "Next steps:"
-    log_info "  1. Test: claudy daemon status"
-    log_info "  2. Spawn worker: claudy --via-parent /path/to/project"
+    log_info "  1. Test: hal-9000 daemon status"
+    log_info "  2. Spawn worker: hal-9000 --via-parent /path/to/project"
     log_info "  3. If issues, rollback: ./scripts/rollback-dind.sh"
     echo ""
     log_info "To remove old local data (after verifying migration):"

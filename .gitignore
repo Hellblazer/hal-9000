@@ -22,8 +22,8 @@ logs/
 # Only allow Python in proper locations (scripts/, src/, tests/)
 /*.py
 !scripts/*.py
-!claudy
-!install-claudy.sh
+!hal-9000
+!install-hal-9000.sh
 
 # Prevent JSON data file sprawl in root (ART-678)
 # Only allow JSON in proper locations (src/, .claude/, docs/archive/)

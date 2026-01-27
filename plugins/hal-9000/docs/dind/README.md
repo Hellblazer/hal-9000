@@ -14,13 +14,13 @@ The DinD architecture provides isolated Claude Code environments running in Dock
 
 ```bash
 # Start the daemon (parent container + ChromaDB)
-claudy daemon start
+hal-9000 daemon start
 
 # Spawn a worker for your project
-claudy --via-parent /path/to/project
+hal-9000 --via-parent /path/to/project
 
 # Check status
-claudy daemon status
+hal-9000 daemon status
 ```
 
 ## Documentation
@@ -79,15 +79,15 @@ graph TB
 - Resource-limited (4GB memory, 2 CPUs, 100 processes)
 - Run Claude Code sessions
 
-### Claudy CLI
-- `claudy daemon start/stop/status` - Manage parent container
-- `claudy --via-parent` - Spawn worker through parent
-- `claudy pool start/status` - Manage warm worker pool
+### hal-9000 CLI
+- `hal-9000 daemon start/stop/status` - Manage parent container
+- `hal-9000 --via-parent` - Spawn worker through parent
+- `hal-9000 pool start/status` - Manage warm worker pool
 
 ## Requirements
 
 - Docker 20.10+
-- claudy v0.7.0+
+- hal-9000 v0.7.0+
 - 8GB+ RAM recommended
 - Docker socket access
 

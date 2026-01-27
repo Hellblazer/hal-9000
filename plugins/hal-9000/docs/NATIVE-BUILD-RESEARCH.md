@@ -37,7 +37,7 @@ RUN curl -fsSL https://claude.ai/install.sh | bash  # ✅ RECOMMENDED
 **Status**: FIXED and committed (0b29dfb)
 
 ### VERIFIED ✅
-**claudy script** - Already compatible
+**hal-9000 script** - Already compatible
 
 - Uses `~/.claude/` directory (same in both builds)
 - Doesn't hardcode paths
@@ -60,7 +60,7 @@ RUN curl -fsSL https://claude.ai/install.sh | bash  # ✅ RECOMMENDED
 - Smaller image size (no npm overhead)
 - Future-proof for upcoming Claude versions
 
-✅ **claudy script**
+✅ **hal-9000 script**
 - Ready for testing with native build
 - Session authentication unchanged
 - Configuration paths unchanged
@@ -68,7 +68,7 @@ RUN curl -fsSL https://claude.ai/install.sh | bash  # ✅ RECOMMENDED
 
 ## What Needs Testing
 
-Phase 1 Week 2 (CLAUDY-IMPL-2-4):
+Phase 1 Week 2 (HAL9000-IMPL-2-4):
 
 1. **Test native build locally**
    - Install via `curl -fsSL https://claude.ai/install.sh | bash`
@@ -80,7 +80,7 @@ Phase 1 Week 2 (CLAUDY-IMPL-2-4):
    - Run: `docker run -it test:latest bash`
    - Verify: `claude --version` in container
 
-3. **Test claudy integration**
+3. **Test hal-9000 integration**
    - Launch with native build installed
    - Verify session creation
    - Verify file permissions
@@ -190,7 +190,7 @@ mcp-server-sequential-thinking # Should be available
 ✅ Dockerfile builds without errors
 ✅ `claude --version` works in container
 ✅ Session token copying works
-✅ claudy launches container successfully
+✅ hal-9000 launches container successfully
 ✅ MCP servers functional
 ✅ Cross-platform testing passes
 
@@ -210,7 +210,7 @@ docker build -f docker/Dockerfile.hal9000 -t hal-9000:latest .
 
 ✅ **Research Complete**: Full compatibility analysis done
 ✅ **Dockerfile Updated**: Uses native build (recommended)
-✅ **claudy Ready**: Already compatible, no changes needed
+✅ **hal-9000 Ready**: Already compatible, no changes needed
 ⏳ **Testing Pending**: Phase 1 Week 2 verification
 ⏳ **MCP Verification**: Phase 2 checklist
 
@@ -226,7 +226,7 @@ docker build -f docker/Dockerfile.hal9000 -t hal-9000:latest .
 **Related Tickets**:
 - ART-900 (Native build compatibility)
 - ART-880-TESTING (Phase 1 testing)
-- CLAUDY-IMPL-2-4 (Cross-platform testing)
+- HAL9000-IMPL-2-4 (Cross-platform testing)
 
 **Commit**: 0b29dfb
 **Status**: READY FOR TESTING

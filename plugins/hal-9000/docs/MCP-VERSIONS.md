@@ -212,4 +212,4 @@ chroma-mcp --help
 **Next Action**: Build base image with updated MCP servers
 
 **Ticket**: ART-901 (MCP Server Version Management)
-**Related**: CLAUDY-IMPL-2-4 (Testing), Phase 1 base build
+**Related**: HAL9000-IMPL-2-4 (Testing), Phase 1 base build

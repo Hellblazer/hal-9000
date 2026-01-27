@@ -1,9 +1,9 @@
 #!/bin/bash
-# claudy error handling tests
+# hal-9000 error handling tests
 set -euo pipefail
 
-CLAUDY_SCRIPT="./claudy"
-TEST_TEMP_DIR="/tmp/claudy-error-tests"
+HAL9000_SCRIPT="./hal-9000"
+TEST_TEMP_DIR="/tmp/hal-9000-error-tests"
 FAILED=0
 
 # Colors
@@ -38,7 +38,7 @@ test_result() {
 
 test_no_docker() {
     # Test that Docker checking is part of diagnostics
-    local result=$($CLAUDY_SCRIPT --diagnose 2>&1 | grep -c "Docker" || true)
+    local result=$($HAL9000_SCRIPT --diagnose 2>&1 | grep -c "Docker" || true)
 
     if [ "$result" -gt 0 ]; then
         test_result "Docker check present in diagnostics" 0
@@ -53,7 +53,7 @@ test_no_directory() {
     cd "$TEST_TEMP_DIR/project"
 
     # Try to run with non-existent directory (should error)
-    local output=$($CLAUDY_SCRIPT /nonexistent/path 2>&1 || true)
+    local output=$($HAL9000_SCRIPT /nonexistent/path 2>&1 || true)
 
     if echo "$output" | grep -q "not found\|error\|Error"; then
         test_result "Missing directory error handling" 0
@@ -67,7 +67,7 @@ test_no_claude_home() {
     mkdir -p "$TEST_TEMP_DIR/project"
 
     # Use non-existent CLAUDE_HOME
-    local output=$(CLAUDE_HOME="/nonexistent/claude" $CLAUDY_SCRIPT --verify 2>&1 || true)
+    local output=$(CLAUDE_HOME="/nonexistent/claude" $HAL9000_SCRIPT --verify 2>&1 || true)
 
     # Should warn but not fail verify
     if echo "$output" | grep -q "Claude\|session"; then
@@ -82,7 +82,7 @@ test_invalid_profile() {
     mkdir -p "$TEST_TEMP_DIR/project"
 
     # Check help mentions valid profiles
-    local help_output=$($CLAUDY_SCRIPT --help 2>&1)
+    local help_output=$($HAL9000_SCRIPT --help 2>&1)
 
     if echo "$help_output" | grep -q "base\|python\|node\|java"; then
         test_result "Valid profiles documented" 0
@@ -93,7 +93,7 @@ test_invalid_profile() {
 
 test_help_on_error() {
     # Test that help is accessible on errors
-    local output=$($CLAUDY_SCRIPT --help 2>&1)
+    local output=$($HAL9000_SCRIPT --help 2>&1)
 
     if echo "$output" | grep -q "USAGE\|OPTIONS"; then
         test_result "Help text accessible and formatted" 0
@@ -104,7 +104,7 @@ test_help_on_error() {
 
 test_version_info() {
     # Test that version information is available
-    local output=$($CLAUDY_SCRIPT --version 2>&1)
+    local output=$($HAL9000_SCRIPT --version 2>&1)
 
     if echo "$output" | grep -q "version"; then
         test_result "Version information accessible" 0
@@ -115,7 +115,7 @@ test_version_info() {
 
 test_unknown_option() {
     # Test that unknown options are rejected
-    local output=$($CLAUDY_SCRIPT --invalid-option 2>&1 || true)
+    local output=$($HAL9000_SCRIPT --invalid-option 2>&1 || true)
 
     if echo "$output" | grep -q "Unknown\|invalid\|Error"; then
         test_result "Unknown option error handling" 0

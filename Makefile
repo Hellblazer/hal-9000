@@ -1,4 +1,4 @@
-.PHONY: help clean validate test test-claudy test-unit test-integration test-docker test-config test-errors build package ci
+.PHONY: help clean validate test test-hal-9000 test-unit test-integration test-docker test-config test-errors build package ci
 
 # Colors for output
 RED := \033[0;31m
@@ -19,7 +19,7 @@ DIST_DIR := dist
 
 # Test configuration
 DOCKER_SOCKET := /var/run/docker.sock
-TEST_PROJECT_DIR := /tmp/claudy-test-project
+TEST_PROJECT_DIR := /tmp/hal-9000-test-project
 VERBOSE ?= 0
 
 ifeq ($(VERBOSE), 1)
@@ -41,19 +41,19 @@ help:
 	@echo "  $(YELLOW)make clean$(NC)              Clean build artifacts and test containers"
 	@echo "  $(YELLOW)make validate$(NC)           Validate syntax, JSON, and code quality"
 	@echo "  $(YELLOW)make test$(NC)               Run all tests (unit + integration + docker)"
-	@echo "  $(YELLOW)make test-claudy$(NC)        Run all claudy-specific tests"
+	@echo "  $(YELLOW)make test-hal-9000$(NC)        Run all hal-9000-specific tests"
 	@echo "  $(YELLOW)make build$(NC)              Build Docker images (base, python, node, java)"
 	@echo "  $(YELLOW)make package$(NC)            Create marketplace package"
 	@echo "  $(YELLOW)make ci$(NC)                 Full CI pipeline (clean → validate → test → build)"
 	@echo ""
-	@echo "$(GREEN)Claudy Testing:$(NC)"
-	@echo "  $(YELLOW)make test-claudy-syntax$(NC)        Check bash syntax"
-	@echo "  $(YELLOW)make test-claudy-unit$(NC)         Unit tests (profile, session naming)"
-	@echo "  $(YELLOW)make test-claudy-integration$(NC)  Full workflow tests"
-	@echo "  $(YELLOW)make test-claudy-docker$(NC)       Docker socket mounting tests"
-	@echo "  $(YELLOW)make test-claudy-config$(NC)       Configuration override tests"
-	@echo "  $(YELLOW)make test-claudy-errors$(NC)       Error handling tests"
-	@echo "  $(YELLOW)make test-claudy-cleanup$(NC)      Session cleanup tests"
+	@echo "$(GREEN)hal-9000 Testing:$(NC)"
+	@echo "  $(YELLOW)make test-hal-9000-syntax$(NC)        Check bash syntax"
+	@echo "  $(YELLOW)make test-hal-9000-unit$(NC)         Unit tests (profile, session naming)"
+	@echo "  $(YELLOW)make test-hal-9000-integration$(NC)  Full workflow tests"
+	@echo "  $(YELLOW)make test-hal-9000-docker$(NC)       Docker socket mounting tests"
+	@echo "  $(YELLOW)make test-hal-9000-config$(NC)       Configuration override tests"
+	@echo "  $(YELLOW)make test-hal-9000-errors$(NC)       Error handling tests"
+	@echo "  $(YELLOW)make test-hal-9000-cleanup$(NC)      Session cleanup tests"
 	@echo ""
 	@echo "$(GREEN)DinD Testing:$(NC)"
 	@echo "  $(YELLOW)make test-dind$(NC)                 Run all DinD tests"
@@ -94,7 +94,7 @@ clean-test:
 
 clean-containers:
 	@echo "$(YELLOW)Removing test containers...$(NC)"
-	$(QUIET)docker ps -a --filter "name=claudy-test-" --format "{{.ID}}" | xargs -r docker rm -f 2>/dev/null || true
+	$(QUIET)docker ps -a --filter "name=hal-9000-test-" --format "{{.ID}}" | xargs -r docker rm -f 2>/dev/null || true
 	$(QUIET)docker ps -a --filter "name=hal-9000-test-" --format "{{.ID}}" | xargs -r docker rm -f 2>/dev/null || true
 	@echo "$(GREEN)✓ Test containers cleaned$(NC)"
 
@@ -112,8 +112,8 @@ validate: validate-bash validate-json validate-markdown validate-shellcheck
 
 validate-bash:
 	@echo "$(YELLOW)Validating bash scripts...$(NC)"
-	$(QUIET)bash -n claudy
-	$(QUIET)bash -n install-claudy.sh
+	$(QUIET)bash -n hal-9000
+	$(QUIET)bash -n install-hal-9000.sh
 	$(QUIET)bash -n $(PLUGIN_DIR)/install.sh
 	$(QUIET)bash -n $(PLUGIN_DIR)/aod/aod.sh
 	@echo "$(GREEN)✓ Bash syntax valid$(NC)"
@@ -131,7 +131,7 @@ validate-json:
 validate-markdown:
 	@echo "$(YELLOW)Validating markdown files...$(NC)"
 	$(QUIET)if command -v mdl &> /dev/null; then \
-		mdl README.md README-CLAUDY.md $(PLUGIN_DIR)/README.md 2>/dev/null || echo "$(YELLOW)⚠ Markdown style check skipped$(NC)"; \
+		mdl README.md README-HAL9000.md $(PLUGIN_DIR)/README.md 2>/dev/null || echo "$(YELLOW)⚠ Markdown style check skipped$(NC)"; \
 	else \
 		echo "$(YELLOW)⚠ mdl not found, skipping markdown validation$(NC)"; \
 	fi
@@ -139,75 +139,75 @@ validate-markdown:
 validate-shellcheck:
 	@echo "$(YELLOW)Running shellcheck...$(NC)"
 	$(QUIET)if command -v shellcheck &> /dev/null; then \
-		shellcheck -x claudy 2>&1 | head -20 || echo "$(YELLOW)⚠ Minor shellcheck issues (non-blocking)$(NC)"; \
+		shellcheck -x hal-9000 2>&1 | head -20 || echo "$(YELLOW)⚠ Minor shellcheck issues (non-blocking)$(NC)"; \
 	else \
 		echo "$(YELLOW)⚠ shellcheck not found, skipping code quality checks$(NC)"; \
 	fi
 
 ##############################################################################
-# CLAUDY TESTS
+# HAL9000 TESTS
 ##############################################################################
 
-test: test-claudy
+test: test-hal-9000
 	@echo ""
 	@echo "$(GREEN)╔═══════════════════════════════════════════════════╗$(NC)"
 	@echo "$(GREEN)║         All Tests Passed ✓                        ║$(NC)"
 	@echo "$(GREEN)╚═══════════════════════════════════════════════════╝$(NC)"
 
-test-claudy: test-claudy-syntax test-claudy-unit test-claudy-config test-claudy-errors test-claudy-integration test-claudy-docker
-	@echo "$(GREEN)✓ All claudy tests passed$(NC)"
+test-hal-9000: test-hal-9000-syntax test-hal-9000-unit test-hal-9000-config test-hal-9000-errors test-hal-9000-integration test-hal-9000-docker
+	@echo "$(GREEN)✓ All hal-9000 tests passed$(NC)"
 
-test-claudy-syntax: validate-bash
-	@echo "$(GREEN)✓ Claudy syntax check passed$(NC)"
+test-hal-9000-syntax: validate-bash
+	@echo "$(GREEN)✓ hal-9000 syntax check passed$(NC)"
 
-test-claudy-unit:
-	@echo "$(YELLOW)Running claudy unit tests...$(NC)"
+test-hal-9000-unit:
+	@echo "$(YELLOW)Running hal-9000 unit tests...$(NC)"
 	@echo "  Testing profile detection..."
-	$(QUIET)./scripts/build/test-claudy-unit.sh detect-java
-	$(QUIET)./scripts/build/test-claudy-unit.sh detect-python
-	$(QUIET)./scripts/build/test-claudy-unit.sh detect-node
-	$(QUIET)./scripts/build/test-claudy-unit.sh detect-base
+	$(QUIET)./scripts/build/test-hal-9000-unit.sh detect-java
+	$(QUIET)./scripts/build/test-hal-9000-unit.sh detect-python
+	$(QUIET)./scripts/build/test-hal-9000-unit.sh detect-node
+	$(QUIET)./scripts/build/test-hal-9000-unit.sh detect-base
 	@echo "  Testing session naming..."
-	$(QUIET)./scripts/build/test-claudy-unit.sh session-naming
+	$(QUIET)./scripts/build/test-hal-9000-unit.sh session-naming
 	@echo "  Testing help system..."
-	$(QUIET)./scripts/build/test-claudy-unit.sh help-system
-	@echo "$(GREEN)✓ Claudy unit tests passed$(NC)"
+	$(QUIET)./scripts/build/test-hal-9000-unit.sh help-system
+	@echo "$(GREEN)✓ hal-9000 unit tests passed$(NC)"
 
-test-claudy-config:
+test-hal-9000-config:
 	@echo "$(YELLOW)Testing CLAUDE_HOME configuration...$(NC)"
 	@echo "  Testing default CLAUDE_HOME behavior..."
-	$(QUIET)./scripts/build/test-claudy-config.sh default-home
+	$(QUIET)./scripts/build/test-hal-9000-config.sh default-home
 	@echo "  Testing environment variable override..."
-	$(QUIET)./scripts/build/test-claudy-config.sh env-override
+	$(QUIET)./scripts/build/test-hal-9000-config.sh env-override
 	@echo "  Testing CLI argument override..."
-	$(QUIET)./scripts/build/test-claudy-config.sh cli-override
+	$(QUIET)./scripts/build/test-hal-9000-config.sh cli-override
 	@echo "  Testing priority (CLI > ENV > default)..."
-	$(QUIET)./scripts/build/test-claudy-config.sh priority
+	$(QUIET)./scripts/build/test-hal-9000-config.sh priority
 	@echo "$(GREEN)✓ CLAUDE_HOME configuration tests passed$(NC)"
 
-test-claudy-errors:
+test-hal-9000-errors:
 	@echo "$(YELLOW)Testing error handling...$(NC)"
 	@echo "  Testing missing Docker..."
-	$(QUIET)./scripts/build/test-claudy-errors.sh no-docker 2>/dev/null || echo "  ✓ Missing Docker error handled"
+	$(QUIET)./scripts/build/test-hal-9000-errors.sh no-docker 2>/dev/null || echo "  ✓ Missing Docker error handled"
 	@echo "  Testing missing project directory..."
-	$(QUIET)./scripts/build/test-claudy-errors.sh no-directory 2>/dev/null || echo "  ✓ Missing directory error handled"
+	$(QUIET)./scripts/build/test-hal-9000-errors.sh no-directory 2>/dev/null || echo "  ✓ Missing directory error handled"
 	@echo "  Testing missing CLAUDE_HOME..."
-	$(QUIET)./scripts/build/test-claudy-errors.sh no-claude-home 2>/dev/null || echo "  ✓ Missing CLAUDE_HOME error handled"
+	$(QUIET)./scripts/build/test-hal-9000-errors.sh no-claude-home 2>/dev/null || echo "  ✓ Missing CLAUDE_HOME error handled"
 	@echo "$(GREEN)✓ Error handling tests passed$(NC)"
 
-test-claudy-integration:
-	@echo "$(YELLOW)Running claudy integration tests...$(NC)"
+test-hal-9000-integration:
+	@echo "$(YELLOW)Running hal-9000 integration tests...$(NC)"
 	@echo "  Testing prerequisite checks..."
-	$(QUIET)./claudy --verify 2>/dev/null || echo "$(YELLOW)  ⚠ Prerequisites check (may fail if docker not running)$(NC)"
+	$(QUIET)./hal-9000 --verify 2>/dev/null || echo "$(YELLOW)  ⚠ Prerequisites check (may fail if docker not running)$(NC)"
 	@echo "  Testing diagnostics..."
-	$(QUIET)./claudy --diagnose > /dev/null 2>&1 || echo "$(YELLOW)  ⚠ Diagnostics (may fail if docker not running)$(NC)"
+	$(QUIET)./hal-9000 --diagnose > /dev/null 2>&1 || echo "$(YELLOW)  ⚠ Diagnostics (may fail if docker not running)$(NC)"
 	@echo "  Testing help..."
-	$(QUIET)./claudy --help > /dev/null 2>&1
+	$(QUIET)./hal-9000 --help > /dev/null 2>&1
 	@echo "  Testing version..."
-	$(QUIET)./claudy --version > /dev/null 2>&1
-	@echo "$(GREEN)✓ Claudy integration tests passed$(NC)"
+	$(QUIET)./hal-9000 --version > /dev/null 2>&1
+	@echo "$(GREEN)✓ hal-9000 integration tests passed$(NC)"
 
-test-claudy-docker:
+test-hal-9000-docker:
 	@echo "$(YELLOW)Testing Docker integration...$(NC)"
 	@echo "  Checking Docker socket exists..."
 	@if [ -S "$(DOCKER_SOCKET)" ]; then \
@@ -219,7 +219,7 @@ test-claudy-docker:
 	fi
 	@echo "$(GREEN)✓ Docker integration checks passed$(NC)"
 
-test-claudy-cleanup:
+test-hal-9000-cleanup:
 	@echo "$(YELLOW)Testing session cleanup...$(NC)"
 	@echo "  Session cleanup would be tested on actual container lifecycle"
 	@echo "$(GREEN)✓ Cleanup test structure in place$(NC)"
@@ -323,7 +323,7 @@ package: validate
 # CI PIPELINE
 ##############################################################################
 
-ci: clean validate test-claudy build package
+ci: clean validate test-hal-9000 build package
 	@echo ""
 	@echo "$(GREEN)╔═══════════════════════════════════════════════════╗$(NC)"
 	@echo "$(GREEN)║      CI Pipeline Complete ✓                       ║$(NC)"
@@ -343,7 +343,7 @@ lint: validate shellcheck-detailed
 shellcheck-detailed:
 	@if command -v shellcheck &> /dev/null; then \
 		echo "$(YELLOW)Running detailed shellcheck...$(NC)"; \
-		shellcheck -x claudy $(PLUGIN_DIR)/install.sh $(PLUGIN_DIR)/aod/aod.sh || true; \
+		shellcheck -x hal-9000 $(PLUGIN_DIR)/install.sh $(PLUGIN_DIR)/aod/aod.sh || true; \
 	fi
 
 install-dev-tools:
@@ -358,12 +358,12 @@ install-dev-tools:
 
 watch:
 	@echo "$(YELLOW)Watching for changes...$(NC)"
-	@echo "Run 'make test-claudy' on file changes"
+	@echo "Run 'make test-hal-9000' on file changes"
 	$(QUIET)if command -v watchmedo &> /dev/null; then \
 		watchmedo shell-command \
 			--patterns="*.sh;*.md;Makefile" \
 			--recursive \
-			--command="make test-claudy" \
+			--command="make test-hal-9000" \
 			.; \
 	else \
 		echo "$(YELLOW)⚠ watchdog not found. Install with: pip install watchdog[watchmedo]$(NC)"; \
@@ -385,8 +385,8 @@ version:
 
 .PHONY: help clean clean-build clean-test clean-containers clean-docker-images
 .PHONY: validate validate-bash validate-json validate-markdown validate-shellcheck
-.PHONY: test test-claudy test-claudy-syntax test-claudy-unit test-claudy-config
-.PHONY: test-claudy-errors test-claudy-integration test-claudy-docker test-claudy-cleanup
+.PHONY: test test-hal-9000 test-hal-9000-syntax test-hal-9000-unit test-hal-9000-config
+.PHONY: test-hal-9000-errors test-hal-9000-integration test-hal-9000-docker test-hal-9000-cleanup
 .PHONY: test-dind test-pool-manager test-resource-limits benchmark-dind
 .PHONY: build build-base build-python build-node build-java build-test-image
 .PHONY: package ci lint shellcheck-detailed install-dev-tools watch version

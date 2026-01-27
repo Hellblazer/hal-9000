@@ -1,16 +1,16 @@
-# claudy - Containerized Claude CLI
+# hal-9000 - Containerized Claude CLI
 
 Quick, frictionless access to Claude inside a containerized development environment.
 
 **Status**: Phase 1 - Core Foundation (Alpha)
 
-## What is claudy?
+## What is hal-9000?
 
-claudy is a simple wrapper that opens Claude inside a tmux session within a hal-9000 container. No permission dialogs. No complexity. Just `claudy` and you're working.
+hal-9000 is a simple wrapper that opens Claude inside a tmux session within a hal-9000 container. No permission dialogs. No complexity. Just `hal-9000` and you're working.
 
 ```bash
 $ cd ~/my-project
-$ claudy
+$ hal-9000
 # Claude opens inside a container with your project mounted
 ```
 
@@ -29,11 +29,11 @@ $ claudy
 git clone https://github.com/hellblazer/hal-9000.git
 cd hal-9000
 
-# Install claudy
-./install-claudy.sh
+# Install hal-9000
+./install-hal-9000.sh
 
 # Verify installation
-claudy --verify
+hal-9000 --verify
 ```
 
 ### 3. First Use
@@ -43,7 +43,7 @@ claudy --verify
 cd ~/my-project
 
 # Start Claude in a container
-claudy
+hal-9000
 
 # That's it! You're now in Claude inside a container
 # Your project is mounted at /workspace
@@ -53,10 +53,10 @@ claudy
 
 ### Docker Integration
 
-claudy automatically mounts your Docker daemon socket into the container, allowing you to use `docker` commands as if you were on the host:
+hal-9000 automatically mounts your Docker daemon socket into the container, allowing you to use `docker` commands as if you were on the host:
 
 ```bash
-# Inside claudy container
+# Inside hal-9000 container
 docker build -t my-app .
 docker run my-app
 docker compose up
@@ -69,7 +69,7 @@ docker compose up
 
 ### Automatic Project Detection
 
-claudy automatically detects your project type:
+hal-9000 automatically detects your project type:
 
 - **Java**: Looks for `pom.xml`, `build.gradle`, `build.gradle.kts`
 - **Python**: Looks for `pyproject.toml`, `Pipfile`, `requirements.txt`
@@ -78,10 +78,10 @@ claudy automatically detects your project type:
 
 ```bash
 # Auto-detects profile
-claudy
+hal-9000
 
 # Or force a specific profile
-claudy --profile python
+hal-9000 --profile python
 ```
 
 ### Per-Project Session Isolation
@@ -94,19 +94,19 @@ Each project gets its own isolated session with:
 
 ### No Permission Dialogs
 
-Because claudy runs inside a container (sandbox), there are no permission popups. The container is the security boundary.
+Because hal-9000 runs inside a container (sandbox), there are no permission popups. The container is the security boundary.
 
 ### Persistent Plugins & Configuration
 
-claudy uses Docker volumes to share CLAUDE_HOME across all sessions:
+hal-9000 uses Docker volumes to share CLAUDE_HOME across all sessions:
 - Plugins installed in any session persist for all sessions
 - Settings, agents, commands shared across workers
 - No copying or syncing - just shared volumes
 
 ```bash
-# Install a plugin - it persists across all claudy sessions
-claudy plugin install memory-bank
-claudy mcp list
+# Install a plugin - it persists across all hal-9000 sessions
+hal-9000 plugin install memory-bank
+hal-9000 mcp list
 ```
 
 ## Usage
@@ -115,40 +115,40 @@ claudy mcp list
 
 ```bash
 # Start Claude (auto-detect profile)
-claudy
+hal-9000
 
 # Start Claude with specific profile
-claudy --profile java
+hal-9000 --profile java
 
 # Start bash shell instead of Claude
-claudy --shell
+hal-9000 --shell
 
 # Run detached (don't attach to tmux)
-claudy --detach
+hal-9000 --detach
 
 # Custom session name
-claudy --name my-session
+hal-9000 --name my-session
 
 # Specific directory
-claudy ~/projects/myapp
+hal-9000 ~/projects/myapp
 ```
 
 ### Claude Command Passthrough
 
-Run any `claude` command through claudy - it executes in a container with the shared volume:
+Run any `claude` command through hal-9000 - it executes in a container with the shared volume:
 
 ```bash
 # Plugin management
-claudy plugin list                        # List installed plugins
-claudy plugin install memory-bank         # Install a plugin
-claudy plugin marketplace add <url>       # Add a marketplace
+hal-9000 plugin list                        # List installed plugins
+hal-9000 plugin install memory-bank         # Install a plugin
+hal-9000 plugin marketplace add <url>       # Add a marketplace
 
 # MCP server management
-claudy mcp list                           # List MCP servers
-claudy mcp add <server>                   # Add an MCP server
+hal-9000 mcp list                           # List MCP servers
+hal-9000 mcp add <server>                   # Add an MCP server
 
 # Health checks
-claudy doctor                             # Check Claude health
+hal-9000 doctor                             # Check Claude health
 ```
 
 All changes persist in the shared Docker volume (`hal9000-claude-home`).
@@ -159,16 +159,16 @@ For multi-worker orchestration with shared services:
 
 ```bash
 # Start the daemon (parent container with ChromaDB)
-claudy daemon start
+hal-9000 daemon start
 
 # Spawn workers via parent (shared network namespace)
-claudy --via-parent ~/my-project
+hal-9000 --via-parent ~/my-project
 
 # Check orchestrator status
-claudy daemon status
+hal-9000 daemon status
 
 # Stop orchestrator
-claudy daemon stop
+hal-9000 daemon stop
 ```
 
 See `plugins/hal-9000/docker/README-dind.md` for full DinD architecture documentation.
@@ -177,36 +177,36 @@ See `plugins/hal-9000/docker/README-dind.md` for full DinD architecture document
 
 ```bash
 # Show all options
-claudy --help
+hal-9000 --help
 
 # Check prerequisites (Docker, bash, tmux)
-claudy --verify
+hal-9000 --verify
 
 # Show detailed diagnostics
-claudy --diagnose
+hal-9000 --diagnose
 ```
 
 ### Environment Variables
 
-**HAL9000_HOME**: Path to claudy session metadata storage
+**HAL9000_HOME**: Path to hal-9000 session metadata storage
 
 ```bash
 # Override default session storage location (default: ~/.hal9000)
 export HAL9000_HOME=$HOME/.my-hal9000-sessions
-claudy
+hal-9000
 ```
 
 **ANTHROPIC_API_KEY**: API key for Claude authentication
 
 ```bash
-# Set API key for all claudy sessions
+# Set API key for all hal-9000 sessions
 export ANTHROPIC_API_KEY=sk-ant-api03-...
-claudy
+hal-9000
 ```
 
 ### Docker Volumes
 
-claudy uses shared Docker volumes for persistence:
+hal-9000 uses shared Docker volumes for persistence:
 
 | Volume | Purpose |
 |--------|---------|
@@ -226,13 +226,13 @@ graph TB
         V2["hal9000-memory-bank<br/>/root/memory-bank"]
     end
 
-    subgraph Sessions["claudy sessions"]
-        S1["claudy session 1"]
-        S2["claudy session 2"]
+    subgraph Sessions["hal-9000 sessions"]
+        S1["hal-9000 session 1"]
+        S2["hal-9000 session 2"]
     end
 
     subgraph Host["Host (~/.hal9000/)"]
-        Meta["Session metadata<br/>claudy-project-hash/.claudy-session.json"]
+        Meta["Session metadata<br/>hal-9000-project-hash/.hal-9000-session.json"]
     end
 
     S1 --> V1
@@ -253,7 +253,7 @@ graph TB
 
 Sessions are named deterministically:
 ```
-claudy-{project-name}-{path-hash}
+hal-9000-{project-name}-{path-hash}
 ```
 
 This ensures:
@@ -271,7 +271,7 @@ This ensures:
 - Help and diagnostics
 
 🔄 **Coming Soon (Phase 2-3)**
-- Configuration system (.claudyrc)
+- Configuration system (.hal-9000rc)
 - Multi-project coordination
 - Skills (/wrap, /sup, /fragile)
 - Advanced orchestration
@@ -295,8 +295,8 @@ This ensures:
 # Authenticate Claude
 claude /login
 
-# Then run claudy again
-claudy
+# Then run hal-9000 again
+hal-9000
 ```
 
 ### "Container image not found"
@@ -305,17 +305,17 @@ claudy
 cd plugins/hal-9000/docker
 ./build-profiles.sh
 
-# Then try claudy again
-claudy
+# Then try hal-9000 again
+hal-9000
 ```
 
 ### "Permission denied"
 ```bash
-# Make sure claudy is executable
-chmod +x /usr/local/bin/claudy
+# Make sure hal-9000 is executable
+chmod +x /usr/local/bin/hal-9000
 
 # Or reinstall
-./install-claudy.sh
+./install-hal-9000.sh
 ```
 
 ## Architecture
@@ -337,7 +337,7 @@ chmod +x /usr/local/bin/claudy
 ### Why Simple?
 
 - **Zero configuration**: Works out of the box
-- **Frictionless**: Just type `claudy` and go
+- **Frictionless**: Just type `hal-9000` and go
 - **Progressive**: Advanced features available when needed
 - **Human control**: Claude doesn't make unilateral decisions
 
@@ -359,10 +359,10 @@ To report issues or suggest improvements:
 
 ## Documentation
 
-- **Installation**: See `install-claudy.sh`
-- **Design Details**: See `.pm/CLAUDY_MASTER_INDEX.md` in Memory Bank
-- **Architecture**: See `.pm/CLAUDY_DESIGN_SYNTHESIS.md`
-- **Authentication**: See `.pm/claudy-authentication-revised.md`
+- **Installation**: See `install-hal-9000.sh`
+- **Design Details**: See `.pm/HAL9000_MASTER_INDEX.md` in Memory Bank
+- **Architecture**: See `.pm/HAL9000_DESIGN_SYNTHESIS.md`
+- **Authentication**: See `.pm/hal-9000-authentication-revised.md`
 
 ## License
 
@@ -370,6 +370,6 @@ Apache 2.0 - See LICENSE file in repository
 
 ---
 
-**Get started**: `cd ~/your-project && claudy`
+**Get started**: `cd ~/your-project && hal-9000`
 
-**Need help?** `claudy --help` or `claudy --diagnose`
+**Need help?** `hal-9000 --help` or `hal-9000 --diagnose`

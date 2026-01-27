@@ -3,7 +3,7 @@
   "_compatibility": "2.x",
   "_schema_version": "1.0",
   "name": "hal-9000",
-  "description": "claudy - Containerized Claude with MCP servers pre-installed",
+  "description": "hal-9000 - Containerized Claude with MCP servers pre-installed",
   "version": "3.0.0",
   "author": {
     "name": "Hal Hildebrand",
@@ -13,7 +13,7 @@
   "license": "Apache-2.0",
   "homepage": "https://github.com/Hellblazer/hal-9000",
   "keywords": [
-    "claudy",
+    "hal-9000",
     "docker",
     "containerized-claude",
     "chromadb",
@@ -21,7 +21,7 @@
     "mcp-servers"
   ],
   "install": {
-    "script": "./install-claudy.sh",
-    "postInstall": "✓ claudy installed\n\nUsage:\n  claudy daemon start    # Start orchestrator\n  claudy                  # Launch Claude\n\nSet ANTHROPIC_API_KEY environment variable before use.\nSee: https://github.com/Hellblazer/hal-9000"
+    "script": "./install-hal-9000.sh",
+    "postInstall": "✓ hal-9000 installed\n\nUsage:\n  hal-9000 daemon start    # Start orchestrator\n  hal-9000                  # Launch Claude\n\nSet ANTHROPIC_API_KEY environment variable before use.\nSee: https://github.com/Hellblazer/hal-9000"
   }
 }
