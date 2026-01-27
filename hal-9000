@@ -83,6 +83,7 @@ run_claude_command() {
         docker run --rm -it
         -v "${CLAUDE_HOME_VOLUME}:/root/.claude"
         -v "${MEMORY_BANK_VOLUME}:/root/memory-bank"
+        -e "CLAUDE_HOME=/root/.claude"
         -e "MEMORY_BANK_ROOT=/root/memory-bank"
     )
 
@@ -1070,6 +1071,7 @@ launch_container_session() {
         -v "${CLAUDE_HOME_VOLUME}:/root/.claude"
         -v "${MEMORY_BANK_VOLUME}:/root/memory-bank"
         -v /var/run/docker.sock:/var/run/docker.sock
+        -e "CLAUDE_HOME=/root/.claude"
         -e "HAL9000_SESSION=$session_name"
         -e "HAL9000_PROJECT_DIR=$abs_project_path"
         -e "MEMORY_BANK_ROOT=/root/memory-bank"
