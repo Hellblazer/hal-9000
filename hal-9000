@@ -99,14 +99,25 @@ run_login_command() {
         # Wait for file to exist and have content
         sleep 1
         tail -f "$output_file" 2>/dev/null | while IFS= read -r line; do
-            # Look for anthropic/claude URLs
-            if [[ "$line" =~ (https://[^[:space:]\"\']+anthropic[^[:space:]\"\']*) ]] || \
-               [[ "$line" =~ (https://[^[:space:]\"\']+claude[^[:space:]\"\']*) ]]; then
+            # Strip ANSI escape codes
+            local clean_line
+            clean_line=$(echo "$line" | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' | tr -d '\r')
+
+            # Look for anthropic/claude auth URLs
+            if [[ "$clean_line" =~ (https://[^[:space:]\"\']+) ]]; then
                 local url="${BASH_REMATCH[1]}"
-                # Clean up any trailing characters
-                url="${url%%[\"\']*}"
-                success "Opening browser: $url"
-                open_url "$url"
+                # Only process anthropic/claude URLs
+                if [[ "$url" == *"anthropic"* ]] || [[ "$url" == *"claude"* ]]; then
+                    # Clean up any trailing punctuation
+                    url="${url%%[\"\'.,)]*}"
+                    # Skip if we already opened this URL
+                    if [[ ! -f "${output_file}.opened" ]] || ! grep -q "$url" "${output_file}.opened" 2>/dev/null; then
+                        echo "$url" >> "${output_file}.opened"
+                        info "Detected auth URL, opening browser..."
+                        info "URL: $url"
+                        open_url "$url"
+                    fi
+                fi
             fi
         done
     ) &
@@ -131,7 +142,7 @@ run_login_command() {
 
     # Cleanup
     kill "$watcher_pid" 2>/dev/null || true
-    rm -f "$output_file"
+    rm -f "$output_file" "${output_file}.opened"
 
     return $exit_code
 }
