@@ -56,12 +56,12 @@ Options:
 
 What this does:
   1. Stops the DinD daemon (parent container)
-  2. Optionally removes Docker volumes (hal9000-chromadb, etc.)
+  2. Optionally removes Docker volumes (hal9000-claude-home, etc.)
   3. Restores local directories from backup
-  4. Confirms you can use --legacy mode
 
 After rollback:
-  - Use 'claudy --legacy' for single-container mode
+  - Claudy v0.7.0+ still uses Docker volumes for CLAUDE_HOME
+  - To fully rollback, install claudy v0.5.x from git history
   - Data from volumes is NOT automatically restored to local dirs
   - Manual volume data export available with --keep-volumes
 
@@ -360,8 +360,8 @@ show_post_rollback_info() {
     echo ""
     log_info "Your system has been reverted to single-container mode."
     echo ""
-    log_info "To use claudy in legacy mode:"
-    log_info "  claudy --legacy /path/to/project"
+    log_info "To use claudy after rollback:"
+    log_info "  claudy /path/to/project"
     echo ""
     if [[ "$KEEP_VOLUMES" == "true" ]]; then
         log_info "Docker volumes were preserved. To re-migrate later:"

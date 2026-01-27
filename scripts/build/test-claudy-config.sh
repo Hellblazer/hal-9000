@@ -1,5 +1,5 @@
 #!/bin/bash
-# claudy configuration tests - CLAUDE_HOME handling
+# claudy configuration tests - Docker volume handling
 set -euo pipefail
 
 CLAUDY_SCRIPT="./claudy"
@@ -14,7 +14,6 @@ NC='\033[0m'
 
 cleanup() {
     rm -rf "$TEST_TEMP_DIR"
-    unset CLAUDE_HOME
 }
 
 trap cleanup EXIT
@@ -37,104 +36,87 @@ test_result() {
 # TEST CASES
 ##############################################################################
 
-test_default_home() {
-    # Test that claudy uses ~/.claude by default
-    mkdir -p "$TEST_TEMP_DIR/project"
-
-    # Check that --help mentions CLAUDE_HOME default
+test_volume_documentation() {
+    # Test that help mentions Docker volumes
     local help_output=$($CLAUDY_SCRIPT --help 2>&1)
 
-    if echo "$help_output" | grep -q "CLAUDE_HOME"; then
-        test_result "Default CLAUDE_HOME documented in help" 0
+    if echo "$help_output" | grep -q "hal9000-claude-home"; then
+        test_result "Help documents hal9000-claude-home volume" 0
     else
-        test_result "Default CLAUDE_HOME documented in help" 1
+        test_result "Help documents hal9000-claude-home volume" 1
+    fi
+
+    if echo "$help_output" | grep -q "hal9000-memory-bank"; then
+        test_result "Help documents hal9000-memory-bank volume" 0
+    else
+        test_result "Help documents hal9000-memory-bank volume" 1
     fi
 }
 
-test_env_override() {
-    # Test that environment variable overrides default
-    mkdir -p "$TEST_TEMP_DIR/custom-claude"
-    mkdir -p "$TEST_TEMP_DIR/project"
-    touch "$TEST_TEMP_DIR/custom-claude/.session.json"
-
-    # Extract the value that would be used
-    local result=$(CLAUDE_HOME="$TEST_TEMP_DIR/custom-claude" bash -c "
-        source '$CLAUDY_SCRIPT'
-        # The CLAUDE_HOME should be set from environment
-        echo \${CLAUDE_HOME}
-    ")
-
-    if [ "$result" = "$TEST_TEMP_DIR/custom-claude" ]; then
-        test_result "Environment variable CLAUDE_HOME override works" 0
-    else
-        echo "    Got: '$result'" >&2
-        test_result "Environment variable CLAUDE_HOME override works" 1
-    fi
-}
-
-test_cli_override() {
-    # Test that --claude-home CLI argument works
-    mkdir -p "$TEST_TEMP_DIR/cli-config"
-    touch "$TEST_TEMP_DIR/cli-config/.session.json"
-
-    # Test that argument is parsed (we can't fully test without running container)
-    # But we can verify the help shows it
+test_command_passthrough() {
+    # Test that help shows command passthrough examples
     local help_output=$($CLAUDY_SCRIPT --help 2>&1)
 
-    if echo "$help_output" | grep -q "\--claude-home"; then
-        test_result "CLI argument --claude-home available" 0
+    if echo "$help_output" | grep -q "plugin install"; then
+        test_result "Help shows plugin install passthrough" 0
     else
-        test_result "CLI argument --claude-home available" 1
+        test_result "Help shows plugin install passthrough" 1
+    fi
+
+    if echo "$help_output" | grep -q "mcp list"; then
+        test_result "Help shows mcp list passthrough" 0
+    else
+        test_result "Help shows mcp list passthrough" 1
     fi
 }
 
-test_priority() {
-    # Test priority: CLI > ENV > default
-    mkdir -p "$TEST_TEMP_DIR/env-config"
-    mkdir -p "$TEST_TEMP_DIR/cli-config"
+test_diagnose_shows_volumes() {
+    # Test that --diagnose shows volume information
+    local diag_output=$($CLAUDY_SCRIPT --diagnose 2>&1) || true
 
-    # Verify the help text explains priority
+    if echo "$diag_output" | grep -q "Docker Volumes"; then
+        test_result "Diagnose shows Docker Volumes section" 0
+    else
+        test_result "Diagnose shows Docker Volumes section" 1
+    fi
+}
+
+test_api_key_env() {
+    # Test that help mentions ANTHROPIC_API_KEY
     local help_output=$($CLAUDY_SCRIPT --help 2>&1)
 
-    if echo "$help_output" | grep -q "default:"; then
-        test_result "Priority explanation in help (default fallback)" 0
+    if echo "$help_output" | grep -q "ANTHROPIC_API_KEY"; then
+        test_result "Help documents ANTHROPIC_API_KEY" 0
     else
-        test_result "Priority explanation in help (default fallback)" 1
+        test_result "Help documents ANTHROPIC_API_KEY" 1
     fi
 }
 
-test_config_isolation() {
-    # Test that using different CLAUDE_HOME keeps configs isolated
-    local config1="$TEST_TEMP_DIR/config1"
-    local config2="$TEST_TEMP_DIR/config2"
-
-    mkdir -p "$config1"
-    mkdir -p "$config2"
-
-    # Create different configs
-    echo '{"session": "config1"}' > "$config1/.session.json"
-    echo '{"session": "config2"}' > "$config2/.session.json"
-
-    # Verify they're different
-    local diff=$(diff "$config1/.session.json" "$config2/.session.json" || true)
-
-    if [ -n "$diff" ]; then
-        test_result "Config isolation (different paths keep separate configs)" 0
-    else
-        test_result "Config isolation (different paths keep separate configs)" 1
-    fi
-}
-
-test_help_text() {
-    # Test that help text includes usage example
+test_no_legacy_options() {
+    # Test that removed options are not present
     local help_output=$($CLAUDY_SCRIPT --help 2>&1)
 
-    local has_example=$(echo "$help_output" | grep -c "export CLAUDE_HOME" || true)
-
-    if [ "$has_example" -gt 0 ]; then
-        test_result "Help includes environment variable example" 0
+    if echo "$help_output" | grep -q "\-\-claude-home"; then
+        test_result "Removed option --claude-home NOT in help" 1
     else
-        test_result "Help includes environment variable example" 1
+        test_result "Removed option --claude-home NOT in help" 0
+    fi
+
+    if echo "$help_output" | grep -q "\-\-legacy"; then
+        test_result "Removed option --legacy NOT in help" 1
+    else
+        test_result "Removed option --legacy NOT in help" 0
+    fi
+}
+
+test_version() {
+    # Test that version is 0.7.0+
+    local version=$($CLAUDY_SCRIPT --version 2>&1 | head -1)
+
+    if echo "$version" | grep -qE "0\.[7-9]|[1-9]\.[0-9]"; then
+        test_result "Version is 0.7.0+: $version" 0
+    else
+        test_result "Version is 0.7.0+: $version" 1
     fi
 }
 
@@ -143,31 +125,31 @@ test_help_text() {
 ##############################################################################
 
 case "${1:-all}" in
-    default-home)
-        test_default_home
+    volumes)
+        test_volume_documentation
         ;;
-    env-override)
-        test_env_override
+    passthrough)
+        test_command_passthrough
         ;;
-    cli-override)
-        test_cli_override
+    diagnose)
+        test_diagnose_shows_volumes
         ;;
-    priority)
-        test_priority
+    api-key)
+        test_api_key_env
         ;;
-    isolation)
-        test_config_isolation
+    no-legacy)
+        test_no_legacy_options
         ;;
-    help)
-        test_help_text
+    version)
+        test_version
         ;;
     all)
-        test_default_home
-        test_env_override
-        test_cli_override
-        test_priority
-        test_config_isolation
-        test_help_text
+        test_volume_documentation
+        test_command_passthrough
+        test_diagnose_shows_volumes
+        test_api_key_env
+        test_no_legacy_options
+        test_version
         ;;
     *)
         echo "Unknown test: $1"

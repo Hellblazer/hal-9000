@@ -173,19 +173,6 @@ test_rollback_shows_completion() {
     fi
 }
 
-test_rollback_mentions_legacy() {
-    log_test "Rollback mentions --legacy mode"
-
-    local output
-    output=$(HAL9000_HOME="$TEST_HAL9000_HOME" "$ROLLBACK" --force --keep-volumes 2>&1) || true
-
-    if echo "$output" | grep -q "\-\-legacy"; then
-        log_pass "Mentions --legacy mode"
-    else
-        log_fail "No mention of --legacy"
-    fi
-}
-
 # ============================================================================
 # MAIN
 # ============================================================================
@@ -209,7 +196,6 @@ main() {
             test_rollback_stops_daemon
             test_rollback_restores_from_backup
             test_rollback_shows_completion
-            test_rollback_mentions_legacy
             ;;
         *)
             # Run specific test

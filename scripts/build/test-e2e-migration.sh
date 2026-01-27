@@ -379,32 +379,6 @@ EOF
 }
 
 # ============================================================================
-# LEGACY MODE COMPATIBILITY
-# ============================================================================
-
-test_legacy_mode_works() {
-    log_test "E2E: Legacy mode works after migration tools installed"
-
-    # Test that --legacy flag is recognized
-    local output
-    output=$("$CLAUDY" --legacy --help 2>&1) || output=$("$CLAUDY" --help 2>&1) || true
-
-    if echo "$output" | grep -q "\-\-legacy"; then
-        log_pass "Legacy flag documented in help"
-    else
-        log_fail "Legacy flag not in help"
-    fi
-
-    # Test legacy mode triggers deprecation warning
-    output=$("$CLAUDY" --legacy /nonexistent 2>&1) || true
-    if echo "$output" | grep -qi "deprecat"; then
-        log_pass "Legacy mode shows deprecation warning"
-    else
-        log_fail "No deprecation warning for legacy mode"
-    fi
-}
-
-# ============================================================================
 # MAIN
 # ============================================================================
 
@@ -425,7 +399,6 @@ main() {
             test_data_preservation
             test_rollback_functionality
             test_full_migration_cycle
-            test_legacy_mode_works
             ;;
         *)
             if declare -f "$test_filter" >/dev/null 2>&1; then
