@@ -144,6 +144,23 @@ claudy --profile java      # + Java/Maven tools
 
 ## Companion Tools
 
+### hal-9000 Plugin - Agents & Commands
+
+Custom agents, slash commands, and hooks for enhanced Claude workflows:
+
+```bash
+# Install the plugin
+claudy plugin marketplace add Hellblazer/hal-9000
+claudy plugin install hal-9000
+```
+
+**Includes**:
+- 12 specialized agents (java-developer, code-review-expert, strategic-planner, etc.)
+- Slash commands (/check, /load, /sessions)
+- Safety hooks
+
+[hal-9000 documentation →](plugins/hal-9000/README.md)
+
 ### beads (bd) - Issue Tracking
 
 AI-optimized issue tracker with dependency support:
