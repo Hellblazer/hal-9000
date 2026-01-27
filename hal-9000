@@ -1093,16 +1093,15 @@ launch_container_session() {
     docker_args+=(-w "/workspace" "$container_image")
 
     # Start container with tmux running Claude and a shell window
-    # Container runs with tmux in foreground to keep it alive
-    # We create tmux session, then keep the container running
+    # Container runs with background process to stay alive after Claude exits
+    # We create tmux session, then keep the container running with a background process
     if [[ "$shell_mode" == "true" ]]; then
         # Shell mode: just shell in tmux window 0
-        # Explicitly export CLAUDE_HOME for credential access
-        docker_args+=(bash -c "export CLAUDE_HOME=/root/.claude && tmux new-session -d -s main -n shell && while tmux has-session -t main 2>/dev/null; do sleep 1; done")
+        docker_args+=(bash -c "tmux new-session -d -s main -n shell && exec sleep infinity")
     else
         # Normal mode: Claude in window 0, shell in window 1
-        # Explicitly export CLAUDE_HOME before running claude so credentials are found
-        docker_args+=(bash -c "export CLAUDE_HOME=/root/.claude && tmux new-session -d -s main -n claude 'claude' && tmux new-window -t main -n shell && while tmux has-session -t main 2>/dev/null; do sleep 1; done")
+        # CLAUDE_HOME is now set in the Dockerfile, but explicit export ensures compatibility
+        docker_args+=(bash -c "tmux new-session -d -s main -n claude 'claude' && tmux new-window -t main -n shell && exec sleep infinity")
     fi
 
     # Start the container

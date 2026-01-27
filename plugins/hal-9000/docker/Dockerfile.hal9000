@@ -73,7 +73,8 @@ RUN uv tool install chroma-mcp==0.2.6
 # Create workspace and hal-9000 mount point
 RUN mkdir -p /workspace /hal-9000 /root/memory-bank
 
-# Set environment variables for MCP servers
+# Set environment variables for MCP servers and Claude Code
+ENV CLAUDE_HOME="/root/.claude"
 ENV MEMORY_BANK_ROOT="/root/memory-bank"
 
 WORKDIR /workspace
