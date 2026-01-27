@@ -1097,10 +1097,12 @@ launch_container_session() {
     # We create tmux session, then keep the container running
     if [[ "$shell_mode" == "true" ]]; then
         # Shell mode: just shell in tmux window 0
-        docker_args+=(bash -c "tmux new-session -d -s main -n shell && while tmux has-session -t main 2>/dev/null; do sleep 1; done")
+        # Explicitly export CLAUDE_HOME for credential access
+        docker_args+=(bash -c "export CLAUDE_HOME=/root/.claude && tmux new-session -d -s main -n shell && while tmux has-session -t main 2>/dev/null; do sleep 1; done")
     else
         # Normal mode: Claude in window 0, shell in window 1
-        docker_args+=(bash -c "tmux new-session -d -s main -n claude 'claude' && tmux new-window -t main -n shell && while tmux has-session -t main 2>/dev/null; do sleep 1; done")
+        # Explicitly export CLAUDE_HOME before running claude so credentials are found
+        docker_args+=(bash -c "export CLAUDE_HOME=/root/.claude && tmux new-session -d -s main -n claude 'claude' && tmux new-window -t main -n shell && while tmux has-session -t main 2>/dev/null; do sleep 1; done")
     fi
 
     # Start the container
