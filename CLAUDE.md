@@ -203,6 +203,126 @@ Before committing plugin changes:
    - Verify functionality
 6. ✅ Environment variables documented
 
+## Release Process
+
+**When releasing a new version of hal-9000:**
+
+### 1. Version Bumping (CRITICAL - DO NOT SKIP!)
+
+Before creating git tag, synchronize all version references:
+
+**README.md badge**:
+```bash
+# Update the version badge at line 3
+[![Version](https://img.shields.io/badge/version-X.Y.Z-blue.svg)]
+```
+
+**hal-9000 script** (line 8):
+```bash
+readonly SCRIPT_VERSION="X.Y.Z"
+```
+
+**Check all are consistent**:
+```bash
+grep -n "version\|VERSION" README.md hal-9000 | grep -E "0\.[0-9]\.|[0-9]\.[0-9]\.[0-9]"
+# All should show the SAME version
+```
+
+### 2. Decide Version Number
+
+Follow semantic versioning:
+- **Patch (X.Y.Z)**: Bug fixes, minor improvements
+- **Minor (X.Y+1.0)**: New features (session persistence, new MCP servers)
+- **Major (X+1.0.0)**: Breaking changes (API changes, incompatible updates)
+
+**Recent changes** (decide category):
+- Session persistence across containers → **MINOR**
+- Authentication token persistence → **MINOR**
+- MCP configuration persistence → **MINOR**
+- Subscription login support → **MINOR**
+- Bug fixes in login/session handling → **MINOR**
+
+→ Result: `v1.3.2` → `v1.4.0` (minor version bump)
+
+### 3. Build & Test
+
+```bash
+# Build all Docker images
+make build
+
+# Verify images exist
+docker images | grep ghcr.io/hellblazer/hal-9000
+
+# Test locally (optional but recommended)
+make test-claudy
+```
+
+### 4. Push Docker Images
+
+```bash
+# Push all profile images to registry
+docker push ghcr.io/hellblazer/hal-9000:base
+docker push ghcr.io/hellblazer/hal-9000:python
+docker push ghcr.io/hellblazer/hal-9000:node
+docker push ghcr.io/hellblazer/hal-9000:java
+```
+
+### 5. Create Release Commit
+
+```bash
+git add README.md hal-9000
+git commit -m "Release v1.4.0: Add session persistence and MCP configuration
+
+Major features:
+- Session state persists across container instances
+- Authentication tokens persist without re-login
+- MCP server configurations survive session boundaries
+- Subscription login support
+- Complete Docker image suite published
+
+Images: ghcr.io/hellblazer/hal-9000:base|python|node|java"
+```
+
+### 6. Create Git Tag
+
+```bash
+git tag -a v1.4.0 -m "Release v1.4.0 - Session Persistence
+
+- Persistent Claude session state via hal9000-claude-session volume
+- Subscription login support with persistent authentication
+- MCP configuration survival across sessions
+- Published images: base, python, node, java"
+
+# Push tag to remote
+git push origin v1.4.0
+```
+
+### 7. Verify Release
+
+```bash
+# Confirm tag exists
+git tag --list | grep v1.4.0
+
+# Verify images are in registry (can take a few minutes to become available)
+# Check GitHub Container Registry:
+# https://github.com/Hellblazer/hal-9000/pkgs/container/hal-9000
+```
+
+### Release Checklist
+
+- [ ] Decided on version number (X.Y.Z)
+- [ ] Updated README.md version badge
+- [ ] Updated hal-9000 script SCRIPT_VERSION
+- [ ] Verified both versions match
+- [ ] Built Docker images (`make build`)
+- [ ] Images built successfully (4 profiles)
+- [ ] Pushed all images to ghcr.io
+- [ ] Created release commit with clear message
+- [ ] Created annotated git tag with changelog
+- [ ] Pushed tag to remote (`git push origin vX.Y.Z`)
+- [ ] Verified tag exists in repository
+- [ ] Confirmed images available in registry
+
 ## Common Issues
 
 **Marketplace not appearing**:

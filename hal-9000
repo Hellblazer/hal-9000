@@ -5,7 +5,7 @@
 set -Eeuo pipefail
 
 readonly SCRIPT_NAME="hal-9000"
-readonly SCRIPT_VERSION="0.7.0"
+readonly SCRIPT_VERSION="1.4.0"
 readonly HAL9000_HOME="${HOME}/.hal9000"
 readonly PARENT_CONTAINER="hal9000-parent"
 readonly PARENT_IMAGE="ghcr.io/hellblazer/hal-9000:parent"
