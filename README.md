@@ -1,6 +1,6 @@
 # claudy - Containerized Claude
 
-[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
+[![Version](https://img.shields.io/badge/version-0.7.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Container Registry](https://img.shields.io/badge/ghcr.io-hellblazer%2Fhal--9000-blue?logo=docker)](https://github.com/Hellblazer/hal-9000/pkgs/container/hal-9000)
 
