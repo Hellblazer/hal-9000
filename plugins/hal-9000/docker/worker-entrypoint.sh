@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # worker-entrypoint.sh - HAL-9000 Worker Container Entrypoint
 #
-# Minimal entrypoint for marketplace-ready Claude environment:
-# 1. Initialize/verify CLAUDE_HOME (mounted as persistent volume)
-# 2. Set up workspace
-# 3. Launch Claude or passed command
+# Responsibilities:
+# 1. Initialize CLAUDE_HOME (shared volume for marketplace)
+# 2. Configure foundation MCP servers (chromadb, memory-bank, sequential-thinking)
+# 3. Set up workspace
+# 4. Launch Claude or passed command
 #
 # Environment Variables:
-#   CLAUDE_HOME       - Claude configuration directory (default: /root/.claude)
+#   CLAUDE_HOME       - Claude config directory (default: /root/.claude)
 #   WORKSPACE         - Working directory (default: /workspace)
+#   MEMORY_BANK_ROOT  - Memory bank data (default: /data/memory-bank)
+#   CHROMADB_HOST     - ChromaDB server host (default: localhost)
+#   CHROMADB_PORT     - ChromaDB server port (default: 8000)
 #   ANTHROPIC_API_KEY - API key for Claude (optional if using session auth)
 #   WORKER_NAME       - Name of this worker (for logging)
 
@@ -34,6 +38,9 @@ log_error() { printf "${RED}[${WORKER_NAME}]${NC} %s\n" "$1" >&2; }
 
 CLAUDE_HOME="${CLAUDE_HOME:-/root/.claude}"
 WORKSPACE="${WORKSPACE:-/workspace}"
+MEMORY_BANK_ROOT="${MEMORY_BANK_ROOT:-/data/memory-bank}"
+CHROMADB_HOST="${CHROMADB_HOST:-localhost}"
+CHROMADB_PORT="${CHROMADB_PORT:-8000}"
 
 # ============================================================================
 # INITIALIZATION
@@ -43,8 +50,8 @@ init_claude_home() {
     log_info "Initializing Claude home: $CLAUDE_HOME"
 
     # Ensure Claude home structure exists
-    # (may already exist if mounted as persistent volume)
     mkdir -p "$CLAUDE_HOME"
+    mkdir -p "$MEMORY_BANK_ROOT"
 
     # Check for authentication
     if [[ -f "$CLAUDE_HOME/.credentials.json" ]]; then
@@ -54,11 +61,62 @@ init_claude_home() {
     else
         log_warn "No authentication found - Claude may prompt for login"
     fi
+}
 
-    # Check for marketplace installations
-    if [[ -f "$CLAUDE_HOME/settings.json" ]]; then
-        log_info "Found existing settings.json (marketplace config preserved)"
+setup_foundation_mcp() {
+    log_info "Configuring foundation MCP servers..."
+
+    local settings_file="$CLAUDE_HOME/settings.json"
+
+    # If settings.json exists, merge our foundation servers
+    # Otherwise create fresh config
+    if [[ -f "$settings_file" ]]; then
+        log_info "Existing settings.json found - preserving marketplace installs"
+        # Check if our foundation servers are already configured
+        if grep -q '"memory-bank"' "$settings_file" 2>/dev/null; then
+            log_info "Foundation MCP servers already configured"
+            return 0
+        fi
+        # TODO: merge foundation servers into existing config
+        # For now, we'll leave existing config alone
+        log_warn "Adding foundation servers to existing config not yet implemented"
+        return 0
     fi
+
+    # Create settings.json with foundation MCP servers
+    cat > "$settings_file" <<EOF
+{
+  "theme": "dark",
+  "preferredNotificationChannel": "terminal",
+  "verbose": false,
+  "mcpServers": {
+    "memory-bank": {
+      "command": "mcp-server-memory-bank",
+      "args": [],
+      "env": {
+        "MEMORY_BANK_ROOT": "${MEMORY_BANK_ROOT}"
+      }
+    },
+    "sequential-thinking": {
+      "command": "mcp-server-sequential-thinking",
+      "args": []
+    },
+    "chromadb": {
+      "command": "chroma-mcp",
+      "args": [
+        "--client-type", "http",
+        "--host", "${CHROMADB_HOST}",
+        "--port", "${CHROMADB_PORT}"
+      ]
+    }
+  }
+}
+EOF
+
+    log_success "Foundation MCP servers configured:"
+    log_info "  - memory-bank: ${MEMORY_BANK_ROOT}"
+    log_info "  - chromadb: http://${CHROMADB_HOST}:${CHROMADB_PORT}"
+    log_info "  - sequential-thinking: enabled"
 }
 
 setup_workspace() {
@@ -91,17 +149,49 @@ verify_claude() {
     log_success "Claude CLI version: $version"
 }
 
+verify_mcp_servers() {
+    log_info "Verifying foundation MCP servers..."
+
+    local all_ok=true
+
+    if command -v mcp-server-memory-bank &>/dev/null; then
+        log_success "  memory-bank: ready"
+    else
+        log_warn "  memory-bank: not found"
+        all_ok=false
+    fi
+
+    if command -v mcp-server-sequential-thinking &>/dev/null; then
+        log_success "  sequential-thinking: ready"
+    else
+        log_warn "  sequential-thinking: not found"
+        all_ok=false
+    fi
+
+    if command -v chroma-mcp &>/dev/null; then
+        log_success "  chromadb: ready"
+    else
+        log_warn "  chromadb: not found"
+        all_ok=false
+    fi
+
+    if [[ "$all_ok" == "true" ]]; then
+        log_success "All foundation MCP servers available"
+    fi
+}
+
 print_worker_info() {
     echo
     echo "============================================"
     echo "  HAL-9000 Worker: $WORKER_NAME"
     echo "============================================"
-    echo "  Claude Home:  $CLAUDE_HOME"
-    echo "  Workspace:    $WORKSPACE"
+    echo "  Claude Home:   $CLAUDE_HOME"
+    echo "  Workspace:     $WORKSPACE"
+    echo "  Memory Bank:   $MEMORY_BANK_ROOT"
+    echo "  ChromaDB:      http://${CHROMADB_HOST}:${CHROMADB_PORT}"
     echo "============================================"
-    echo "  Install MCP servers via marketplace:"
-    echo "    claude marketplace add <url>"
-    echo "    claude marketplace install <plugin>"
+    echo "  Foundation: memory-bank, chromadb, sequential-thinking"
+    echo "  Add more via: claude marketplace install <plugin>"
     echo "============================================"
     echo
 }
@@ -126,8 +216,10 @@ main() {
 
     # Run initialization
     init_claude_home
+    setup_foundation_mcp
     setup_workspace
     verify_claude
+    verify_mcp_servers
 
     print_worker_info
 

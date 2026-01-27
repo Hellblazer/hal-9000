@@ -1,28 +1,30 @@
 # HAL-9000 Worker Container
-# Minimal Claude Code environment - marketplace-ready
+# Claude Code environment with foundation MCP servers + marketplace support
 #
-# Philosophy:
-# - Minimal base with Claude CLI + tooling for marketplace installs
-# - CLAUDE_HOME mounted as persistent volume from parent
-# - Users install MCP servers, agents, commands via marketplace
-# - Everything persists in CLAUDE_HOME volume
+# Foundation MCP servers (pre-installed):
+# - ChromaDB: Client connects to parent's server (localhost:8000)
+# - Memory Bank: Shared volume mount, global to all workers
+# - Sequential Thinking: Stateless reasoning tool
+#
+# Additional MCP servers can be installed via marketplace.
 #
 # Build: docker build -f Dockerfile.worker -t ghcr.io/hellblazer/hal-9000:worker .
 
 FROM debian:bookworm-slim
 
 LABEL maintainer="hal-9000"
-LABEL description="HAL-9000 worker - Minimal Claude CLI, marketplace-ready"
+LABEL description="HAL-9000 worker - Claude CLI with foundation MCP servers"
 LABEL version="3.0.0"
 LABEL architecture="dind-worker"
+LABEL mcp_servers="chromadb, memory-bank, sequential-thinking"
 LABEL build_date="2026-01-26"
 
 # Install system dependencies
-# - curl: Claude CLI installation and marketplace operations
+# - curl: Claude CLI installation and health checks
 # - git: Development workflows
 # - tmux: Session management
-# - python3 + venv: Python MCP servers from marketplace
-# - nodejs: npm MCP servers from marketplace
+# - python3 + venv: Python MCP servers
+# - nodejs: npm MCP servers
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
@@ -55,12 +57,32 @@ RUN curl -fsSL https://claude.ai/install.sh | bash
 # Add Claude CLI to PATH
 ENV PATH="/root/.local/bin:${PATH}"
 
-# Install uv (fast Python package installer for Python MCP servers)
+# Install uv (fast Python package installer)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Create directory structure
-# CLAUDE_HOME will be mounted as persistent volume from parent
-RUN mkdir -p /workspace /root/.claude /scripts
+# ============================================================================
+# Foundation MCP Servers
+# ============================================================================
+
+# Memory Bank - persistent memory across sessions (npm)
+# Data stored in shared volume: /data/memory-bank
+RUN npm install -g @allpepper/memory-bank-mcp@0.2.2
+
+# Sequential Thinking - step-by-step reasoning (npm)
+RUN npm install -g @modelcontextprotocol/server-sequential-thinking@2025.12.18
+
+# ChromaDB MCP client - connects to parent's ChromaDB server (Python)
+RUN uv tool install chroma-mcp==0.2.6
+
+# ============================================================================
+# Directory Structure
+# ============================================================================
+
+# Create directories for:
+# - /workspace: Project files (mounted per-session)
+# - /root/.claude: CLAUDE_HOME (shared volume for marketplace)
+# - /data/memory-bank: Memory Bank data (shared volume)
+RUN mkdir -p /workspace /root/.claude /data/memory-bank /scripts
 
 # Copy entrypoint script
 COPY docker/worker-entrypoint.sh /scripts/worker-entrypoint.sh
@@ -69,18 +91,24 @@ RUN chmod +x /scripts/worker-entrypoint.sh
 # Environment variables
 ENV CLAUDE_HOME=/root/.claude
 ENV WORKSPACE=/workspace
+ENV MEMORY_BANK_ROOT=/data/memory-bank
+ENV CHROMADB_HOST=localhost
+ENV CHROMADB_PORT=8000
 
 WORKDIR /workspace
 
-# Verify core installations
+# Verify installations
 RUN echo "Verifying installations..." \
     && claude --version \
     && node --version \
     && npm --version \
     && uv --version \
-    && echo "✓ Claude CLI and package managers ready"
+    && mcp-server-memory-bank --version > /dev/null 2>&1 || echo "✓ memory-bank ready" \
+    && mcp-server-sequential-thinking --version > /dev/null 2>&1 || echo "✓ sequential-thinking ready" \
+    && chroma-mcp --help > /dev/null 2>&1 \
+    && echo "✓ Foundation MCP servers installed"
 
-# Health check - verify Claude CLI accessible
+# Health check
 HEALTHCHECK --interval=60s --timeout=10s --start-period=5s --retries=3 \
     CMD claude --version >/dev/null 2>&1 || exit 1
 

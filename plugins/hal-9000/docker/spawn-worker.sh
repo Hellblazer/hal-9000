@@ -237,20 +237,17 @@ spawn_worker() {
 
     log_info "Marketplace installations will persist in CLAUDE_HOME"
 
-    # Mount shared data volumes (if they exist)
+    # Mount shared Memory Bank volume (required for foundation MCP server)
+    # Create if doesn't exist - all workers share this for persistent memory
+    local membank_volume="hal9000-memory-bank"
+    docker volume create "$membank_volume" >/dev/null 2>&1 || true
+    docker_args+=(-v "${membank_volume}:/data/memory-bank")
+    log_info "Memory Bank: shared volume $membank_volume"
+
+    # Mount shared ChromaDB data volume (if it exists)
     if docker volume inspect "hal9000-chromadb" >/dev/null 2>&1; then
         docker_args+=(-v "hal9000-chromadb:/data/chromadb")
-        log_info "Mounting shared ChromaDB volume"
-    fi
-
-    if docker volume inspect "hal9000-memorybank" >/dev/null 2>&1; then
-        docker_args+=(-v "hal9000-memorybank:/data/membank")
-        log_info "Mounting shared Memory Bank volume"
-    fi
-
-    if docker volume inspect "hal9000-plugins" >/dev/null 2>&1; then
-        docker_args+=(-v "hal9000-plugins:/data/plugins")
-        log_info "Mounting shared Plugins volume"
+        log_info "ChromaDB data: shared volume"
     fi
 
     # Pass through API key if set
