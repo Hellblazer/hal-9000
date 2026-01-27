@@ -1,21 +1,27 @@
 #!/bin/bash
 # install-hal-9000.sh - Installation script for hal-9000
-# Installs hal-9000 to system PATH and verifies the installation
+# Installs hal-9000 to system PATH
+# Works whether run directly or via: curl -fsSL https://raw.githubusercontent.com/Hellblazer/hal-9000/main/install-hal-9000.sh | bash
 
 set -Eeuo pipefail
 
-readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-readonly HAL9000_SOURCE="$SCRIPT_DIR/hal-9000"
+readonly REPO_OWNER="Hellblazer"
+readonly REPO_NAME="hal-9000"
+readonly GITHUB_RAW="https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/main"
 readonly INSTALL_PREFIX="${INSTALL_PREFIX:-/usr/local}"
 readonly INSTALL_DIR="$INSTALL_PREFIX/bin"
 readonly HAL9000_DEST="$INSTALL_DIR/hal-9000"
+readonly TEMP_DIR=$(mktemp -d)
 
 # Colors for output
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
 readonly BLUE='\033[0;34m'
 readonly RED='\033[0;31m'
-readonly NC='\033[0m' # No Color
+readonly NC='\033[0m'
+
+# Cleanup temp directory on exit
+trap 'rm -rf "$TEMP_DIR"' EXIT
 
 #==============================================================================
 # Helper functions
@@ -38,18 +44,36 @@ error() {
     exit 1
 }
 
+#==============================================================================
+# Installation functions
+#==============================================================================
+
+download_hal9000() {
+    local hal9000_url="$GITHUB_RAW/hal-9000"
+    local temp_script="$TEMP_DIR/hal-9000"
+
+    info "Downloading hal-9000 from GitHub..."
+
+    if ! curl -fsSL "$hal9000_url" -o "$temp_script" 2>/dev/null; then
+        error "Failed to download hal-9000. Check your internet connection."
+    fi
+
+    # Verify the script was downloaded
+    if [[ ! -f "$temp_script" ]]; then
+        error "hal-9000 script not found after download"
+    fi
+
+    # Make it executable
+    chmod +x "$temp_script"
+
+    success "hal-9000 downloaded successfully"
+
+    # Return the path to the downloaded script
+    echo "$temp_script"
+}
+
 check_prerequisites() {
     info "Checking prerequisites..."
-
-    # Check if hal-9000 source exists
-    if [[ ! -f "$HAL9000_SOURCE" ]]; then
-        error "hal-9000 script not found at $HAL9000_SOURCE"
-    fi
-
-    # Check if hal-9000 is executable
-    if [[ ! -x "$HAL9000_SOURCE" ]]; then
-        error "hal-9000 is not executable. Run: chmod +x $HAL9000_SOURCE"
-    fi
 
     # Check for write access to install directory
     if [[ ! -d "$INSTALL_DIR" ]]; then
@@ -57,13 +81,24 @@ check_prerequisites() {
     fi
 
     if [[ ! -w "$INSTALL_DIR" ]]; then
-        warn "No write access to $INSTALL_DIR (may need sudo)"
+        warn "No write access to $INSTALL_DIR (will try with sudo)"
+    fi
+
+    # Check for required tools
+    if ! command -v docker &> /dev/null; then
+        error "Docker is not installed. Please install Docker to use hal-9000."
+    fi
+
+    if ! command -v curl &> /dev/null; then
+        warn "curl not found (needed for installer updates)"
     fi
 
     success "Prerequisites checked"
 }
 
-install_hal-9000() {
+install_hal9000() {
+    local hal9000_script="$1"
+
     info "Installing hal-9000 to $HAL9000_DEST..."
 
     # Check if installation requires sudo
@@ -72,10 +107,10 @@ install_hal-9000() {
         if ! sudo -v &> /dev/null; then
             error "sudo access required but not available"
         fi
-        sudo cp "$HAL9000_SOURCE" "$HAL9000_DEST"
+        sudo cp "$hal9000_script" "$HAL9000_DEST"
         sudo chmod 755 "$HAL9000_DEST"
     else
-        cp "$HAL9000_SOURCE" "$HAL9000_DEST"
+        cp "$hal9000_script" "$HAL9000_DEST"
         chmod 755 "$HAL9000_DEST"
     fi
 
@@ -85,13 +120,6 @@ install_hal-9000() {
 verify_installation() {
     info "Verifying installation..."
 
-    # Check if hal-9000 is in PATH
-    if ! command -v hal-9000 &> /dev/null; then
-        warn "hal-9000 not in PATH. You may need to restart your terminal."
-    else
-        success "hal-9000 is in PATH"
-    fi
-
     # Check if hal-9000 is executable
     if ! "$HAL9000_DEST" --version &> /dev/null; then
         error "hal-9000 is not working. Try: $HAL9000_DEST --verify"
@@ -100,6 +128,13 @@ verify_installation() {
     local version
     version=$("$HAL9000_DEST" --version | head -1)
     success "Installed: $version"
+
+    # Check if hal-9000 is in PATH
+    if ! command -v hal-9000 &> /dev/null; then
+        warn "hal-9000 not in PATH. Add $INSTALL_DIR to your PATH or restart your terminal."
+    else
+        success "hal-9000 is in PATH"
+    fi
 
     # Run basic verification
     info "Running basic verification..."
@@ -128,11 +163,11 @@ show_post_install() {
     echo "    hal-9000 --profile python    Force a specific profile"
     echo ""
     echo -e "${YELLOW}  Documentation:${NC}"
-    echo "    https://github.com/hellblazer/hal-9000"
+    echo "    https://github.com/Hellblazer/hal-9000"
     echo ""
 }
 
-uninstall_hal-9000() {
+uninstall_hal9000() {
     info "Uninstalling hal-9000..."
 
     if [[ ! -f "$HAL9000_DEST" ]]; then
@@ -167,7 +202,9 @@ main() {
             echo "Destination: $HAL9000_DEST"
             echo ""
             check_prerequisites
-            install_hal-9000
+            local hal9000_script
+            hal9000_script=$(download_hal9000)
+            install_hal9000 "$hal9000_script"
             verify_installation
             show_post_install
             ;;
@@ -175,7 +212,7 @@ main() {
             echo -e "${BLUE}hal-9000 Uninstallation${NC}"
             echo "Target: $HAL9000_DEST"
             echo ""
-            uninstall_hal-9000
+            uninstall_hal9000
             ;;
         verify)
             echo -e "${BLUE}Verifying Installation${NC}"
@@ -191,9 +228,9 @@ main() {
             echo "  verify     Check existing installation"
             echo ""
             echo "Examples:"
-            echo "  ./install-hal-9000.sh              # Install hal-9000"
-            echo "  ./install-hal-9000.sh verify       # Check installation"
-            echo "  ./install-hal-9000.sh uninstall    # Remove hal-9000"
+            echo "  curl -fsSL https://raw.githubusercontent.com/Hellblazer/hal-9000/main/install-hal-9000.sh | bash"
+            echo "  ./install-hal-9000.sh verify"
+            echo "  ./install-hal-9000.sh uninstall"
             exit 1
             ;;
     esac
