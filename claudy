@@ -6,15 +6,19 @@
 set -Eeuo pipefail
 
 readonly SCRIPT_NAME="claudy"
-readonly SCRIPT_VERSION="0.6.0"
+readonly SCRIPT_VERSION="0.7.0"
 readonly HAL9000_HOME="${HOME}/.hal9000"
 readonly PARENT_CONTAINER="hal9000-parent"
 readonly PARENT_IMAGE="ghcr.io/hellblazer/hal-9000:parent"
-# CLAUDE_HOME can be overridden by environment variable or --claude-home argument
-# Default: ~/.claude (same as Claude Code)
-readonly DEFAULT_CLAUDE_HOME="${HOME}/.claude"
 readonly DEFAULT_PROFILE="base"
 readonly CONTAINER_IMAGE_BASE="ghcr.io/hellblazer/hal-9000"
+
+# Shared Docker volume for CLAUDE_HOME - all workers share this
+readonly CLAUDE_HOME_VOLUME="hal9000-claude-home"
+readonly MEMORY_BANK_VOLUME="hal9000-memory-bank"
+
+# Claude subcommands that should be passed through to container
+readonly CLAUDE_SUBCOMMANDS="mcp|plugin|doctor|install|setup-token|update"
 
 # Colors for output
 readonly RED='\033[0;31m'
@@ -45,6 +49,46 @@ success() {
 }
 
 #==============================================================================
+# Claude command passthrough
+#==============================================================================
+
+# Ensure shared volumes exist
+ensure_volumes() {
+    docker volume create "$CLAUDE_HOME_VOLUME" >/dev/null 2>&1 || true
+    docker volume create "$MEMORY_BANK_VOLUME" >/dev/null 2>&1 || true
+}
+
+# Run a claude command inside a container with shared volumes
+# Usage: run_claude_command <args...>
+run_claude_command() {
+    ensure_volumes
+
+    local image="${CONTAINER_IMAGE_BASE}:base"
+
+    # Build docker args
+    local docker_args=(
+        docker run --rm -it
+        -v "${CLAUDE_HOME_VOLUME}:/root/.claude"
+        -v "${MEMORY_BANK_VOLUME}:/root/memory-bank"
+        -e "MEMORY_BANK_ROOT=/root/memory-bank"
+    )
+
+    # Pass through API key if available
+    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+        docker_args+=(-e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
+    fi
+
+    # Run claude with the provided arguments
+    "${docker_args[@]}" "$image" claude "$@"
+}
+
+# Check if arg is a claude subcommand that should be passed through
+is_claude_subcommand() {
+    local arg="${1:-}"
+    [[ "$arg" =~ ^($CLAUDE_SUBCOMMANDS)$ ]]
+}
+
+#==============================================================================
 # Help and diagnostics
 #==============================================================================
 
@@ -53,9 +97,21 @@ show_help() {
 claudy - Containerized Claude CLI
 
 USAGE:
-  claudy [OPTIONS] [DIRECTORY]
-  claudy daemon <command>
-  claudy pool <command>
+  claudy [OPTIONS] [DIRECTORY]           # Interactive Claude session
+  claudy <claude-command> [args...]      # Run claude command in container
+  claudy daemon <command>                # Manage orchestrator
+  claudy pool <command>                  # Manage worker pool
+
+CLAUDE COMMANDS (passthrough to container):
+  claudy plugin list                     # List installed plugins
+  claudy plugin install <name>           # Install a plugin
+  claudy plugin marketplace add <url>    # Add a marketplace
+  claudy mcp list                        # List MCP servers
+  claudy mcp add <server>                # Add MCP server
+  claudy doctor                          # Check Claude health
+
+  All 'claude' subcommands work - they run inside a container with the
+  shared CLAUDE_HOME volume, so changes persist across all sessions.
 
 DAEMON COMMANDS:
   claudy daemon start    Start the orchestrator (parent container with ChromaDB)
@@ -75,11 +131,9 @@ OPTIONS:
   --profile PROFILE      Profile: base, python, node, java (default: auto-detect)
   --shell, -s            Start bash shell instead of Claude
   --name NAME            Custom session name (default: auto from directory)
-  --claude-home PATH     Path to Claude config directory (default: $CLAUDE_HOME or ~/.claude)
   --api-key KEY          Anthropic API key (or set ANTHROPIC_API_KEY env var)
   --detach, -d           Don't attach to tmux session after launch
   --via-parent           Launch worker via parent container (requires daemon running)
-  --legacy               Force single-container mode (v0.5.x behavior, deprecated)
   --verify               Verify prerequisites and exit
   --diagnose             Show diagnostic information
   --help, -h             Show this help message
@@ -107,7 +161,8 @@ EXAMPLES:
   claudy --profile python                   # Force Python profile
   claudy ~/projects/myapp                   # Specific directory
   claudy --shell -d                         # Detached shell session
-  claudy --api-key sk-ant-xxx123            # Use specific API key
+  claudy plugin install memory-bank         # Install plugin (persists)
+  claudy mcp list                           # List MCP servers
   claudy --diagnose                         # Check setup
 
 DAEMON EXAMPLES:
@@ -118,13 +173,12 @@ DAEMON EXAMPLES:
 
 ENVIRONMENT:
   ANTHROPIC_API_KEY      API key for Claude authentication
-  CLAUDE_HOME            Override Claude config directory (default: ~/.claude)
   HAL9000_HOME           Override session storage (default: ~/.hal9000)
   DOCKER_SOCKET          Docker socket path (default: /var/run/docker.sock)
 
-CONTAINER CONFIG:
-  Config is mounted at /claude with CLAUDE_CONFIG_DIR=/claude
-  Host UID/GID passed via USER_UID/USER_GID for file permissions
+VOLUMES:
+  hal9000-claude-home    Shared CLAUDE_HOME - plugins/config persist here
+  hal9000-memory-bank    Shared memory bank for cross-session context
 
 For more information, see documentation at:
   https://github.com/hellblazer/hal-9000/blob/main/README.md
@@ -272,33 +326,25 @@ show_diagnostics() {
         warn "  ANTHROPIC_API_KEY: Not set"
     fi
 
-    # Check Claude home
-    if [[ -d "$CLAUDE_HOME" ]]; then
-        success "Claude home: $CLAUDE_HOME (exists)"
-
-        # Check for config files
-        local config_count=0
-        [[ -f "$CLAUDE_HOME/settings.json" ]] && ((config_count++))
-        [[ -d "$CLAUDE_HOME/agents" ]] && ((config_count++))
-        [[ -d "$CLAUDE_HOME/mcp-servers" ]] && ((config_count++))
-        [[ -f "$CLAUDE_HOME/CLAUDE.md" ]] && ((config_count++))
-        info "  → Config files found: $config_count"
-
-        # Check for agents
-        if [[ -d "$CLAUDE_HOME/agents" ]]; then
-            local agent_count
-            agent_count=$(find "$CLAUDE_HOME/agents" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
-            info "  → Agents: $agent_count"
-        fi
-
-        # Check for MCP servers
-        if [[ -d "$CLAUDE_HOME/mcp-servers/servers" ]]; then
-            local mcp_count
-            mcp_count=$(find "$CLAUDE_HOME/mcp-servers/servers" -name "*.json" 2>/dev/null | wc -l | tr -d ' ')
-            info "  → MCP servers: $mcp_count"
+    # Check Docker volumes
+    echo ""
+    info "Docker Volumes:"
+    if docker volume inspect "$CLAUDE_HOME_VOLUME" &>/dev/null; then
+        success "  $CLAUDE_HOME_VOLUME (exists)"
+        # Show volume size if possible
+        local vol_path
+        vol_path=$(docker volume inspect "$CLAUDE_HOME_VOLUME" --format '{{.Mountpoint}}' 2>/dev/null || true)
+        if [[ -n "$vol_path" ]]; then
+            info "    → Mountpoint: $vol_path"
         fi
     else
-        warn "Claude home: $CLAUDE_HOME (not configured)"
+        info "  $CLAUDE_HOME_VOLUME (not yet created)"
+    fi
+
+    if docker volume inspect "$MEMORY_BANK_VOLUME" &>/dev/null; then
+        success "  $MEMORY_BANK_VOLUME (exists)"
+    else
+        info "  $MEMORY_BANK_VOLUME (not yet created)"
     fi
 
     # Check hal9000 storage
@@ -344,8 +390,9 @@ show_diagnostics() {
     # Container config info
     echo ""
     info "Container config:"
-    echo "  CLAUDE_CONFIG_DIR=/claude (mounted from session)"
-    echo "  USER_UID/USER_GID passed for file permissions"
+    echo "  CLAUDE_HOME: /root/.claude (from $CLAUDE_HOME_VOLUME volume)"
+    echo "  Memory Bank: /root/memory-bank (from $MEMORY_BANK_VOLUME volume)"
+    echo "  Plugins installed in container persist across all sessions"
 }
 
 #==============================================================================
@@ -821,97 +868,12 @@ init_session() {
 
     abs_project_path=$(cd "$project_dir" && pwd)
 
-    # Create session directory structure
+    # Ensure shared Docker volumes exist
+    ensure_volumes
+
+    # Create session metadata directory
     local session_dir="$HAL9000_HOME/claude/$session_name"
-
-    # Use SHARED config directory for auth persistence (login once, use everywhere)
-    # Per-session isolation caused repeated login prompts
-    local shared_claude_config="$HAL9000_HOME/claude/.shared-config"
-
-    mkdir -p "$shared_claude_config"
-    mkdir -p "$session_dir/.workspace"
-
-    # Copy host Claude configuration to shared config (only on first setup)
-    if [[ ! -f "$shared_claude_config/.initialized" ]]; then
-        info "First-time setup: copying config to shared directory..."
-
-        if [[ -d "$CLAUDE_HOME" ]]; then
-            # Copy settings
-            [[ -f "$CLAUDE_HOME/settings.json" ]] && cp "$CLAUDE_HOME/settings.json" "$shared_claude_config/"
-            [[ -f "$CLAUDE_HOME/settings.local.json" ]] && cp "$CLAUDE_HOME/settings.local.json" "$shared_claude_config/"
-            [[ -f "$CLAUDE_HOME/CLAUDE.md" ]] && cp "$CLAUDE_HOME/CLAUDE.md" "$shared_claude_config/"
-
-            # Copy agents (exclude _shared directory which contains non-agent docs)
-            if [[ -d "$CLAUDE_HOME/agents" ]]; then
-                mkdir -p "$shared_claude_config/agents"
-                find "$CLAUDE_HOME/agents" -maxdepth 1 -name "*.md" -exec cp {} "$shared_claude_config/agents/" \; 2>/dev/null || true
-                local agent_count
-                agent_count=$(find "$shared_claude_config/agents" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l | tr -d ' ')
-                info "Copied $agent_count agents"
-            fi
-
-            # Copy commands
-            [[ -d "$CLAUDE_HOME/commands" ]] && cp -r "$CLAUDE_HOME/commands" "$shared_claude_config/" 2>/dev/null || true
-
-            # Copy MCP server configurations
-            if [[ -d "$CLAUDE_HOME/mcp-servers" ]]; then
-                cp -r "$CLAUDE_HOME/mcp-servers" "$shared_claude_config/" 2>/dev/null || true
-                local mcp_count
-                mcp_count=$(find "$shared_claude_config/mcp-servers/servers" -name "*.json" 2>/dev/null | wc -l | tr -d ' ')
-                info "Copied $mcp_count MCP server configs"
-            fi
-
-            # Copy skills
-            [[ -d "$CLAUDE_HOME/skills" ]] && cp -r "$CLAUDE_HOME/skills" "$shared_claude_config/" 2>/dev/null || true
-        fi
-
-        # Mark as initialized
-        touch "$shared_claude_config/.initialized"
-        success "Shared config initialized"
-    else
-        info "Using existing shared config"
-    fi
-
-    # Create .claude.json with API key and MCP servers
-    # This file tells Claude Code to use the API key directly (bypasses OAuth)
-    # Also configures MCP servers that are pre-installed in the container
-    local api_key_for_config="${ANTHROPIC_API_KEY:-}"
-    if [[ -n "$api_key_for_config" ]]; then
-        cat > "$shared_claude_config/.claude.json" << CLAUDEJSON
-{
-  "changelogLastFetched": 1000000000000,
-  "primaryApiKey": "$api_key_for_config",
-  "isQualifiedForDataSharing": false,
-  "hasCompletedOnboarding": true,
-  "lastOnboardingVersion": "2.1.19",
-  "maxSubscriptionNoticeCount": 0,
-  "hasAvailableMaxSubscription": false,
-  "lastReleaseNotesSeen": "2.1.19",
-  "mcpServers": {
-    "allPepper-memory-bank": {
-      "type": "stdio",
-      "command": "mcp-server-memory-bank",
-      "env": {
-        "MEMORY_BANK_ROOT": "/root/memory-bank"
-      }
-    },
-    "sequential-thinking": {
-      "type": "stdio",
-      "command": "mcp-server-sequential-thinking"
-    },
-    "chromadb": {
-      "type": "stdio",
-      "command": "chroma-mcp",
-      "env": {
-        "CHROMA_DB_PATH": "/root/chromadb"
-      }
-    }
-  }
-}
-CLAUDEJSON
-        chmod 600 "$shared_claude_config/.claude.json"
-        info "Configured API key and MCP servers"
-    fi
+    mkdir -p "$session_dir"
 
     # Create session metadata
     cat > "$session_dir/.claudy-session.json" << METADATA
@@ -942,8 +904,6 @@ launch_container_session() {
     local abs_project_path
 
     abs_project_path=$(cd "$project_dir" && pwd)
-    local session_dir="$HAL9000_HOME/claude/$session_name"
-    local shared_claude_config="$HAL9000_HOME/claude/.shared-config"
     local container_image="${CONTAINER_IMAGE_BASE}:${profile}"
 
     # Verify image exists or fall back to base
@@ -958,23 +918,20 @@ launch_container_session() {
     info "  Directory: $abs_project_path"
 
     # Build docker run command
-    # Key technique from claude-container: use CLAUDE_CONFIG_DIR instead of HOME manipulation
-    # Use SHARED config so login persists across all sessions
-    # Also pass USER_UID/USER_GID for proper file ownership
+    # Uses shared Docker volumes for CLAUDE_HOME and memory bank
+    # All workers share these volumes, so plugins persist across sessions
     local docker_args=(
         docker run
         --rm
         -it
         --name "$session_name"
         -v "$abs_project_path:/workspace"
-        -v "$shared_claude_config:/claude"
+        -v "${CLAUDE_HOME_VOLUME}:/root/.claude"
+        -v "${MEMORY_BANK_VOLUME}:/root/memory-bank"
         -v /var/run/docker.sock:/var/run/docker.sock
-        -e "CLAUDE_CONFIG_DIR=/claude"
-        -e "USER_UID=$(id -u)"
-        -e "USER_GID=$(id -g)"
         -e "CLAUDY_SESSION=$session_name"
         -e "CLAUDY_PROJECT_DIR=$abs_project_path"
-        -e "MEMORY_BANK_ROOT=/home/claude/memory-bank"
+        -e "MEMORY_BANK_ROOT=/root/memory-bank"
     )
 
     # Pass through API key if available
@@ -992,7 +949,6 @@ launch_container_session() {
     docker_args+=(-w "/workspace" "$container_image")
 
     # Run shell or Claude (using tmux inside container for session persistence)
-    # CLAUDE_CONFIG_DIR tells Claude where to find config, no HOME manipulation needed
     if [[ "$shell_mode" == "true" ]]; then
         info "Starting bash shell in tmux..."
         "${docker_args[@]}" tmux new-session -s shell
@@ -1010,13 +966,11 @@ main() {
     local project_dir="."
     local profile=""
     local session_name=""
-    local claude_home="${CLAUDE_HOME:-$DEFAULT_CLAUDE_HOME}"
     local api_key=""
     local shell_mode=false
     local detach=false
     local verify_only=false
     local via_parent=false
-    local legacy_mode=false
 
     # Handle daemon subcommand first
     if [[ "${1:-}" == "daemon" ]]; then
@@ -1032,7 +986,13 @@ main() {
         exit 0
     fi
 
-    # Parse arguments
+    # Handle claude subcommand passthrough (plugin, mcp, doctor, etc.)
+    if is_claude_subcommand "${1:-}"; then
+        run_claude_command "$@"
+        exit $?
+    fi
+
+    # Parse arguments for interactive session mode
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --profile)
@@ -1047,10 +1007,6 @@ main() {
                 session_name="$2"
                 shift 2
                 ;;
-            --claude-home)
-                claude_home="$2"
-                shift 2
-                ;;
             --api-key)
                 api_key="$2"
                 shift 2
@@ -1063,10 +1019,6 @@ main() {
                 via_parent=true
                 shift
                 ;;
-            --legacy)
-                legacy_mode=true
-                shift
-                ;;
             --verify)
                 verify_only=true
                 shift
@@ -1076,7 +1028,6 @@ main() {
                 exit 0
                 ;;
             --diagnose)
-                export CLAUDE_HOME="$claude_home"
                 show_diagnostics
                 exit 0
                 ;;
@@ -1097,22 +1048,6 @@ main() {
                 ;;
         esac
     done
-
-    # Export CLAUDE_HOME for use in functions
-    export CLAUDE_HOME="$claude_home"
-
-    # Handle legacy mode (deprecated single-container mode)
-    if [[ "$legacy_mode" == "true" ]]; then
-        warn "DEPRECATION: --legacy mode is deprecated and will be removed in v1.0"
-        warn "Please migrate to DinD architecture:"
-        warn "  1. Run: ./scripts/migrate-to-dind.sh"
-        warn "  2. Use: claudy daemon start && claudy --via-parent"
-        echo ""
-        if [[ "$via_parent" == "true" ]]; then
-            warn "--legacy overrides --via-parent; using single-container mode"
-            via_parent=false
-        fi
-    fi
 
     # Verify prerequisites (skip API key check for via-parent mode)
     if [[ "$via_parent" == "true" ]]; then
