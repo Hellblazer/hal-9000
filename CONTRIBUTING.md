@@ -4,24 +4,32 @@ Thank you for your interest in contributing to the hal-9000 Claude Code plugin m
 
 ## Repository Structure
 
-```
-hal-9000/
-├── .claude-plugin/
-│   └── marketplace.json          # Marketplace definition
-├── plugins/
-│   └── hal-9000/                 # Main plugin
-│       ├── .claude-plugin/
-│       │   └── plugin.json       # Plugin metadata
-│       ├── agents/               # Custom agent definitions
-│       ├── aod/                  # Army of Darkness tool
-│       ├── commands/             # Slash commands
-│       ├── hal9000/              # Containerized Claude launcher
-│       ├── hooks/                # Safety hooks
-│       ├── lib/                  # Shared libraries
-│       ├── mcp-servers/          # MCP server configs
-│       └── tests/                # Unit tests
-├── templates/                    # CLAUDE.md templates
-└── CLAUDE.md                     # Development guide
+```mermaid
+graph LR
+    subgraph hal9000["hal-9000/"]
+        subgraph claude_plugin[".claude-plugin/"]
+            marketplace["marketplace.json<br/>Marketplace definition"]
+        end
+
+        subgraph plugins["plugins/"]
+            subgraph hal9000_plugin["hal-9000/"]
+                subgraph plugin_meta[".claude-plugin/"]
+                    pluginjson["plugin.json"]
+                end
+                agents["agents/<br/>Custom agents"]
+                aod["aod/<br/>Army of Darkness"]
+                commands["commands/<br/>Slash commands"]
+                hal9000dir["hal9000/<br/>Container launcher"]
+                hooks["hooks/<br/>Safety hooks"]
+                lib["lib/<br/>Shared libraries"]
+                mcp["mcp-servers/<br/>MCP configs"]
+                tests["tests/<br/>Unit tests"]
+            end
+        end
+
+        templates["templates/<br/>CLAUDE.md templates"]
+        claudemd["CLAUDE.md<br/>Development guide"]
+    end
 ```
 
 ## How to Contribute

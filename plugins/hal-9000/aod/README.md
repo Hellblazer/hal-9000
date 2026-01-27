@@ -12,20 +12,28 @@ Inspired by claude-squad's multi-session workflow concept, aod is an independent
 
 ## Architecture
 
-```
-aod (Orchestrator)
-    │
-    ├── Branch: feature/auth
-    │   └── Worktree → tmux session → hal-9000 container (Slot 1)
-    │       └── Claude CLI + MCP servers (Memory Bank, ChromaDB, Sequential Thinking)
-    │
-    ├── Branch: feature/api
-    │   └── Worktree → tmux session → hal-9000 container (Slot 2)
-    │       └── Claude CLI + MCP servers
-    │
-    └── Branch: bugfix/validation
-        └── Worktree → tmux session → hal-9000 container (Slot 3)
-            └── Claude CLI + MCP servers
+```mermaid
+graph LR
+    AOD["aod<br/>(Orchestrator)"]
+
+    subgraph B1["Branch: feature/auth"]
+        WT1["Git Worktree"] --> TM1["tmux session"] --> C1["hal-9000 container<br/>(Slot 1)"]
+        C1 --> MCP1["Claude CLI + MCP servers"]
+    end
+
+    subgraph B2["Branch: feature/api"]
+        WT2["Git Worktree"] --> TM2["tmux session"] --> C2["hal-9000 container<br/>(Slot 2)"]
+        C2 --> MCP2["Claude CLI + MCP servers"]
+    end
+
+    subgraph B3["Branch: bugfix/validation"]
+        WT3["Git Worktree"] --> TM3["tmux session"] --> C3["hal-9000 container<br/>(Slot 3)"]
+        C3 --> MCP3["Claude CLI + MCP servers"]
+    end
+
+    AOD --> B1
+    AOD --> B2
+    AOD --> B3
 ```
 
 **Components:**
@@ -37,24 +45,21 @@ aod (Orchestrator)
 - **Shared Memory Bank** - Host's `~/memory-bank` mounted for cross-container data sharing
 
 **v1.3.0 Container Architecture:**
-```
-┌─────────────────────────────────────────────────────────┐
-│ hal-9000 Container (ghcr.io/hellblazer/hal-9000:latest) │
-├─────────────────────────────────────────────────────────┤
-│ Claude CLI 2.0.69                                       │
-│ MCP Servers (pre-installed, auto-configured):           │
-│   ├── mcp-server-memory-bank                            │
-│   ├── mcp-server-sequential-thinking                    │
-│   └── chroma-mcp (ephemeral or cloud mode)              │
-│ Tools: tmux-cli, vault, env-safe                        │
-│ Agents: 12 custom agents linked from /hal-9000          │
-├─────────────────────────────────────────────────────────┤
-│ Mounts:                                                 │
-│   /workspace     ← git worktree                         │
-│   /root/.claude  ← writable config (per-container)      │
-│   /hal-9000      ← agents, tools, commands (read-only)  │
-│   /root/memory-bank ← shared with host ~/memory-bank    │
-└─────────────────────────────────────────────────────────┘
+
+```mermaid
+graph TB
+    subgraph Container["hal-9000 Container (ghcr.io/hellblazer/hal-9000:worker)"]
+        subgraph Runtime["Runtime"]
+            CLI["Claude CLI"]
+            MCP["MCP Servers:<br/>memory-bank, sequential-thinking, chroma-mcp"]
+        end
+
+        subgraph Mounts["Volume Mounts"]
+            WS["/workspace ← git worktree"]
+            CC["/root/.claude ← shared config"]
+            MB["/data/memory-bank ← shared storage"]
+        end
+    end
 ```
 
 ## Prerequisites

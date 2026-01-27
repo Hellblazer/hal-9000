@@ -206,17 +206,22 @@ claudy --claude-home ~/.hal9000/test-config --profile python ~/my-project
 
 ### Session Directory Structure
 
-```
-~/.hal9000/                                    # hal-9000 storage root
-└── claude/
-    └── claudy-myproject-a1b2c3d4/           # Session directory (unique per project)
-        ├── .claude/                          # Copied from host ~/.claude
-        │   ├── .session.json                 # Authentication token
-        │   ├── settings.json                 # Claude Code settings
-        │   ├── agents/                       # Custom agents
-        │   └── commands/                     # Custom commands
-        ├── .session.json                     # Session metadata
-        └── .workspace/                       # Project mount point
+```mermaid
+graph LR
+    subgraph hal9000["~/.hal9000/ (hal-9000 storage root)"]
+        subgraph claude["claude/"]
+            subgraph session["claudy-myproject-a1b2c3d4/<br/>(unique per project)"]
+                subgraph dotclaude[".claude/<br/>(Copied from host ~/.claude)"]
+                    SessionJSON[".session.json<br/>Authentication token"]
+                    Settings["settings.json<br/>Claude Code settings"]
+                    Agents["agents/<br/>Custom agents"]
+                    Commands["commands/<br/>Custom commands"]
+                end
+                Metadata[".session.json<br/>Session metadata"]
+                Workspace[".workspace/<br/>Project mount point"]
+            end
+        end
+    end
 ```
 
 ### Execution Flow

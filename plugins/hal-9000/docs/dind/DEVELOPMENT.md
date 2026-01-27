@@ -30,25 +30,41 @@ docker build -f plugins/hal-9000/docker/Dockerfile.worker-minimal \
 
 ## Project Structure
 
-```
-plugins/hal-9000/docker/
-├── Dockerfile.parent           # Parent container image
-├── Dockerfile.worker           # Standard worker image
-├── Dockerfile.worker-minimal   # Worker with git
-├── Dockerfile.worker-ultramin  # Worker without git
-├── parent-entrypoint.sh        # Parent startup script
-├── spawn-worker.sh             # Worker spawning script
-├── pool-manager.sh             # Warm worker pool manager
-├── coordinator.sh              # Worker management
-├── README-dind.md              # Architecture documentation
-└── ...
+```mermaid
+graph LR
+    subgraph docker["plugins/hal-9000/docker/"]
+        DP[Dockerfile.parent]
+        DW[Dockerfile.worker]
+        DWM[Dockerfile.worker-minimal]
+        DWU[Dockerfile.worker-ultramin]
+        PE[parent-entrypoint.sh]
+        SW[spawn-worker.sh]
+        PM[pool-manager.sh]
+        CO[coordinator.sh]
+        RD[README-dind.md]
+    end
 
-scripts/build/
-├── test-pool-manager.sh        # Pool manager tests
-├── test-resource-limits.sh     # Resource limit tests
-├── benchmark-dind.sh           # Performance benchmarks
-└── ...
+    subgraph scripts["scripts/build/"]
+        TPM[test-pool-manager.sh]
+        TRL[test-resource-limits.sh]
+        BD[benchmark-dind.sh]
+    end
 ```
+
+| Directory | File | Purpose |
+|-----------|------|---------|
+| `plugins/hal-9000/docker/` | `Dockerfile.parent` | Parent container image |
+| | `Dockerfile.worker` | Standard worker image |
+| | `Dockerfile.worker-minimal` | Worker with git |
+| | `Dockerfile.worker-ultramin` | Worker without git |
+| | `parent-entrypoint.sh` | Parent startup script |
+| | `spawn-worker.sh` | Worker spawning script |
+| | `pool-manager.sh` | Warm worker pool manager |
+| | `coordinator.sh` | Worker management |
+| | `README-dind.md` | Architecture documentation |
+| `scripts/build/` | `test-pool-manager.sh` | Pool manager tests |
+| | `test-resource-limits.sh` | Resource limit tests |
+| | `benchmark-dind.sh` | Performance benchmarks |
 
 ## Running Tests
 

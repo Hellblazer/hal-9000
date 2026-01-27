@@ -113,12 +113,15 @@ Recommended workflow for Claude Code:
 
 ## Database Structure
 
-```
-your-project/
-├── .beads/
-│   ├── project.db      # SQLite database (not committed)
-│   └── issues.jsonl    # Git-synced issue storage
-└── ...
+```mermaid
+graph LR
+    subgraph Project["your-project/"]
+        subgraph Beads[".beads/"]
+            DB["project.db<br/>SQLite database<br/>(not committed)"]
+            JSONL["issues.jsonl<br/>Git-synced issue storage"]
+        end
+        Other["..."]
+    end
 ```
 
 ## Git Integration

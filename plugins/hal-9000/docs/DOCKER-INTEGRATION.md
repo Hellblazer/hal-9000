@@ -38,16 +38,22 @@ $ npm test
 
 ### Architecture
 
-```
-Host Machine
-├── Docker daemon
-│   └── /var/run/docker.sock (socket)
-│
-└── claudy (script)
-    └── docker run -v /var/run/docker.sock:/var/run/docker.sock
-        └── Container
-            ├── Docker CLI (client only)
-            └── /workspace (project mounted)
+```mermaid
+graph TB
+    subgraph Host["Host Machine"]
+        Daemon["Docker daemon"]
+        Socket["/var/run/docker.sock"]
+        Claudy["claudy (script)"]
+
+        subgraph Container["Container"]
+            DockerCLI["Docker CLI<br/>(client only)"]
+            Workspace["/workspace<br/>(project mounted)"]
+        end
+    end
+
+    Daemon --> Socket
+    Claudy -->|docker run -v .../docker.sock| Container
+    DockerCLI -->|connects to| Socket
 ```
 
 ### Socket Mounting

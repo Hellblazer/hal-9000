@@ -35,22 +35,34 @@ claudy daemon status
 
 ## Architecture Diagram
 
-```
-Host Machine
-├── MCP Servers (stdio transport)     ← Run on HOST (not containerized)
-│   ├── memory-bank-mcp
-│   ├── sequential-thinking
-│   └── chroma-mcp
-│
-└── Docker
-    └── Parent Container (hal9000-parent)
-        ├── ChromaDB Server (port 8000)
-        ├── Coordinator process
-        ├── Pool Manager (optional)
-        └── Spawns workers via Docker socket
-            ├── Worker 1 (--network=container:parent)
-            ├── Worker 2 (--network=container:parent)
-            └── Worker N (--network=container:parent)
+```mermaid
+graph TB
+    subgraph Host["Host Machine"]
+        subgraph MCP["MCP Servers (stdio transport)"]
+            MB[memory-bank-mcp]
+            ST[sequential-thinking]
+            CM[chroma-mcp]
+        end
+
+        subgraph Docker["Docker"]
+            subgraph Parent["Parent Container (hal9000-parent)"]
+                ChromaDB[ChromaDB Server<br/>port 8000]
+                Coord[Coordinator process]
+                Pool[Pool Manager<br/>optional]
+            end
+
+            W1[Worker 1]
+            W2[Worker 2]
+            WN[Worker N...]
+        end
+    end
+
+    Parent -->|Docker socket| W1
+    Parent -->|Docker socket| W2
+    Parent -->|Docker socket| WN
+    W1 -->|--network=container:parent| Parent
+    W2 -->|--network=container:parent| Parent
+    WN -->|--network=container:parent| Parent
 ```
 
 ## Key Concepts

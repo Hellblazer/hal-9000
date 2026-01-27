@@ -4,41 +4,45 @@ This document describes the volume and storage architecture for the HAL-9000 Doc
 
 ## Overview
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              HOST MACHINE                                   │
-│                                                                             │
-│  ~/.hal9000/                          ~/.claude/                            │
-│  ├── config/                          ├── settings.json                     │
-│  ├── sessions/                        ├── .credentials.json                 │
-│  ├── logs/                            ├── agents/                           │
-│  ├── workers/                         └── commands/                         │
-│  ├── chromadb/                                                              │
-│  └── memory-bank/                                                           │
-│                                                                             │
-│  Docker Volumes:                                                            │
-│  ├── hal9000-chromadb    (shared ChromaDB data)                            │
-│  ├── hal9000-memorybank  (shared Memory Bank)                              │
-│  └── hal9000-plugins     (marketplace plugins)                             │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-           │                    │                    │
-           ▼                    ▼                    ▼
-┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-│  Parent Container │  │  Worker 1        │  │  Worker 2        │
-│                   │  │                  │  │                  │
-│  /root/.hal9000/  │  │  /root/.claude/  │  │  /root/.claude/  │
-│  (orchestration)  │  │  (claude config) │  │  (claude config) │
-│                   │  │                  │  │                  │
-│  /data/chromadb/  │  │  /data/chromadb/ │  │  /data/chromadb/ │
-│  (shared)         │  │  (shared)        │  │  (shared)        │
-│                   │  │                  │  │                  │
-│  /data/membank/   │  │  /data/membank/  │  │  /data/membank/  │
-│  (shared)         │  │  (shared)        │  │  (shared)        │
-│                   │  │                  │  │                  │
-│  /workspace       │  │  /workspace      │  │  /workspace      │
-│  (project mount)  │  │  (project mount) │  │  (project mount) │
-└──────────────────┘  └──────────────────┘  └──────────────────┘
+```mermaid
+graph TB
+    subgraph Host["Host Machine"]
+        subgraph HostDirs["Host Directories"]
+            HAL["~/.hal9000/<br/>config, sessions, logs"]
+            CLAUDE["~/.claude/<br/>settings, credentials"]
+        end
+
+        subgraph DockerVols["Docker Volumes"]
+            V1["hal9000-chromadb"]
+            V2["hal9000-memory-bank"]
+            V3["hal9000-claude-home"]
+        end
+    end
+
+    subgraph Containers["Containers"]
+        subgraph Parent["Parent Container"]
+            P1["/root/.hal9000<br/>(orchestration)"]
+            P2["/data/chromadb<br/>(server)"]
+        end
+
+        subgraph W1["Worker 1"]
+            W1C["/root/.claude"]
+            W1D["/data/memory-bank"]
+            W1W["/workspace"]
+        end
+
+        subgraph W2["Worker 2"]
+            W2C["/root/.claude"]
+            W2D["/data/memory-bank"]
+            W2W["/workspace"]
+        end
+    end
+
+    V1 --> P2
+    V2 --> W1D
+    V2 --> W2D
+    V3 --> W1C
+    V3 --> W2C
 ```
 
 ## Directory Structure
@@ -213,30 +217,19 @@ docker volume rm hal9000-claude-my-worker
 
 The parent container runs a ChromaDB HTTP server that all workers connect to:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Parent Container                         │
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │          ChromaDB Server (port 8000)                │   │
-│  │                                                     │   │
-│  │  - Handles concurrent read/write safely             │   │
-│  │  - Data persisted to /data/chromadb                 │   │
-│  │  - Workers connect via HTTP                         │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                          ↑                                  │
-└──────────────────────────│──────────────────────────────────┘
-                           │ localhost:8000
-        ┌──────────────────┼──────────────────┐
-        │                  │                  │
-        ▼                  ▼                  ▼
-┌───────────────┐  ┌───────────────┐  ┌───────────────┐
-│   Worker 1    │  │   Worker 2    │  │   Worker N    │
-│               │  │               │  │               │
-│ chroma-mcp    │  │ chroma-mcp    │  │ chroma-mcp    │
-│ --client-type │  │ --client-type │  │ --client-type │
-│   http        │  │   http        │  │   http        │
-└───────────────┘  └───────────────┘  └───────────────┘
+```mermaid
+graph TB
+    subgraph Parent["Parent Container"]
+        ChromaDB["ChromaDB Server (port 8000)<br/>- Handles concurrent read/write<br/>- Data persisted to /data/chromadb<br/>- Workers connect via HTTP"]
+    end
+
+    W1["Worker 1<br/>chroma-mcp --client-type http"]
+    W2["Worker 2<br/>chroma-mcp --client-type http"]
+    W3["Worker N<br/>chroma-mcp --client-type http"]
+
+    W1 -->|localhost:8000| ChromaDB
+    W2 -->|localhost:8000| ChromaDB
+    W3 -->|localhost:8000| ChromaDB
 ```
 
 **Why HTTP client instead of persistent storage?**

@@ -100,11 +100,14 @@ NAME2=$(./claudy --name test-project /tmp/test-project 2>&1 | grep "session:")
 2. Check: `ls -la ~/.hal9000/claude/`
 3. Check: `ls -la ~/.hal9000/claude/claudy-test-project-*/`
 4. Verify structure:
-   ```
-   ~/.hal9000/claude/claudy-test-project-HASH/
-   ├── .claude/
-   ├── .session.json
-   └── .workspace/
+
+   ```mermaid
+   graph LR
+       subgraph session["~/.hal9000/claude/claudy-test-project-HASH/"]
+           claude[".claude/"]
+           sessionjson[".session.json"]
+           workspace[".workspace/"]
+       end
    ```
 
 **Expected**: Directory structure created with correct permissions

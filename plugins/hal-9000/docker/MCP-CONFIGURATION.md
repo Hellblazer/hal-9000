@@ -6,18 +6,28 @@ Based on Phase 0 validation (P0-1), MCP servers use **stdio transport only** and
 
 ## Architecture
 
-```
-Host Machine
-├── ~/.claude/settings.json       ← MCP server configuration
-├── MCP Server Processes          ← Spawned by Claude CLI via stdio
-│   ├── mcp-server-memory-bank
-│   ├── mcp-server-sequential-thinking
-│   └── chroma-mcp
-│
-└── Docker
-    └── Worker Container
-        ├── /root/.claude/        ← Mounted from host
-        └── Claude CLI            ← Reads settings.json, spawns MCP servers
+```mermaid
+graph TB
+    subgraph Host["Host Machine"]
+        Settings["~/.claude/settings.json<br/>MCP server configuration"]
+
+        subgraph MCP["MCP Server Processes"]
+            MB[mcp-server-memory-bank]
+            ST[mcp-server-sequential-thinking]
+            CM[chroma-mcp]
+        end
+
+        subgraph Docker["Docker"]
+            subgraph Worker["Worker Container"]
+                Claude["/root/.claude/<br/>Mounted from host"]
+                CLI["Claude CLI<br/>Reads settings.json"]
+            end
+        end
+    end
+
+    Settings -->|Spawned via stdio| MCP
+    CLI -->|reads| Claude
+    CLI -->|spawns| MCP
 ```
 
 ## How MCP Works in Workers

@@ -4,47 +4,56 @@ This document describes the keyboard shortcuts available in the HAL-9000 tmux en
 
 ## Quick Reference Card
 
-```
-╔═══════════════════════════════════════════════════════════════════╗
-║                    HAL-9000 tmux Quick Reference                  ║
-╠═══════════════════════════════════════════════════════════════════╣
-║  PREFIX = Ctrl-B (hold Ctrl, press B, release, then press key)   ║
-╠═══════════════════════════════════════════════════════════════════╣
-║  WORKERS                                                          ║
-║    Prefix + w     Spawn new worker                               ║
-║    Prefix + s     Show status                                    ║
-║    Prefix + l     List workers                                   ║
-║    Prefix + S     Stop ALL workers (with confirmation)           ║
-╠═══════════════════════════════════════════════════════════════════╣
-║  WINDOWS                                                          ║
-║    Prefix + c     Create new window                              ║
-║    Prefix + n     Next window                                    ║
-║    Prefix + p     Previous window                                ║
-║    Prefix + 1-9   Jump to window by number                       ║
-║    Prefix + &     Kill current window                            ║
-║    Shift + →      Next window (no prefix)                        ║
-║    Shift + ←      Previous window (no prefix)                    ║
-╠═══════════════════════════════════════════════════════════════════╣
-║  PANES                                                            ║
-║    Prefix + |     Split horizontally                             ║
-║    Prefix + -     Split vertically                               ║
-║    Alt + ←/→/↑/↓  Navigate panes (no prefix)                     ║
-║    Prefix + x     Kill current pane                              ║
-║    Prefix + z     Toggle pane zoom (fullscreen)                  ║
-╠═══════════════════════════════════════════════════════════════════╣
-║  COPY MODE                                                        ║
-║    Prefix + [     Enter copy mode                                ║
-║    q              Exit copy mode                                 ║
-║    Space          Start selection                                ║
-║    Enter          Copy selection                                 ║
-║    Prefix + ]     Paste                                          ║
-╠═══════════════════════════════════════════════════════════════════╣
-║  MISC                                                             ║
-║    Prefix + d     Detach from session                            ║
-║    Prefix + r     Reload config                                  ║
-║    Prefix + ?     Show all key bindings                          ║
-╚═══════════════════════════════════════════════════════════════════╝
-```
+> **PREFIX = Ctrl-B** (hold Ctrl, press B, release, then press key)
+
+### Workers
+
+| Key | Action |
+|-----|--------|
+| `Prefix + w` | Spawn new worker |
+| `Prefix + s` | Show status |
+| `Prefix + l` | List workers |
+| `Prefix + S` | Stop ALL workers (with confirmation) |
+
+### Windows
+
+| Key | Action |
+|-----|--------|
+| `Prefix + c` | Create new window |
+| `Prefix + n` | Next window |
+| `Prefix + p` | Previous window |
+| `Prefix + 1-9` | Jump to window by number |
+| `Prefix + &` | Kill current window |
+| `Shift + →` | Next window (no prefix) |
+| `Shift + ←` | Previous window (no prefix) |
+
+### Panes
+
+| Key | Action |
+|-----|--------|
+| `Prefix + \|` | Split horizontally |
+| `Prefix + -` | Split vertically |
+| `Alt + ←/→/↑/↓` | Navigate panes (no prefix) |
+| `Prefix + x` | Kill current pane |
+| `Prefix + z` | Toggle pane zoom (fullscreen) |
+
+### Copy Mode
+
+| Key | Action |
+|-----|--------|
+| `Prefix + [` | Enter copy mode |
+| `q` | Exit copy mode |
+| `Space` | Start selection |
+| `Enter` | Copy selection |
+| `Prefix + ]` | Paste |
+
+### Misc
+
+| Key | Action |
+|-----|--------|
+| `Prefix + d` | Detach from session |
+| `Prefix + r` | Reload config |
+| `Prefix + ?` | Show all key bindings |
 
 ## HAL-9000 Specific Bindings
 
@@ -160,13 +169,20 @@ Mouse is enabled in HAL-9000 tmux configuration:
 
 The HAL-9000 status bar shows:
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│ HAL-9000 │ session │ 1:dashboard  2:worker-1234* │ Workers: 3 │ 14:30 │
-└──────────────────────────────────────────────────────────────────────┘
-        ↑        ↑              ↑                         ↑         ↑
-     Branding  Session    Window list                 Worker     Time
-                name     (* = current)                 count
+```mermaid
+graph LR
+    subgraph StatusBar["Status Bar Layout"]
+        A["HAL-9000"] --> B["session"]
+        B --> C["1:dashboard  2:worker-1234*"]
+        C --> D["Workers: 3"]
+        D --> E["14:30"]
+    end
+
+    A1["Branding"] -.-> A
+    B1["Session name"] -.-> B
+    C1["Window list<br/>(* = current)"] -.-> C
+    D1["Worker count"] -.-> D
+    E1["Time"] -.-> E
 ```
 
 ## Common Workflows

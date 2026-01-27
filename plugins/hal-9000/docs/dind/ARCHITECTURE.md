@@ -11,38 +11,34 @@ The Docker-in-Docker (DinD) architecture provides:
 
 ## Component Overview
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        Host Machine                          │
-│                                                              │
-│  ┌─────────────────┐  ┌─────────────────────────────────┐   │
-│  │   MCP Servers   │  │         Docker Daemon            │   │
-│  │  (stdio only)   │  │                                  │   │
-│  │                 │  │  ┌─────────────────────────────┐ │   │
-│  │ - memory-bank   │  │  │     Parent Container        │ │   │
-│  │ - seq-thinking  │  │  │     (hal9000-parent)        │ │   │
-│  │ - chroma-mcp    │  │  │                             │ │   │
-│  └─────────────────┘  │  │  ┌───────────────────────┐  │ │   │
-│                       │  │  │   ChromaDB Server     │  │ │   │
-│                       │  │  │   (localhost:8000)    │  │ │   │
-│                       │  │  └───────────────────────┘  │ │   │
-│                       │  │                             │ │   │
-│                       │  │  ┌───────────────────────┐  │ │   │
-│                       │  │  │   Pool Manager        │  │ │   │
-│                       │  │  │   (optional)          │  │ │   │
-│                       │  │  └───────────────────────┘  │ │   │
-│                       │  │                             │ │   │
-│                       │  │  ┌───────────────────────┐  │ │   │
-│                       │  │  │   Coordinator         │  │ │   │
-│                       │  │  └───────────────────────┘  │ │   │
-│                       │  └─────────────────────────────┘ │   │
-│                       │                                  │   │
-│                       │  ┌──────────┐ ┌──────────┐      │   │
-│                       │  │ Worker 1 │ │ Worker 2 │ ...  │   │
-│                       │  │          │ │          │      │   │
-│                       │  └──────────┘ └──────────┘      │   │
-│                       └──────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Host["Host Machine"]
+        subgraph Docker["Docker Daemon"]
+            subgraph Parent["Parent Container (hal9000-parent)"]
+                ChromaDB["ChromaDB Server<br/>localhost:8000"]
+                Pool["Pool Manager<br/>(optional)"]
+                Coord["Coordinator"]
+            end
+
+            W1["Worker 1"]
+            W2["Worker 2"]
+            W3["Worker N..."]
+        end
+
+        subgraph MCP["Foundation MCP Servers"]
+            MB["memory-bank"]
+            ST["sequential-thinking"]
+            CM["chroma-mcp"]
+        end
+    end
+
+    Parent --> W1
+    Parent --> W2
+    Parent --> W3
+    W1 --> MCP
+    W2 --> MCP
+    W3 --> MCP
 ```
 
 ## Parent Container
@@ -55,7 +51,7 @@ The Docker-in-Docker (DinD) architecture provides:
 
 ### Image: `ghcr.io/hellblazer/hal-9000:parent`
 - Base: `debian:bookworm-slim`
-- Size: ~264MB
+- Size: ~934MB
 - Components:
   - Docker CLI (for spawning workers)
   - ChromaDB server
@@ -64,21 +60,29 @@ The Docker-in-Docker (DinD) architecture provides:
 
 ### Startup Sequence
 
-```
-Phase 1: Critical Init (~100ms)
-├── Create directories
-└── Verify Docker socket
+```mermaid
+flowchart LR
+    subgraph Phase1["Phase 1: Critical Init (~100ms)"]
+        A1[Create directories] --> A2[Verify Docker socket]
+    end
 
-Phase 2: Parallel Init (~500ms)
-├── Start ChromaDB (async)
-├── Initialize tmux
-└── Check/pull worker image
+    subgraph Phase2["Phase 2: Parallel Init (~500ms)"]
+        B1[Start ChromaDB]
+        B2[Initialize tmux]
+        B3[Check worker image]
+    end
 
-Phase 3: Service Ready (variable)
-└── Wait for ChromaDB heartbeat
+    subgraph Phase3["Phase 3: Service Ready"]
+        C1[Wait for ChromaDB heartbeat]
+    end
 
-Phase 4: Background Services
-└── Start pool manager (if enabled)
+    subgraph Phase4["Phase 4: Background"]
+        D1[Start pool manager]
+    end
+
+    Phase1 --> Phase2
+    Phase2 --> Phase3
+    Phase3 --> Phase4
 ```
 
 ## Worker Containers
@@ -90,10 +94,12 @@ Phase 4: Background Services
 
 ### Image: `ghcr.io/hellblazer/hal-9000:worker`
 - Base: `debian:bookworm-slim`
-- Size: ~469MB (ultramin) or ~588MB (with git)
+- Size: ~1.68GB
 - Components:
   - Claude CLI
-  - Minimal runtime dependencies
+  - Node.js 20 LTS
+  - Python + uv
+  - Foundation MCP servers
 
 ### Resource Limits
 
@@ -151,53 +157,44 @@ Pre-create "warm" workers for instant session startup.
 
 ### Warm Worker Lifecycle
 
-```
-CREATE         CLAIM          USE            CLEANUP
-   │              │             │                │
-   v              v             v                v
-┌──────┐     ┌──────┐     ┌──────┐         ┌──────┐
-│ warm │ ──> │ busy │ ──> │ idle │ ──(timeout)──> │ removed │
-└──────┘     └──────┘     └──────┘         └──────┘
-   │                                            │
-   └────────────────────────────────────────────┘
-              (if below min warm)
+```mermaid
+stateDiagram-v2
+    [*] --> warm: CREATE
+    warm --> busy: CLAIM
+    busy --> idle: USE COMPLETE
+    idle --> removed: TIMEOUT
+    removed --> warm: if below min
+    removed --> [*]
 ```
 
 ## Data Flow
 
 ### Session Creation
 
-```
-User Request
-     │
-     v
-┌─────────┐
-│ claudy  │  ─── claudy --via-parent /path
-└────┬────┘
-     │
-     v
-┌─────────────┐
-│   Parent    │
-│  Container  │
-└──────┬──────┘
-       │
-       v
-┌─────────────┐     ┌─────────────┐
-│ Pool Manager│ ──> │ Warm Worker │ (if available)
-└─────────────┘     └─────────────┘
-       │
-       └──────────> ┌─────────────┐
-                    │ New Worker  │ (if no warm)
-                    └─────────────┘
+```mermaid
+sequenceDiagram
+    participant User
+    participant claudy
+    participant Parent
+    participant Pool as Pool Manager
+    participant Worker
+
+    User->>claudy: claudy /path
+    claudy->>Parent: Request session
+    Parent->>Pool: Check warm workers
+    alt Warm worker available
+        Pool->>Worker: Claim warm worker
+    else No warm workers
+        Parent->>Worker: Create new worker
+    end
+    Worker->>User: Session ready
 ```
 
 ### ChromaDB Access
 
-```
-┌─────────┐     HTTP        ┌─────────────┐
-│ Worker  │ ──────────────> │  ChromaDB   │
-│         │   localhost:8000│  (parent)   │
-└─────────┘                 └─────────────┘
+```mermaid
+flowchart LR
+    Worker["Worker Container"] -->|HTTP localhost:8000| ChromaDB["ChromaDB<br/>(in Parent)"]
 ```
 
 ## Security Model

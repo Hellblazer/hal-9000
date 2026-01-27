@@ -114,14 +114,18 @@ cat .hal9000-session.md
 
 ## Directory Structure
 
-```
-~/.hal9000/
-├── claude/              # Per-session .claude directories
-│   ├── hal9000-1/
-│   └── hal9000-2/
-└── sessions/            # Session metadata
-    ├── hal9000-1.json
-    └── hal9000-2.json
+```mermaid
+graph LR
+    subgraph hal9000["~/.hal9000/"]
+        subgraph claude["claude/<br/>Per-session .claude directories"]
+            S1[hal9000-1/]
+            S2[hal9000-2/]
+        end
+        subgraph sessions["sessions/<br/>Session metadata"]
+            M1[hal9000-1.json]
+            M2[hal9000-2.json]
+        end
+    end
 ```
 
 ## Environment Variables

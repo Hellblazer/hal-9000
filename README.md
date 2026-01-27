@@ -47,10 +47,14 @@ Every container provides:
 - **Claude CLI** - Native binary, auto-updates
 - **Node.js 20 LTS** - For npm-based MCP servers
 - **Python + uv** - For Python MCP servers
-- **ChromaDB Server** - Vector database (in parent container)
 - **Persistent CLAUDE_HOME** - Marketplace installations persist
 
-MCP servers, agents, and commands are installed via marketplace, not pre-baked.
+**Foundation MCP Servers** (pre-installed):
+- **ChromaDB** - Vector database (server in parent, client in workers)
+- **Memory Bank** - Persistent memory across sessions (shared volume)
+- **Sequential Thinking** - Step-by-step reasoning
+
+Additional MCP servers can be installed via marketplace.
 
 ## Usage
 
@@ -82,32 +86,26 @@ claudy pool scale 3        # Maintain 3 warm workers
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                     Host Machine                         │
-│                                                          │
-│  ┌────────────────────────────────────────────────────┐ │
-│  │              Parent Container                       │ │
-│  │  ┌──────────────────────────────────────────────┐  │ │
-│  │  │           ChromaDB Server                     │  │ │
-│  │  │           (localhost:8000)                    │  │ │
-│  │  └──────────────────────────────────────────────┘  │ │
-│  └────────────────────────────────────────────────────┘ │
-│                         │                                │
-│            ┌────────────┼────────────┐                   │
-│            ▼            ▼            ▼                   │
-│     ┌──────────┐ ┌──────────┐ ┌──────────┐              │
-│     │ Worker 1 │ │ Worker 2 │ │ Worker 3 │              │
-│     │ Claude   │ │ Claude   │ │ Claude   │              │
-│     └──────────┘ └──────────┘ └──────────┘              │
-│            │            │            │                   │
-│            └────────────┴────────────┘                   │
-│                         │                                │
-│            ┌────────────────────────┐                    │
-│            │  Shared CLAUDE_HOME    │                    │
-│            │  (marketplace installs)│                    │
-│            └────────────────────────┘                    │
-└──────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Host["Host Machine"]
+        subgraph Parent["Parent Container"]
+            ChromaDB["ChromaDB Server<br/>localhost:8000"]
+        end
+
+        Parent --> W1["Worker 1<br/>Claude"]
+        Parent --> W2["Worker 2<br/>Claude"]
+        Parent --> W3["Worker 3<br/>Claude"]
+
+        subgraph Volumes["Shared Volumes"]
+            CH["CLAUDE_HOME<br/>(marketplace installs)"]
+            MB["Memory Bank"]
+        end
+
+        W1 --> Volumes
+        W2 --> Volumes
+        W3 --> Volumes
+    end
 ```
 
 - **Parent**: Runs ChromaDB server, manages workers

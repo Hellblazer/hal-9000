@@ -94,15 +94,19 @@ Memory bank provides shared context across parallel agents.
 
 ## Memory Structure
 
-```
-~/memory-bank/
-├── project-name/
-│   ├── decisions.md
-│   ├── architecture.md
-│   ├── ongoing-work.md
-│   └── ...
-└── another-project/
-    └── ...
+```mermaid
+graph LR
+    subgraph membank["~/memory-bank/"]
+        subgraph proj1["project-name/"]
+            D1[decisions.md]
+            A1[architecture.md]
+            O1[ongoing-work.md]
+            E1["..."]
+        end
+        subgraph proj2["another-project/"]
+            F2["..."]
+        end
+    end
 ```
 
 ## Best Practices
