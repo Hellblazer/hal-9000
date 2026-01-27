@@ -71,9 +71,80 @@ check_subscription_auth() {
         2>/dev/null
 }
 
+# Open URL in browser (cross-platform)
+open_url() {
+    local url="$1"
+    if command -v open &>/dev/null; then
+        open "$url" 2>/dev/null  # macOS
+    elif command -v xdg-open &>/dev/null; then
+        xdg-open "$url" 2>/dev/null  # Linux
+    elif command -v wslview &>/dev/null; then
+        wslview "$url" 2>/dev/null  # WSL
+    fi
+}
+
+# Run /login with auto-browser opening
+# Uses 'script' to preserve TTY while capturing output for URL detection
+run_login_command() {
+    ensure_volumes
+
+    local image="${CONTAINER_IMAGE_BASE}:base"
+    local output_file
+    output_file=$(mktemp)
+
+    info "Starting login... (browser will open automatically if URL detected)"
+
+    # Background watcher for URLs
+    (
+        # Wait for file to exist and have content
+        sleep 1
+        tail -f "$output_file" 2>/dev/null | while IFS= read -r line; do
+            # Look for anthropic/claude URLs
+            if [[ "$line" =~ (https://[^[:space:]\"\']+anthropic[^[:space:]\"\']*) ]] || \
+               [[ "$line" =~ (https://[^[:space:]\"\']+claude[^[:space:]\"\']*) ]]; then
+                local url="${BASH_REMATCH[1]}"
+                # Clean up any trailing characters
+                url="${url%%[\"\']*}"
+                success "Opening browser: $url"
+                open_url "$url"
+            fi
+        done
+    ) &
+    local watcher_pid=$!
+
+    # Build docker command
+    local docker_cmd="docker run --rm -it \
+        -v ${CLAUDE_HOME_VOLUME}:/root/.claude \
+        -v ${MEMORY_BANK_VOLUME}:/root/memory-bank \
+        -e MEMORY_BANK_ROOT=/root/memory-bank \
+        $image claude /login"
+
+    # Use 'script' to preserve TTY while logging output
+    # macOS and Linux have different syntax
+    if [[ "$(uname)" == "Darwin" ]]; then
+        script -q "$output_file" bash -c "$docker_cmd"
+    else
+        script -q -c "$docker_cmd" "$output_file"
+    fi
+
+    local exit_code=$?
+
+    # Cleanup
+    kill "$watcher_pid" 2>/dev/null || true
+    rm -f "$output_file"
+
+    return $exit_code
+}
+
 # Run a claude command inside a container with shared volumes
 # Usage: run_claude_command <args...>
 run_claude_command() {
+    # Special handling for /login to auto-open browser
+    if [[ "${1:-}" == "/login" ]]; then
+        run_login_command
+        return $?
+    fi
+
     ensure_volumes
 
     local image="${CONTAINER_IMAGE_BASE}:base"
