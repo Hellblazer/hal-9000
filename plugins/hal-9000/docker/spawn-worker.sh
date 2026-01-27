@@ -16,7 +16,7 @@
 # - Shares parent's network namespace (--network=container:PARENT)
 # - Mounts shared CLAUDE_HOME volume (marketplace installations persist)
 # - Mounts project directory at /workspace
-# - Users install MCP servers via: claude marketplace add/install
+# - Users install MCP servers via: claude plugin marketplace add / claude plugin install
 
 set -euo pipefail
 
@@ -78,8 +78,8 @@ Examples:
 
 Marketplace:
   Workers support Anthropic marketplace. Install plugins that persist:
-    claude marketplace add https://marketplace.url
-    claude marketplace install plugin-name
+    claude plugin marketplace add https://marketplace.url
+    claude plugin install plugin-name
 
   Installations are stored in shared CLAUDE_HOME volume.
 

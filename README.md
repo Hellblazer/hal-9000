@@ -28,14 +28,14 @@ claudy provides first-class support for the Anthropic Claude Code marketplace. I
 
 ```bash
 # Add a marketplace
-claude marketplace add https://github.com/example/my-marketplace
+claude plugin marketplace add https://github.com/example/my-marketplace
 
 # Install plugins
-claude marketplace install memory-bank
-claude marketplace install chromadb
+claude plugin install memory-bank
+claude plugin install chromadb
 
 # List installed plugins
-claude marketplace list
+claude plugin list
 ```
 
 All installations are stored in a persistent `CLAUDE_HOME` volume shared by all workers.

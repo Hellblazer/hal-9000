@@ -191,7 +191,7 @@ print_worker_info() {
     echo "  ChromaDB:      http://${CHROMADB_HOST}:${CHROMADB_PORT}"
     echo "============================================"
     echo "  Foundation: memory-bank, chromadb, sequential-thinking"
-    echo "  Add more via: claude marketplace install <plugin>"
+    echo "  Add more via: claude plugin install <plugin>"
     echo "============================================"
     echo
 }
