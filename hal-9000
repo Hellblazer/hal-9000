@@ -57,6 +57,20 @@ ensure_volumes() {
     docker volume create "$MEMORY_BANK_VOLUME" >/dev/null 2>&1 || true
 }
 
+# Check if subscription login is configured in the shared volume
+# Returns 0 if logged in, 1 if not
+check_subscription_auth() {
+    ensure_volumes
+
+    # Check for auth credentials in the volume
+    # Claude stores session data in .claude/
+    docker run --rm \
+        -v "${CLAUDE_HOME_VOLUME}:/root/.claude:ro" \
+        alpine:latest \
+        sh -c 'test -f /root/.claude/.credentials.json || test -f /root/.claude/statsig_user_id' \
+        2>/dev/null
+}
+
 # Run a claude command inside a container with shared volumes
 # Usage: run_claude_command <args...>
 run_claude_command() {
@@ -141,19 +155,16 @@ OPTIONS:
 ARGUMENTS:
   DIRECTORY              Project directory (default: current directory)
 
-AUTHENTICATION (required):
-  Containerized Claude requires ANTHROPIC_API_KEY environment variable.
-  Host keychain credentials cannot be transferred to containers.
+AUTHENTICATION:
+  Option 1 - Subscription Login (recommended):
+    hal-9000 /login      # Login once, persists for all sessions
 
-  Option 1 - API Key (recommended):
+  Option 2 - API Key:
     export ANTHROPIC_API_KEY=sk-ant-api03-...
     Get key at: https://console.anthropic.com/settings/keys
+    Add to ~/.bashrc or ~/.zshrc to persist.
 
-  Option 2 - Long-lived token:
-    claude setup-token   # Run once on host
-    # Copy the token and set as ANTHROPIC_API_KEY
-
-  Add to ~/.bashrc or ~/.zshrc to persist.
+  Auth is stored in shared Docker volume - login once, use everywhere.
 
 EXAMPLES:
   hal-9000                                    # Current dir, auto-detect profile
@@ -320,9 +331,16 @@ show_diagnostics() {
     info "Authentication:"
     if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
         local key_preview="${ANTHROPIC_API_KEY:0:10}..."
-        success "  ANTHROPIC_API_KEY: Set ($key_preview)"
+        success "  API Key: Set ($key_preview)"
     else
-        warn "  ANTHROPIC_API_KEY: Not set"
+        info "  API Key: Not set"
+    fi
+
+    if check_subscription_auth; then
+        success "  Subscription: Logged in (credentials in volume)"
+    else
+        info "  Subscription: Not logged in"
+        info "    → Run 'hal-9000 /login' to authenticate"
     fi
 
     # Check Docker volumes
@@ -835,20 +853,26 @@ verify_prerequisites() {
         error "Docker daemon not running or not accessible"
     fi
 
-    # Check authentication - required for container usage
+    # Check authentication - API key OR subscription login
     if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
-        echo ""
-        warn "Authentication required for containerized Claude"
-        echo ""
-        info "Run the interactive setup:"
-        echo ""
-        echo "  hal-9000 --setup"
-        echo ""
-        info "Or manually set your API key:"
-        echo "  export ANTHROPIC_API_KEY=sk-ant-api03-..."
-        echo "  Get key at: https://console.anthropic.com/settings/keys"
-        echo ""
-        error "Run 'hal-9000 --setup' to configure authentication"
+        # No API key - check for subscription login
+        if check_subscription_auth; then
+            success "Authentication: Subscription login detected"
+        else
+            echo ""
+            warn "No authentication configured"
+            echo ""
+            info "Option 1: Subscription login (recommended)"
+            echo "  hal-9000 /login"
+            echo ""
+            info "Option 2: API key"
+            echo "  export ANTHROPIC_API_KEY=sk-ant-api03-..."
+            echo "  Get key at: https://console.anthropic.com/settings/keys"
+            echo ""
+            error "Run 'hal-9000 /login' to authenticate with your Claude subscription"
+        fi
+    else
+        success "Authentication: API key configured"
     fi
 
     success "Prerequisites verified"

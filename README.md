@@ -12,15 +12,17 @@ Run Claude Code in isolated Docker containers with full marketplace support.
 # Install hal-9000
 curl -fsSL https://raw.githubusercontent.com/Hellblazer/hal-9000/main/install-hal-9000.sh | bash
 
-# Set API key
-export ANTHROPIC_API_KEY=sk-ant-api03-...
+# Login with your Claude subscription (recommended)
+hal-9000 /login
 
-# Start the daemon (first time)
-hal-9000 daemon start
+# Or use API key instead
+export ANTHROPIC_API_KEY=sk-ant-api03-...
 
 # Launch Claude in current directory
 hal-9000
 ```
+
+Auth is stored in a shared Docker volume - login once, use everywhere.
 
 ## Marketplace Support
 
@@ -117,14 +119,20 @@ graph TB
 
 - Docker
 - Bash
-- `ANTHROPIC_API_KEY` environment variable
+- Claude subscription OR `ANTHROPIC_API_KEY`
 
 ## Configuration
 
-### Environment Variables
+### Authentication
 
+**Option 1 - Subscription Login (recommended):**
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-api03-...  # Required for API access
+hal-9000 /login    # Login once, persists in shared volume
+```
+
+**Option 2 - API Key:**
+```bash
+export ANTHROPIC_API_KEY=sk-ant-api03-...
 ```
 
 ### Docker Volumes
