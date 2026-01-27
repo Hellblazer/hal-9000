@@ -12,8 +12,9 @@ readonly PARENT_IMAGE="ghcr.io/hellblazer/hal-9000:parent"
 readonly DEFAULT_PROFILE="base"
 readonly CONTAINER_IMAGE_BASE="ghcr.io/hellblazer/hal-9000"
 
-# Shared Docker volume for CLAUDE_HOME - all workers share this
+# Shared Docker volumes for CLAUDE_HOME and session state - all workers share these
 readonly CLAUDE_HOME_VOLUME="hal9000-claude-home"
+readonly CLAUDE_SESSION_VOLUME="hal9000-claude-session"
 readonly MEMORY_BANK_VOLUME="hal9000-memory-bank"
 
 # Claude subcommands that should be passed through to container
@@ -54,6 +55,7 @@ success() {
 # Ensure shared volumes exist
 ensure_volumes() {
     docker volume create "$CLAUDE_HOME_VOLUME" >/dev/null 2>&1 || true
+    docker volume create "$CLAUDE_SESSION_VOLUME" >/dev/null 2>&1 || true
     docker volume create "$MEMORY_BANK_VOLUME" >/dev/null 2>&1 || true
 }
 
@@ -82,6 +84,7 @@ run_claude_command() {
     local docker_args=(
         docker run --rm -it
         -v "${CLAUDE_HOME_VOLUME}:/root/.claude"
+        -v "${CLAUDE_SESSION_VOLUME}:/root/.claude-session"
         -v "${MEMORY_BANK_VOLUME}:/root/memory-bank"
         -e "CLAUDE_HOME=/root/.claude"
         -e "MEMORY_BANK_ROOT=/root/memory-bank"
@@ -92,8 +95,18 @@ run_claude_command() {
         docker_args+=(-e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
     fi
 
-    # Run claude with the provided arguments
-    "${docker_args[@]}" "$image" claude "$@"
+    # Run claude with session state restoration and persistence
+    # This ensures commands like /login save credentials properly
+    "${docker_args[@]}" "$image" bash -c '
+        # Restore session state from persistent volume
+        if [ -f /root/.claude-session/.claude.json ]; then
+          cp /root/.claude-session/.claude.json /root/.claude.json
+        fi
+        # Run the command
+        claude "$@"
+        # Save session state back to persistent volume
+        [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
+    ' bash "$@"
 }
 
 # Check if arg is a claude subcommand that should be passed through
@@ -211,8 +224,9 @@ ENVIRONMENT:
   DOCKER_SOCKET          Docker socket path (default: /var/run/docker.sock)
 
 VOLUMES:
-  hal9000-claude-home    Shared CLAUDE_HOME - plugins/config persist here
-  hal9000-memory-bank    Shared memory bank for cross-session context
+  hal9000-claude-home       Shared CLAUDE_HOME - plugins, credentials, config persist here
+  hal9000-claude-session    Shared session state - .claude.json (auth state) persists here
+  hal9000-memory-bank       Shared memory bank for cross-session context
 
 For more information, see documentation at:
   https://github.com/hellblazer/hal-9000/blob/main/README.md
@@ -1069,6 +1083,7 @@ launch_container_session() {
         --label "hal9000.profile=$profile"
         -v "$abs_project_path:/workspace"
         -v "${CLAUDE_HOME_VOLUME}:/root/.claude"
+        -v "${CLAUDE_SESSION_VOLUME}:/root/.claude-session"
         -v "${MEMORY_BANK_VOLUME}:/root/memory-bank"
         -v /var/run/docker.sock:/var/run/docker.sock
         -e "CLAUDE_HOME=/root/.claude"
@@ -1093,12 +1108,35 @@ launch_container_session() {
 
     # Start container with Claude or shell
     # Container keeps running with bash so user can access shell afterward
+    # Key: Restore .claude.json from persistent session volume before running Claude
     if [[ "$shell_mode" == "true" ]]; then
-        # Shell mode: just bash
-        docker_args+=(bash)
+        # Shell mode: restore session state, then bash
+        docker_args+=(bash -c "
+            # Restore Claude session state from persistent volume
+            if [ -f /root/.claude-session/.claude.json ]; then
+              cp /root/.claude-session/.claude.json /root/.claude.json
+            fi
+            # Run shell and ensure state is saved on exit
+            bash
+            # Save Claude session state back to persistent volume
+            [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
+        ")
     else
-        # Normal mode: Claude, then fallback to bash shell if user exits
-        docker_args+=(bash -c "claude; bash")
+        # Normal mode: restore state, run Claude, save state, then bash
+        docker_args+=(bash -c "
+            # Restore Claude session state from persistent volume
+            if [ -f /root/.claude-session/.claude.json ]; then
+              cp /root/.claude-session/.claude.json /root/.claude.json
+            fi
+            # Run Claude
+            claude
+            # Save Claude session state back to persistent volume after exit
+            [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
+            # Drop to bash shell for manual work
+            bash
+            # Save final state
+            [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
+        ")
     fi
 
     # Start the container
