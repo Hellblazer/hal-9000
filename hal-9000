@@ -149,11 +149,11 @@ POOL COMMANDS:
 
 SESSION COMMANDS:
   hal-9000 sessions        List running hal-9000 sessions
-  hal-9000 attach [name]   Attach to an existing session (auto-selects if only one)
+  hal-9000 attach [name]   Reattach to an existing session (auto-selects if only one)
   hal-9000 kill <name>     Stop and remove a session
 
-  Sessions persist after detaching. Use Ctrl-b d to detach from tmux.
-  Each session has two windows: Claude (Ctrl-b 0) and Shell (Ctrl-b 1).
+  Sessions persist after exiting. To reattach to a running container,
+  use 'hal-9000 attach' and the container will drop you into a bash shell.
 
 OPTIONS:
   --setup                Interactive setup for API key (first-time setup)
@@ -192,10 +192,10 @@ EXAMPLES:
   hal-9000 --diagnose                         # Check setup
 
 SESSION EXAMPLES:
-  hal-9000 ~/project                          # Start new session
-  # Inside session: Ctrl-b d                  # Detach (session keeps running)
-  hal-9000 sessions                           # List running sessions
-  hal-9000 attach                             # Reattach (auto-selects if one)
+  hal-9000 ~/project                          # Start new session, launches Claude
+  # Inside Claude: type 'exit' to return to bash shell
+  hal-9000 sessions                           # List all running sessions
+  hal-9000 attach                             # Reattach to a session (auto-pick if one)
   hal-9000 attach hal-9000-myapp-abc123       # Reattach to specific session
   hal-9000 kill hal-9000-myapp-abc123         # Stop a session
 
@@ -993,10 +993,10 @@ attach_session() {
     fi
 
     info "Attaching to session: $session_name"
-    info "  Detach with: Ctrl-b d"
+    info "Type 'exit' to disconnect"
     echo ""
 
-    docker exec -it "$session_name" tmux attach-session
+    docker exec -it "$session_name" bash
 }
 
 # Kill a session
@@ -1088,20 +1088,17 @@ launch_container_session() {
         info "  Auth: Subscription (from volume) or interactive login"
     fi
 
-    # Add image and tmux command
-    # tmux starts with two windows: Claude (0) and Shell (1)
+    # Add image and startup command
     docker_args+=(-w "/workspace" "$container_image")
 
-    # Start container with tmux running Claude and a shell window
-    # Container runs with background process to stay alive after Claude exits
-    # We create tmux session, then keep the container running with a background process
+    # Start container with Claude or shell
+    # Container keeps running with bash so user can access shell afterward
     if [[ "$shell_mode" == "true" ]]; then
-        # Shell mode: just shell in tmux window 0
-        docker_args+=(bash -c "tmux new-session -d -s main -n shell && exec sleep infinity")
+        # Shell mode: just bash
+        docker_args+=(bash)
     else
-        # Normal mode: Claude in window 0, shell in window 1
-        # CLAUDE_HOME is now set in the Dockerfile, but explicit export ensures compatibility
-        docker_args+=(bash -c "tmux new-session -d -s main -n claude 'claude' && tmux new-window -t main -n shell && exec sleep infinity")
+        # Normal mode: Claude, then fallback to bash shell if user exits
+        docker_args+=(bash -c "claude; bash")
     fi
 
     # Start the container
@@ -1110,9 +1107,6 @@ launch_container_session() {
         error "Failed to start container"
     fi
 
-    # Give container a moment to start tmux
-    sleep 0.5
-
     if [[ "$detach" == "true" ]]; then
         # Detached mode: don't attach, just report
         success "Session started in background: $session_name"
@@ -1120,15 +1114,12 @@ launch_container_session() {
         info "Attach with: hal-9000 attach $session_name"
         info "Or simply: hal-9000 attach (if only one session)"
     else
-        # Attach to the tmux session
-        info "Attaching to tmux session..."
-        info "  Detach: Ctrl-b d"
-        info "  Switch windows: Ctrl-b n/p"
-        info "  Claude: Ctrl-b 0"
-        info "  Shell: Ctrl-b 1"
+        # Attach to the running container
+        info "Attaching to session: $session_name"
+        info "When done, type 'exit' to exit the container"
         echo ""
 
-        docker exec -it "$session_name" tmux attach-session -t main
+        docker exec -it "$session_name" bash
     fi
 }
 
