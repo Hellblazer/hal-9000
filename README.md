@@ -123,9 +123,14 @@ graph TB
 ### Environment Variables
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-api03-...  # Required
-export CLAUDE_HOME=~/.claude               # Claude config (default)
+export ANTHROPIC_API_KEY=sk-ant-api03-...  # Required for API access
 ```
+
+### Docker Volumes
+
+claudy uses shared Docker volumes for persistence across sessions:
+- `hal9000-claude-home` - CLAUDE_HOME (plugins, settings, agents)
+- `hal9000-memory-bank` - Memory bank for cross-session context
 
 ### Profiles
 

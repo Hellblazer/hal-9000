@@ -96,13 +96,18 @@ Each project gets its own isolated session with:
 
 Because claudy runs inside a container (sandbox), there are no permission popups. The container is the security boundary.
 
-### Session Inheritance
+### Persistent Plugins & Configuration
 
-claudy copies your host's Claude configuration into the container:
-- Authentication token (`.session.json`)
-- Settings and preferences
-- Custom agents and commands
-- CLAUDE.md configuration
+claudy uses Docker volumes to share CLAUDE_HOME across all sessions:
+- Plugins installed in any session persist for all sessions
+- Settings, agents, commands shared across workers
+- No copying or syncing - just shared volumes
+
+```bash
+# Install a plugin - it persists across all claudy sessions
+claudy plugin install memory-bank
+claudy mcp list
+```
 
 ## Usage
 
@@ -126,15 +131,29 @@ claudy --name my-session
 
 # Specific directory
 claudy ~/projects/myapp
-
-# Use version-controlled config (great for reproducibility)
-claudy --claude-home ~/git/.claude ~/my-project
-
-# Use isolated config for testing (no effect on ~/.claude)
-claudy --claude-home ~/.hal9000/test-config
 ```
 
-### DinD Mode (v0.6.0+)
+### Claude Command Passthrough
+
+Run any `claude` command through claudy - it executes in a container with the shared volume:
+
+```bash
+# Plugin management
+claudy plugin list                        # List installed plugins
+claudy plugin install memory-bank         # Install a plugin
+claudy plugin marketplace add <url>       # Add a marketplace
+
+# MCP server management
+claudy mcp list                           # List MCP servers
+claudy mcp add <server>                   # Add an MCP server
+
+# Health checks
+claudy doctor                             # Check Claude health
+```
+
+All changes persist in the shared Docker volume (`hal9000-claude-home`).
+
+### DinD Mode (v0.7.0+)
 
 For multi-worker orchestration with shared services:
 
@@ -167,71 +186,68 @@ claudy --verify
 claudy --diagnose
 ```
 
-### Environment Variables and Config Override
+### Environment Variables
 
-**CLAUDE_HOME**: Path to Claude Code configuration directory
-
-```bash
-# Use tracked/version-controlled config (great for teams or reproducibility)
-export CLAUDE_HOME=$HOME/git/.claude
-claudy
-
-# Use custom config location for testing/isolation
-export CLAUDE_HOME=$HOME/.hal9000/test-config
-claudy
-
-# Default: uses ~/.claude (same as Claude Code)
-claudy
-```
-
-**HAL9000_HOME**: Path to claudy session storage
+**HAL9000_HOME**: Path to claudy session metadata storage
 
 ```bash
-# Override default session storage location
+# Override default session storage location (default: ~/.hal9000)
 export HAL9000_HOME=$HOME/.my-hal9000-sessions
 claudy
 ```
 
-**Via Command-Line Arguments**:
+**ANTHROPIC_API_KEY**: API key for Claude authentication
 
 ```bash
-# Override Claude home without environment variable
-claudy --claude-home ~/git/.claude
-
-# Combine with other options
-claudy --claude-home ~/.hal9000/test-config --profile python ~/my-project
+# Set API key for all claudy sessions
+export ANTHROPIC_API_KEY=sk-ant-api03-...
+claudy
 ```
+
+### Docker Volumes
+
+claudy uses shared Docker volumes for persistence:
+
+| Volume | Purpose |
+|--------|---------|
+| `hal9000-claude-home` | CLAUDE_HOME - plugins, settings, agents |
+| `hal9000-memory-bank` | Memory bank for cross-session context |
+
+All workers share these volumes, so plugins installed in any session persist everywhere.
 
 ## How It Works
 
-### Session Directory Structure
+### Architecture
 
 ```mermaid
-graph LR
-    subgraph hal9000["~/.hal9000/ (hal-9000 storage root)"]
-        subgraph claude["claude/"]
-            subgraph session["claudy-myproject-a1b2c3d4/<br/>(unique per project)"]
-                subgraph dotclaude[".claude/<br/>(Copied from host ~/.claude)"]
-                    SessionJSON[".session.json<br/>Authentication token"]
-                    Settings["settings.json<br/>Claude Code settings"]
-                    Agents["agents/<br/>Custom agents"]
-                    Commands["commands/<br/>Custom commands"]
-                end
-                Metadata[".session.json<br/>Session metadata"]
-                Workspace[".workspace/<br/>Project mount point"]
-            end
-        end
+graph TB
+    subgraph Volumes["Docker Volumes (shared by all sessions)"]
+        V1["hal9000-claude-home<br/>/root/.claude"]
+        V2["hal9000-memory-bank<br/>/root/memory-bank"]
     end
+
+    subgraph Sessions["claudy sessions"]
+        S1["claudy session 1"]
+        S2["claudy session 2"]
+    end
+
+    subgraph Host["Host (~/.hal9000/)"]
+        Meta["Session metadata<br/>claudy-project-hash/.claudy-session.json"]
+    end
+
+    S1 --> V1
+    S2 --> V1
+    S1 --> V2
+    S2 --> V2
 ```
 
 ### Execution Flow
 
 1. **Detect**: Auto-detect project type from markers
-2. **Initialize**: Create session directory and copy host config
-3. **Authenticate**: Copy ~/.claude/.session.json to container
-4. **Docker Setup**: Mount host Docker daemon socket (`/var/run/docker.sock`)
-5. **Launch**: Start tmux session and open Claude inside container
-6. **Mount**: Project directory mounted at /workspace
+2. **Volumes**: Ensure shared Docker volumes exist
+3. **Metadata**: Create session metadata in `~/.hal9000/claude/{session}/`
+4. **Launch**: Start container with shared volumes mounted
+5. **Mount**: Project directory mounted at /workspace
 
 ### Session Naming
 

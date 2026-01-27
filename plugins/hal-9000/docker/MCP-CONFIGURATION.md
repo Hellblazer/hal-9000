@@ -159,10 +159,10 @@ spawn-worker.sh --mount-claude /path/to/project
 
 # Without MCP
 spawn-worker.sh /path/to/project
-
-# With specific Claude home
-spawn-worker.sh --claude-home ~/.hal9000/workers/worker-1/.claude /path/to/project
 ```
+
+Workers share the `hal9000-claude-home` Docker volume, so MCP configuration
+persists across all workers automatically.
 
 ## Shared Data Considerations
 

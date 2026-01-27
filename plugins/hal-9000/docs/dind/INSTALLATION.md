@@ -22,12 +22,12 @@ docker ps
 If you already have claudy installed:
 
 ```bash
-# Update claudy to v0.6.0+
+# Update claudy to v0.7.0+
 ./install-claudy.sh
 
 # Verify version
 claudy --version
-# Should show 0.6.0 or later
+# Should show 0.7.0 or later
 ```
 
 ### Method 2: Building Images Locally

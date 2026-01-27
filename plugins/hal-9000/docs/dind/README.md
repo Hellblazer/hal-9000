@@ -87,7 +87,7 @@ graph TB
 ## Requirements
 
 - Docker 20.10+
-- claudy v0.6.0+
+- claudy v0.7.0+
 - 8GB+ RAM recommended
 - Docker socket access
 

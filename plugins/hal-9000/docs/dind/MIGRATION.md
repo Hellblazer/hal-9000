@@ -85,17 +85,6 @@ docker volume create hal9000-plugins
 claudy daemon start
 ```
 
-## Using Legacy Mode
-
-If you need to temporarily use the old single-container mode:
-
-```bash
-# Run in legacy mode
-claudy --legacy /path/to/project
-```
-
-**Note**: `--legacy` mode is deprecated and will be removed in v1.0.
-
 ## Rollback
 
 If migration fails, you can rollback:
@@ -122,8 +111,8 @@ BACKUP_DIR="$HOME/.hal9000-backup-YYYYMMDD"  # Use your backup date
 rm -rf ~/.hal9000
 cp -r "$BACKUP_DIR" ~/.hal9000
 
-# 3. Use legacy mode
-claudy --legacy /path/to/project
+# 3. Remove Docker volumes to start fresh
+docker volume rm hal9000-claude-home hal9000-memory-bank
 ```
 
 ## Data Migration Details
@@ -222,7 +211,7 @@ rm -rf ~/.hal9000/chromadb ~/.hal9000/membank
 ## Migration FAQ
 
 ### Q: Can I use both modes simultaneously?
-A: No, but you can switch between them by stopping the daemon and using `--legacy`.
+A: No. Claudy v0.7.0+ uses the DinD architecture with shared Docker volumes.
 
 ### Q: Is the migration reversible?
 A: Yes, if you keep the backup. Use the rollback script.

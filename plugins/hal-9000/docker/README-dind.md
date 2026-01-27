@@ -7,7 +7,7 @@ This directory contains Dockerfiles and scripts for the Docker-in-Docker parent/
 
 ## Quick Start
 
-The easiest way to use DinD is through the `claudy` CLI (v0.6.0+):
+The easiest way to use DinD is through the `claudy` CLI (v0.7.0+):
 
 ```bash
 # Start the daemon (parent container with ChromaDB)

@@ -56,8 +56,8 @@ graph TB
 
         subgraph Mounts["Volume Mounts"]
             WS["/workspace ← git worktree"]
-            CC["/root/.claude ← shared config"]
-            MB["/data/memory-bank ← shared storage"]
+            CC["/root/.claude ← hal9000-claude-home volume"]
+            MB["/data/memory-bank ← hal9000-memory-bank volume"]
         end
     end
 ```
