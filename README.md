@@ -59,6 +59,36 @@ Every container provides:
 
 Additional MCP servers can be installed via marketplace.
 
+### MCP Configuration Persistence
+
+MCP server configurations are automatically persisted across all hal-9000 sessions:
+
+```bash
+# Session 1: Add a custom MCP server
+hal-9000 /path/to/project1
+# Inside Claude:
+# hal-9000 mcp add my-custom-server
+
+# Exit and start a new session
+hal-9000 /path/to/project2
+
+# MCP configuration from session 1 is automatically available
+# No need to re-register servers in each session
+```
+
+**What persists:**
+- All MCP server registrations and configurations
+- Custom MCP server settings and parameters
+- Tool search preferences and exclusions
+- Feature flag state
+- Performance tuning settings
+
+**Why this matters:**
+- Set up MCP servers once, use everywhere
+- Consistent Claude environment across all projects
+- No configuration drift between sessions
+- Faster startup (no reconfiguration needed)
+
 ## Usage
 
 ### Basic
@@ -101,7 +131,8 @@ graph TB
         Parent --> W3["Worker 3<br/>Claude"]
 
         subgraph Volumes["Shared Volumes"]
-            CH["CLAUDE_HOME<br/>(marketplace installs)"]
+            CH["CLAUDE_HOME<br/>(plugins, creds)"]
+            CS["Session State<br/>(.claude.json)"]
             MB["Memory Bank"]
         end
 
@@ -113,7 +144,8 @@ graph TB
 
 - **Parent**: Runs ChromaDB server, manages workers
 - **Workers**: Run Claude with marketplace-installed MCP servers
-- **CLAUDE_HOME**: Shared volume for all marketplace installations
+- **CLAUDE_HOME**: Shared volume for plugins, credentials, and settings
+- **Session State**: Shared volume for `.claude.json` (authentication, MCP config)
 
 ## Requirements
 
@@ -135,11 +167,29 @@ hal-9000 /login    # Login once, persists in shared volume
 export ANTHROPIC_API_KEY=sk-ant-api03-...
 ```
 
-### Docker Volumes
+### Session State Persistence
 
-hal-9000 uses shared Docker volumes for persistence across sessions:
-- `hal9000-claude-home` - CLAUDE_HOME (plugins, settings, agents)
-- `hal9000-memory-bank` - Memory bank for cross-session context
+hal-9000 maintains full state across container instances using shared volumes:
+
+- **`hal9000-claude-home`** - CLAUDE_HOME directory
+  - Marketplace plugins and commands
+  - User settings and preferences
+  - MCP server registrations
+  - Installed skills and agents
+  - Complete credentials (from `/login`)
+
+- **`hal9000-claude-session`** - Claude session state (`.claude.json`)
+  - **Critical**: Authentication token and expiration
+  - **Critical**: MCP server configurations
+  - Feature flags and experimental features
+  - Tool search preferences
+  - User identity and metadata
+
+- **`hal9000-memory-bank`** - Memory bank for cross-session context
+  - Persistent structured memory across sessions
+  - Available to all Claude processes
+
+**Key Benefit**: MCP configurations registered in one session are automatically available in all subsequent sessions.
 
 ### Profiles
 
