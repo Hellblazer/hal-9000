@@ -1,6 +1,6 @@
 # HAL-9000 v2.0.0 Release Notes
 
-**Release Date**: January 25, 2026
+**Release Date**: January 28, 2026
 **Type**: Major Release (Backward Compatible)
 **Migration**: Seamless - No Breaking Changes
 
