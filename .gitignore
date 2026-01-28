@@ -39,7 +39,10 @@ logs/
 !README-*.md
 !CHEATSHEET.md
 !CLAUDE.md
+!SECURITY.md
 !SECURITY_FIX_SUMMARY.md
+!AGENTS.md
+!RELEASE_NOTES_*.md
 !/plugins/*/README.md
 
 # Prevent directory sprawl in root
@@ -52,9 +55,11 @@ logs/
 !/scripts/tests/
 !/scripts/migrate-to-dind.sh
 !/scripts/rollback-dind.sh
+!/scripts/rollback-to-v1.sh
 !/scripts/setup-foundation-mcp.sh
+!/scripts/agent-registry.py
+!/scripts/validate-handoff-graph.py
 /tests/
-/install-mcp-servers.sh
 
 # Working documents - temporary/ephemeral files for agent work
 /working-documents/
