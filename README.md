@@ -24,6 +24,14 @@ hal-9000
 
 Auth is stored in a shared Docker volume - login once, use everywhere.
 
+## Security Improvements (v1.5.0)
+
+hal-9000 v1.5.0 includes **2 critical security fixes**:
+- **Code Injection via Config File** - Replaced unsafe `source` command with safe parsing
+- **Path Traversal in Local Profiles** - Added validation to prevent `../` attacks in profile names
+
+All fixes validated with **30/30 tests passing**. [Read detailed security summary →](SECURITY_FIX_SUMMARY.md)
+
 ## Marketplace Support
 
 hal-9000 supports Claude Code plugins. Install agents, commands, and tools that persist across all sessions:
