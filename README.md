@@ -193,12 +193,29 @@ hal-9000 maintains full state across container instances using shared volumes:
 
 ### Profiles
 
+Built-in profiles are automatically selected based on your project structure:
+
 ```bash
 hal-9000 --profile base      # Minimal (default)
 hal-9000 --profile python    # + Python tools
 hal-9000 --profile node      # + Node.js tools
 hal-9000 --profile java      # + Java/Maven tools
 ```
+
+**Auto-Detection:**
+- Python: Detects `requirements.txt`, `pyproject.toml`, `Pipfile`
+- Node.js: Detects `package.json`
+- Java: Detects `pom.xml`, `build.gradle`, `build.gradle.kts`
+
+**Creating Custom Profiles:**
+
+Want a Ruby profile? Go profile? Anything else? You can create custom profiles for any language/framework.
+
+See [Custom Profiles Guide](README-CUSTOM_PROFILES.md) for:
+- Complete walkthrough of creating a new profile
+- Examples: Ruby, Go, Rust, PHP, .NET
+- Best practices and troubleshooting
+- How to share profiles with the community
 
 ## Companion Tools
 
@@ -277,6 +294,7 @@ hal-9000 daemon restart
 - [Configuration Reference](plugins/hal-9000/docs/dind/CONFIGURATION.md)
 - [Troubleshooting Guide](plugins/hal-9000/docs/dind/TROUBLESHOOTING.md)
 - [Development Guide](plugins/hal-9000/docs/dind/DEVELOPMENT.md)
+- [Custom Profiles Guide](README-CUSTOM_PROFILES.md) - Create your own specialized profiles (Ruby, Go, Rust, PHP, etc.)
 
 ## License
 
