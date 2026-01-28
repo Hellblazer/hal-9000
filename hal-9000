@@ -175,7 +175,9 @@ check_subscription_auth() {
 run_claude_command() {
     ensure_volumes
 
-    local image="${CONTAINER_IMAGE_BASE}:base"
+    local image_base
+    image_base=$(get_container_image_base)
+    local image="${image_base}:base"
 
     # Build docker args
     local docker_args=(
@@ -550,10 +552,12 @@ show_diagnostics() {
 
     # Check for container image
     echo ""
-    if docker inspect "${CONTAINER_IMAGE_BASE}:base" &> /dev/null; then
-        success "Container image: ${CONTAINER_IMAGE_BASE}:base (available)"
+    local image_base
+    image_base=$(get_container_image_base)
+    if docker inspect "${image_base}:base" &> /dev/null; then
+        success "Container image: ${image_base}:base (available)"
     else
-        warn "Container image: ${CONTAINER_IMAGE_BASE}:base (not found - run: make build-base)"
+        warn "Container image: ${image_base}:base (not found - run: make build-base)"
     fi
 
     echo ""
@@ -882,8 +886,10 @@ launch_via_parent() {
     local api_key="$5"
     local detach="$6"
     local abs_project_path
+    local image_base
 
     abs_project_path=$(cd "$project_dir" && pwd)
+    image_base=$(get_container_image_base)
 
     # Check if parent is running
     if ! docker ps --format '{{.Names}}' | grep -q "^${PARENT_CONTAINER}$"; then
@@ -912,7 +918,7 @@ launch_via_parent() {
     fi
 
     # Use worker image based on profile
-    local worker_image="${CONTAINER_IMAGE_BASE}:${profile}"
+    local worker_image="${image_base}:${profile}"
     spawn_args+=(-i "$worker_image")
 
     # Project directory - use HOST path because spawn-worker.sh
@@ -1053,8 +1059,10 @@ init_session() {
     local session_name="${3:-$(get_session_name "$project_dir")}"
     local shell_mode="${4:-false}"
     local abs_project_path
+    local image_base
 
     abs_project_path=$(cd "$project_dir" && pwd)
+    image_base=$(get_container_image_base)
 
     # Ensure shared Docker volumes exist
     ensure_volumes
@@ -1071,7 +1079,7 @@ init_session() {
   "project_dir": "$abs_project_path",
   "created_at": "$(date -Iseconds)",
   "shell_mode": $shell_mode,
-  "container_image": "${CONTAINER_IMAGE_BASE}:${profile}",
+  "container_image": "${image_base}:${profile}",
   "hal-9000_version": "$SCRIPT_VERSION"
 }
 METADATA
