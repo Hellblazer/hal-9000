@@ -5,7 +5,7 @@
 set -Eeuo pipefail
 
 readonly SCRIPT_NAME="hal-9000"
-readonly SCRIPT_VERSION="1.4.2"
+readonly SCRIPT_VERSION="1.5.0"
 readonly HAL9000_HOME="${HOME}/.hal9000"
 readonly HAL9000_PROFILES_DIR="${HAL9000_HOME}/profiles"
 readonly HAL9000_CONFIG_FILE="${HAL9000_HOME}/config"
