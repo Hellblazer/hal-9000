@@ -1007,11 +1007,31 @@ attach_session() {
         error "Session not found: $session_name" 5
     fi
 
+    # Get the shell_mode flag from the container labels
+    local shell_mode
+    shell_mode=$(docker inspect --format='{{index .Config.Labels "hal9000.shell_mode"}}' "$session_name" 2>/dev/null || echo "false")
+
     info "Attaching to session: $session_name"
-    info "Type 'exit' to disconnect"
     echo ""
 
-    docker exec -it "$session_name" bash
+    if [[ "$shell_mode" == "true" ]]; then
+        # Shell mode: just attach to bash
+        info "Type 'exit' to disconnect"
+        docker exec -it "$session_name" bash
+    else
+        # Normal mode: restore session state and run Claude with proper TTY
+        info "Launching Claude..."
+        docker exec -it "$session_name" bash -c "
+            # Restore Claude session state from persistent volume
+            if [ -f /root/.claude-session/.claude.json ]; then
+              cp /root/.claude-session/.claude.json /root/.claude.json
+            fi
+            # Run Claude
+            claude
+            # Save Claude session state back to persistent volume after exit
+            [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
+        "
+    fi
 }
 
 # Kill a session
@@ -1082,6 +1102,7 @@ launch_container_session() {
         --label "hal9000.session=true"
         --label "hal9000.project=$abs_project_path"
         --label "hal9000.profile=$profile"
+        --label "hal9000.shell_mode=$shell_mode"
         -v "$abs_project_path:/workspace"
         -v "${CLAUDE_HOME_VOLUME}:/root/.claude"
         -v "${CLAUDE_SESSION_VOLUME}:/root/.claude-session"
@@ -1110,34 +1131,13 @@ launch_container_session() {
     # Start container with Claude or shell
     # Container keeps running with bash so user can access shell afterward
     # Key: Restore .claude.json from persistent session volume before running Claude
-    if [[ "$shell_mode" == "true" ]]; then
-        # Shell mode: restore session state, keep container alive for docker exec
-        docker_args+=(bash -c "
-            # Restore Claude session state from persistent volume
-            if [ -f /root/.claude-session/.claude.json ]; then
-              cp /root/.claude-session/.claude.json /root/.claude.json
-            fi
-            # Keep container alive - user will interact via docker exec
-            tail -f /dev/null
-            # Save Claude session state back to persistent volume (when docker exec exits)
-            [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
-        ")
-    else
-        # Normal mode: restore state, run Claude, save state, then keep alive
-        docker_args+=(bash -c "
-            # Restore Claude session state from persistent volume
-            if [ -f /root/.claude-session/.claude.json ]; then
-              cp /root/.claude-session/.claude.json /root/.claude.json
-            fi
-            # Run Claude
-            claude
-            # Save Claude session state back to persistent volume after exit
-            [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
-            # Keep container alive for docker exec to attach
-            # User will interact via 'docker exec -it' which provides the TTY
-            tail -f /dev/null
-        ")
-    fi
+    # Container startup: just keep it alive indefinitely
+    # Claude will be launched via docker exec, which provides proper TTY
+    docker_args+=(bash -c "
+        # Keep container alive for docker exec to attach
+        # User will interact via 'docker exec -it' which provides the TTY
+        tail -f /dev/null
+    ")
 
     # Start the container
     info "Starting container..."
@@ -1154,10 +1154,26 @@ launch_container_session() {
     else
         # Attach to the running container
         info "Attaching to session: $session_name"
-        info "When done, type 'exit' to exit the container"
         echo ""
 
-        docker exec -it "$session_name" bash
+        if [[ "$shell_mode" == "true" ]]; then
+            # Shell mode: just attach to bash
+            info "Type 'exit' to disconnect"
+            docker exec -it "$session_name" bash
+        else
+            # Normal mode: restore session state and run Claude with proper TTY
+            info "Launching Claude..."
+            docker exec -it "$session_name" bash -c "
+                # Restore Claude session state from persistent volume
+                if [ -f /root/.claude-session/.claude.json ]; then
+                  cp /root/.claude-session/.claude.json /root/.claude.json
+                fi
+                # Run Claude
+                claude
+                # Save Claude session state back to persistent volume after exit
+                [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
+            "
+        fi
     fi
 }
 
