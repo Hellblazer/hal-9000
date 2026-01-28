@@ -1069,15 +1069,16 @@ launch_container_session() {
     local container_image="${CONTAINER_IMAGE_BASE}:${profile}"
 
     # Check if session already exists
+    local session_exists=false
     if docker ps --format '{{.Names}}' | grep -q "^${session_name}$"; then
+        session_exists=true
         info "Session already running: $session_name"
         if [[ "$detach" == "true" ]]; then
             info "Use 'hal-9000 attach $session_name' to attach"
             return 0
         else
-            info "Attaching..."
-            attach_session "$session_name"
-            return $?
+            # Reuse existing session (will continue to cleanup code below if interactive)
+            shell_mode=$(docker inspect --format='{{index .Config.Labels "hal9000.shell_mode"}}' "$session_name" 2>/dev/null || echo "false")
         fi
     fi
 
@@ -1139,21 +1140,31 @@ launch_container_session() {
         tail -f /dev/null
     ")
 
-    # Start the container
-    info "Starting container..."
-    if ! "${docker_args[@]}" >/dev/null; then
-        error "Failed to start container" 3
+    # Start the container (unless it already exists)
+    if [[ "$session_exists" != "true" ]]; then
+        info "Starting container..."
+        if ! "${docker_args[@]}" >/dev/null; then
+            error "Failed to start container" 3
+        fi
     fi
 
     if [[ "$detach" == "true" ]]; then
         # Detached mode: don't attach, just report
-        success "Session started in background: $session_name"
+        if [[ "$session_exists" == "true" ]]; then
+            success "Session already running in background: $session_name"
+        else
+            success "Session started in background: $session_name"
+        fi
         echo ""
         info "Attach with: hal-9000 attach $session_name"
         info "Or simply: hal-9000 attach (if only one session)"
     else
-        # Attach to the running container
-        info "Attaching to session: $session_name"
+        # Interactive mode: attach and clean up when user exits
+        if [[ "$session_exists" == "true" ]]; then
+            info "Reattaching to session: $session_name"
+        else
+            info "Attaching to session: $session_name"
+        fi
         echo ""
 
         if [[ "$shell_mode" == "true" ]]; then
@@ -1174,6 +1185,12 @@ launch_container_session() {
                 [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
             "
         fi
+
+        # Clean up container after interactive session ends
+        info "Cleaning up container..."
+        docker stop "$session_name" >/dev/null 2>&1
+        docker rm "$session_name" >/dev/null 2>&1
+        success "Session ended: $session_name"
     fi
 }
 
