@@ -47,6 +47,7 @@ logs/
 /scripts/*
 !/scripts/build/
 !/scripts/release/
+!/scripts/tests/
 !/scripts/migrate-to-dind.sh
 !/scripts/rollback-dind.sh
 /tests/
