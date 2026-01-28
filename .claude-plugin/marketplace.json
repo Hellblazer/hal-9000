@@ -1,5 +1,5 @@
 {
-  "_version": "1.4.0",
+  "_version": "1.4.1",
   "_schema_version": "1.0",
   "name": "hal-9000",
   "description": "hal-9000 - Containerized Claude with MCP servers pre-installed",
@@ -12,7 +12,7 @@
       "name": "hal-9000",
       "source": "./plugins/hal-9000",
       "description": "hal-9000 - Containerized Claude with MCP servers pre-installed",
-      "version": "1.4.0"
+      "version": "1.4.1"
     }
   ]
 }
