@@ -52,6 +52,7 @@ logs/
 !/scripts/tests/
 !/scripts/migrate-to-dind.sh
 !/scripts/rollback-dind.sh
+!/scripts/setup-foundation-mcp.sh
 /tests/
 /install-mcp-servers.sh
 
