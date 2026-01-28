@@ -1111,19 +1111,19 @@ launch_container_session() {
     # Container keeps running with bash so user can access shell afterward
     # Key: Restore .claude.json from persistent session volume before running Claude
     if [[ "$shell_mode" == "true" ]]; then
-        # Shell mode: restore session state, then bash
+        # Shell mode: restore session state, keep container alive for docker exec
         docker_args+=(bash -c "
             # Restore Claude session state from persistent volume
             if [ -f /root/.claude-session/.claude.json ]; then
               cp /root/.claude-session/.claude.json /root/.claude.json
             fi
-            # Run shell and ensure state is saved on exit
-            bash
-            # Save Claude session state back to persistent volume
+            # Keep container alive - user will interact via docker exec
+            tail -f /dev/null
+            # Save Claude session state back to persistent volume (when docker exec exits)
             [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
         ")
     else
-        # Normal mode: restore state, run Claude, save state, then bash
+        # Normal mode: restore state, run Claude, save state, then keep alive
         docker_args+=(bash -c "
             # Restore Claude session state from persistent volume
             if [ -f /root/.claude-session/.claude.json ]; then
@@ -1133,10 +1133,9 @@ launch_container_session() {
             claude
             # Save Claude session state back to persistent volume after exit
             [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
-            # Drop to bash shell for manual work
-            bash
-            # Save final state
-            [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
+            # Keep container alive for docker exec to attach
+            # User will interact via 'docker exec -it' which provides the TTY
+            tail -f /dev/null
         ")
     fi
 
