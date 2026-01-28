@@ -55,12 +55,50 @@ success() {
 # Configuration and local profiles
 #==============================================================================
 
-# Load configuration from ~/.hal9000/config
-load_config() {
-    if [[ -f "$HAL9000_CONFIG_FILE" ]]; then
-        # Source the config file (contains variable assignments like CONTAINER_IMAGE_BASE=...)
-        source "$HAL9000_CONFIG_FILE" || true
+# Validate profile name (prevent path traversal attacks)
+validate_profile_name() {
+    local name="$1"
+
+    # Only allow alphanumeric, dash, underscore
+    if [[ ! "$name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        return 1
     fi
+
+    # Additional check: reject common path traversal patterns
+    if [[ "$name" == ".."* ]] || [[ "$name" == *".."* ]]; then
+        return 1
+    fi
+
+    return 0
+}
+
+# Load configuration from ~/.hal9000/config (safe parsing, no arbitrary code execution)
+load_config() {
+    if [[ ! -f "$HAL9000_CONFIG_FILE" ]]; then
+        return 0
+    fi
+
+    # Safely parse config file - only allow VAR=value assignments with known variables
+    while IFS='=' read -r key value; do
+        # Skip empty lines and comments
+        [[ -z "$key" ]] && continue
+        [[ "$key" =~ ^[[:space:]]*# ]] && continue
+
+        # Trim whitespace
+        key=$(echo "$key" | xargs)
+        value=$(echo "$value" | xargs)
+
+        # Only allow specific known variables (whitelist approach)
+        case "$key" in
+            CONTAINER_IMAGE_BASE)
+                export CONTAINER_IMAGE_BASE="$value"
+                ;;
+            *)
+                # Silently ignore unknown variables - do not execute arbitrary code
+                :
+                ;;
+        esac
+    done < "$HAL9000_CONFIG_FILE"
 }
 
 # Get container image base with precedence: env var > config file > default
@@ -85,6 +123,12 @@ get_container_image_base() {
 # Check if a local profile exists and optionally build it
 get_local_profile_image() {
     local profile="$1"
+
+    # Validate profile name (prevent path traversal)
+    if ! validate_profile_name "$profile"; then
+        error "Invalid profile name: $profile (only alphanumeric, dash, underscore allowed)" 2
+    fi
+
     local local_profile_dir="${HAL9000_PROFILES_DIR}/${profile}"
 
     if [[ -f "${local_profile_dir}/Dockerfile" ]]; then
@@ -100,6 +144,12 @@ get_local_profile_image() {
 # Build a local profile if it exists and is not already built
 build_local_profile() {
     local profile="$1"
+
+    # Validate profile name (prevent path traversal)
+    if ! validate_profile_name "$profile"; then
+        error "Invalid profile name: $profile (only alphanumeric, dash, underscore allowed)" 2
+    fi
+
     local local_profile_dir="${HAL9000_PROFILES_DIR}/${profile}"
 
     if [[ ! -f "${local_profile_dir}/Dockerfile" ]]; then
