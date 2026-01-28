@@ -154,6 +154,32 @@ ensure_volumes() {
     docker volume create "$CLAUDE_HOME_VOLUME" >/dev/null 2>&1 || true
     docker volume create "$CLAUDE_SESSION_VOLUME" >/dev/null 2>&1 || true
     docker volume create "$MEMORY_BANK_VOLUME" >/dev/null 2>&1 || true
+
+    # Initialize volumes with pristine Claude config on first creation
+    # This ensures containers start in a clean state with no host-specific paths
+    docker run --rm \
+        -v "${CLAUDE_SESSION_VOLUME}:/session" \
+        -v "${CLAUDE_HOME_VOLUME}:/claude-home" \
+        alpine:latest \
+        sh -c '
+            # Initialize session volume with pristine Claude config
+            if [ ! -f /session/.initialized ]; then
+                cat > /session/.claude.json << '"'"'EOF'"'"'
+{
+  "theme": "auto",
+  "installMethod": "native",
+  "autoUpdates": false
+}
+EOF
+                touch /session/.initialized
+            fi
+
+            # Initialize CLAUDE_HOME structure if empty
+            if [ ! -d /claude-home/plugins ]; then
+                mkdir -p /claude-home/plugins
+                touch /claude-home/.initialized
+            fi
+        ' >/dev/null 2>&1 || true
 }
 
 # Check if subscription login is configured in the shared volume
@@ -1321,6 +1347,8 @@ launch_container_session() {
             info "Launching Claude..."
             docker exec -it "$session_name" bash -c "
                 # Restore Claude session state from persistent volume
+                # The volume is initialized with pristine config on first creation,
+                # so the container gets a clean environment with no host-specific paths
                 if [ -f /root/.claude-session/.claude.json ]; then
                   cp /root/.claude-session/.claude.json /root/.claude.json
                 fi
@@ -1352,6 +1380,10 @@ main() {
     local detach=false
     local verify_only=false
     local via_parent=false
+
+    # Ensure volumes exist and are initialized with pristine config
+    # This runs once on first use, subsequent launches reuse initialized volumes
+    ensure_volumes
 
     # Handle daemon subcommand first
     if [[ "${1:-}" == "daemon" ]]; then
