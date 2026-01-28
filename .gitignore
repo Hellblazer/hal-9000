@@ -39,6 +39,7 @@ logs/
 !README-*.md
 !CHEATSHEET.md
 !CLAUDE.md
+!SECURITY_FIX_SUMMARY.md
 !/plugins/*/README.md
 
 # Prevent directory sprawl in root
