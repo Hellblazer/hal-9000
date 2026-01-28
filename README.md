@@ -211,11 +211,17 @@ hal-9000 --profile java      # + Java/Maven tools
 
 Want a Ruby profile? Go profile? Anything else? You can create custom profiles for any language/framework.
 
-See [Custom Profiles Guide](README-CUSTOM_PROFILES.md) for:
+**Quick Start (easiest):** See [Local Profiles Quick Start](README-LOCAL_PROFILES.md)
+- Create a Dockerfile in `~/.hal9000/profiles/{name}/`
+- hal-9000 auto-detects and builds it
+- Zero setup, no repo cloning needed
+
+**Complete Guide:** See [Custom Profiles Guide](README-CUSTOM_PROFILES.md) for:
 - Complete walkthrough of creating a new profile
 - Examples: Ruby, Go, Rust, PHP, .NET
 - Best practices and troubleshooting
 - How to share profiles with the community
+- Contributing profiles back to the project
 
 ## Companion Tools
 
