@@ -20,7 +20,7 @@ hal-9000/
 │   └── hal-9000/                 # Main plugin
 │       ├── .claude-plugin/
 │       │   └── plugin.json       # Plugin metadata
-│       ├── agents/               # 12 custom agent definitions
+│       ├── agents/               # 16 custom agent definitions
 │       ├── aod/                  # Army of Darkness multi-branch tool
 │       ├── commands/             # Slash commands (/check, /load, etc.)
 │       ├── hal9000/              # Containerized Claude launcher

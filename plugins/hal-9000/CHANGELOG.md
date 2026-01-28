@@ -145,7 +145,7 @@ For users upgrading from v1.x to v2.0.0:
 - Updated ClaudeBox references to hal9000 throughout codebase
 - Renamed `is_claudebox_container()` to `is_hal9000_container()` in common.sh
 - Updated container name patterns in aod scripts from "claudebox-*" to "aod-*"
-- Unified agent documentation - clarified 12 installed agents vs agent invocation patterns
+- Unified agent documentation - clarified 16 installed agents vs agent invocation patterns
 - Repository structure in CLAUDE.md now reflects actual layout
 
 ### Fixed
@@ -268,7 +268,7 @@ Tested and validated on:
 ### Initial Release
 - aod (Army of Darkness) multi-branch parallel development
 - MCP servers: ChromaDB, Memory Bank, Sequential Thinking, DEVONthink
-- 12 custom agents for Java development, code review, research
+- 16 custom agents for Java development, code review, research
 - Session management commands: /check, /load, /sessions, /session-delete
 - Terminal tools: tmux-cli, find-session, vault, env-safe, ccstatusline
 - Safety hooks for git, file, and environment protection

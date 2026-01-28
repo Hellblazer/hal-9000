@@ -1,6 +1,6 @@
 # Custom Agent Configurations
 
-Agent configuration files for specialized Claude Code tasks. 12 agents installed to `~/.claude/agents/`.
+Agent configuration files for specialized Claude Code tasks. 16 agents installed to `~/.claude/agents/`.
 
 ## Available Agents
 

@@ -33,7 +33,7 @@ Productivity tools for Claude Code: aod multi-branch development, MCP servers, c
 
 ### Custom Agents
 
-12 specialized agent configurations for Java development, code review, research, and analysis. Installed to `~/.claude/agents/`. See AGENTS.md for details.
+16 specialized agent configurations for Java development, code review, research, and analysis. Installed to `~/.claude/agents/`. See AGENTS.md for details.
 
 ### Session Commands
 

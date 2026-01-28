@@ -306,7 +306,7 @@ hal-9000 plugin install hal-9000
 ```
 
 **Includes**:
-- 12 specialized agents (java-developer, code-review-expert, strategic-planner, etc.)
+- 16 specialized agents (java-developer, code-review-expert, strategic-planner, etc.)
 - Slash commands (/check, /load, /sessions)
 - Safety hooks
 
