@@ -17,6 +17,7 @@ logs/
 **/*.txt
 !**/src/test/resources/**/*.txt
 !**/docs/archive/**/*.txt
+!scripts/tests/fixtures/**/*.txt
 
 # Prevent Python script sprawl in root (ART-677)
 # Only allow Python in proper locations (scripts/, src/, tests/)
