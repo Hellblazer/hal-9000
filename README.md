@@ -49,7 +49,7 @@ hal-9000 plugin list
 
 All installations are stored in a persistent Docker volume shared by all workers.
 
-> **Note**: Foundation MCP servers (ChromaDB, Memory Bank, Sequential Thinking) are **pre-installed** in the container - no marketplace installation needed.
+> **Note**: Foundation MCP servers (ChromaDB, Memory Bank) require one-time setup via `scripts/setup-foundation-mcp.sh` on your host machine. Sequential Thinking is pre-installed in all workers. See [Foundation MCP Servers Setup](#foundation-mcp-servers-setup) below.
 
 ## What's Included
 
@@ -60,10 +60,10 @@ Every container provides:
 - **Python + uv** - For Python MCP servers
 - **Persistent CLAUDE_HOME** - Marketplace installations persist
 
-**Foundation MCP Servers** (pre-installed):
-- **ChromaDB** - Vector database (server in parent, client in workers)
-- **Memory Bank** - Persistent memory across sessions (shared volume)
-- **Sequential Thinking** - Step-by-step reasoning
+**Foundation MCP Servers** (available via setup script):
+- **ChromaDB** - Vector database server (requires setup via `scripts/setup-foundation-mcp.sh`)
+- **Memory Bank** - Persistent memory across sessions (requires setup)
+- **Sequential Thinking** - Step-by-step reasoning (pre-installed in workers)
 
 Additional MCP servers can be installed via marketplace.
 
@@ -96,6 +96,68 @@ hal-9000 /path/to/project2
 - Consistent Claude environment across all projects
 - No configuration drift between sessions
 - Faster startup (no reconfiguration needed)
+
+## Foundation MCP Servers Setup
+
+Foundation MCP Servers (ChromaDB and Memory Bank) run at the host level, accessible to all worker containers. One-time setup is required:
+
+```bash
+./scripts/setup-foundation-mcp.sh              # Full setup
+./scripts/setup-foundation-mcp.sh --status     # Check status
+```
+
+### What Gets Deployed
+
+**ChromaDB** - Vector database for semantic search and embeddings
+- Runs as Docker container on port 8000 (configurable)
+- Persistent local storage at `~/.hal9000/foundation-mcp/chromadb-data/`
+- Automatically restarts if stopped
+
+**Memory Bank** - Persistent memory across sessions
+- File-based storage at `~/.hal9000/foundation-mcp/memory-bank-data/`
+- Shared with all worker containers
+- Use for storing context, research findings, and persistent state
+
+**Sequential Thinking** - Step-by-step reasoning
+- Pre-installed as MCP server in all workers
+- Available immediately after setup script completes
+
+### Setup Script Commands
+
+```bash
+# Full setup (creates directories, deploys ChromaDB, initializes Memory Bank)
+./scripts/setup-foundation-mcp.sh
+
+# Customize ChromaDB port
+./scripts/setup-foundation-mcp.sh --chromadb-port 8001
+
+# Check service status
+./scripts/setup-foundation-mcp.sh --status
+
+# View logs
+./scripts/setup-foundation-mcp.sh --logs chromadb        # ChromaDB logs
+./scripts/setup-foundation-mcp.sh --logs memory-bank     # Memory Bank info
+./scripts/setup-foundation-mcp.sh --logs all             # All services
+
+# Manage services
+./scripts/setup-foundation-mcp.sh --start                # Start services
+./scripts/setup-foundation-mcp.sh --stop                 # Stop services
+
+# Remove everything (destructive)
+./scripts/setup-foundation-mcp.sh --cleanup
+```
+
+### Verification
+
+After setup, verify services are accessible:
+
+```bash
+# Check ChromaDB is responding
+curl http://localhost:8000/api/v1/heartbeat
+
+# Check Memory Bank storage
+ls ~/.hal9000/foundation-mcp/memory-bank-data/
+```
 
 ## Usage
 
