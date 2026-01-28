@@ -99,11 +99,11 @@ hal-9000 /path/to/project2
 
 ## Foundation MCP Servers Setup
 
-Foundation MCP Servers (ChromaDB and Memory Bank) run at the host level, accessible to all worker containers. One-time setup is required:
+Foundation MCP Servers (ChromaDB and Memory Bank) run at the host level, accessible to all worker containers. One-time setup is required after installing hal-9000:
 
 ```bash
-./scripts/setup-foundation-mcp.sh              # Full setup
-./scripts/setup-foundation-mcp.sh --status     # Check status
+~/.hal9000/scripts/setup-foundation-mcp.sh              # Full setup
+~/.hal9000/scripts/setup-foundation-mcp.sh --status     # Check status
 ```
 
 ### What Gets Deployed
@@ -126,25 +126,25 @@ Foundation MCP Servers (ChromaDB and Memory Bank) run at the host level, accessi
 
 ```bash
 # Full setup (creates directories, deploys ChromaDB, initializes Memory Bank)
-./scripts/setup-foundation-mcp.sh
+~/.hal9000/scripts/setup-foundation-mcp.sh
 
 # Customize ChromaDB port
-./scripts/setup-foundation-mcp.sh --chromadb-port 8001
+~/.hal9000/scripts/setup-foundation-mcp.sh --chromadb-port 8001
 
 # Check service status
-./scripts/setup-foundation-mcp.sh --status
+~/.hal9000/scripts/setup-foundation-mcp.sh --status
 
 # View logs
-./scripts/setup-foundation-mcp.sh --logs chromadb        # ChromaDB logs
-./scripts/setup-foundation-mcp.sh --logs memory-bank     # Memory Bank info
-./scripts/setup-foundation-mcp.sh --logs all             # All services
+~/.hal9000/scripts/setup-foundation-mcp.sh --logs chromadb        # ChromaDB logs
+~/.hal9000/scripts/setup-foundation-mcp.sh --logs memory-bank     # Memory Bank info
+~/.hal9000/scripts/setup-foundation-mcp.sh --logs all             # All services
 
 # Manage services
-./scripts/setup-foundation-mcp.sh --start                # Start services
-./scripts/setup-foundation-mcp.sh --stop                 # Stop services
+~/.hal9000/scripts/setup-foundation-mcp.sh --start                # Start services
+~/.hal9000/scripts/setup-foundation-mcp.sh --stop                 # Stop services
 
 # Remove everything (destructive)
-./scripts/setup-foundation-mcp.sh --cleanup
+~/.hal9000/scripts/setup-foundation-mcp.sh --cleanup
 ```
 
 ### Verification

@@ -96,6 +96,25 @@ check_prerequisites() {
     success "Prerequisites checked"
 }
 
+download_setup_script() {
+    local setup_url="$GITHUB_RAW/scripts/setup-foundation-mcp.sh"
+    local temp_script="$TEMP_DIR/setup-foundation-mcp.sh"
+
+    if ! curl -fsSL "$setup_url" -o "$temp_script" 2>/dev/null; then
+        warn "Failed to download setup-foundation-mcp.sh"
+        return 1
+    fi
+
+    if [[ ! -f "$temp_script" ]]; then
+        warn "setup-foundation-mcp.sh not found after download"
+        return 1
+    fi
+
+    chmod +x "$temp_script"
+    echo "$temp_script"
+    return 0
+}
+
 install_hal9000() {
     local hal9000_script="$1"
 
@@ -115,6 +134,27 @@ install_hal9000() {
     fi
 
     success "hal-9000 installed to $HAL9000_DEST"
+}
+
+install_setup_script() {
+    local setup_script="$1"
+    local scripts_dir="$HOME/.hal9000/scripts"
+
+    # Skip if download failed
+    if [[ -z "$setup_script" ]] || [[ ! -f "$setup_script" ]]; then
+        warn "Skipping setup-foundation-mcp.sh installation"
+        return 0
+    fi
+
+    info "Installing setup-foundation-mcp.sh to $scripts_dir..."
+
+    # Create directory if it doesn't exist
+    mkdir -p "$scripts_dir"
+
+    cp "$setup_script" "$scripts_dir/setup-foundation-mcp.sh"
+    chmod 755 "$scripts_dir/setup-foundation-mcp.sh"
+
+    success "setup-foundation-mcp.sh installed to $scripts_dir"
 }
 
 verify_installation() {
@@ -156,6 +196,10 @@ show_post_install() {
     echo -e "${YELLOW}  Quick Start:${NC}"
     echo "    cd ~/your-project"
     echo "    hal-9000"
+    echo ""
+    echo -e "${YELLOW}  Set Up Foundation MCP Servers:${NC}"
+    echo "    ~/.hal9000/scripts/setup-foundation-mcp.sh    Full setup"
+    echo "    ~/.hal9000/scripts/setup-foundation-mcp.sh --help   All options"
     echo ""
     echo -e "${YELLOW}  More Options:${NC}"
     echo "    hal-9000 --help              Show all options"
@@ -205,6 +249,12 @@ main() {
             local hal9000_script
             hal9000_script=$(download_hal9000)
             install_hal9000 "$hal9000_script"
+
+            # Download and install Foundation MCP setup script
+            local setup_script
+            setup_script=$(download_setup_script) || true
+            install_setup_script "$setup_script"
+
             verify_installation
             show_post_install
             ;;
