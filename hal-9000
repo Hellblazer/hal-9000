@@ -7,10 +7,12 @@ set -Eeuo pipefail
 readonly SCRIPT_NAME="hal-9000"
 readonly SCRIPT_VERSION="1.4.2"
 readonly HAL9000_HOME="${HOME}/.hal9000"
+readonly HAL9000_PROFILES_DIR="${HAL9000_HOME}/profiles"
+readonly HAL9000_CONFIG_FILE="${HAL9000_HOME}/config"
 readonly PARENT_CONTAINER="hal9000-parent"
 readonly PARENT_IMAGE="ghcr.io/hellblazer/hal-9000:parent"
 readonly DEFAULT_PROFILE="base"
-readonly CONTAINER_IMAGE_BASE="ghcr.io/hellblazer/hal-9000"
+readonly DEFAULT_CONTAINER_IMAGE_BASE="ghcr.io/hellblazer/hal-9000"
 
 # Shared Docker volumes for CLAUDE_HOME and session state - all workers share these
 readonly CLAUDE_HOME_VOLUME="hal9000-claude-home"
@@ -47,6 +49,100 @@ info() {
 
 success() {
     echo -e "${GREEN}✓ $*${NC}"
+}
+
+#==============================================================================
+# Configuration and local profiles
+#==============================================================================
+
+# Load configuration from ~/.hal9000/config
+load_config() {
+    if [[ -f "$HAL9000_CONFIG_FILE" ]]; then
+        # Source the config file (contains variable assignments like CONTAINER_IMAGE_BASE=...)
+        source "$HAL9000_CONFIG_FILE" || true
+    fi
+}
+
+# Get container image base with precedence: env var > config file > default
+get_container_image_base() {
+    # Environment variable takes highest precedence
+    if [[ -n "${HAL9000_CONTAINER_IMAGE_BASE:-}" ]]; then
+        echo "$HAL9000_CONTAINER_IMAGE_BASE"
+        return 0
+    fi
+
+    # Load and check config file
+    load_config
+    if [[ -n "${CONTAINER_IMAGE_BASE:-}" ]]; then
+        echo "$CONTAINER_IMAGE_BASE"
+        return 0
+    fi
+
+    # Default
+    echo "$DEFAULT_CONTAINER_IMAGE_BASE"
+}
+
+# Check if a local profile exists and optionally build it
+get_local_profile_image() {
+    local profile="$1"
+    local local_profile_dir="${HAL9000_PROFILES_DIR}/${profile}"
+
+    if [[ -f "${local_profile_dir}/Dockerfile" ]]; then
+        # Local profile exists - return the image name
+        echo "hal-9000-local-${profile}:latest"
+        return 0
+    fi
+
+    # No local profile
+    return 1
+}
+
+# Build a local profile if it exists and is not already built
+build_local_profile() {
+    local profile="$1"
+    local local_profile_dir="${HAL9000_PROFILES_DIR}/${profile}"
+
+    if [[ ! -f "${local_profile_dir}/Dockerfile" ]]; then
+        # No local profile to build
+        return 0
+    fi
+
+    local image_name="hal-9000-local-${profile}:latest"
+
+    # Check if already built
+    if docker inspect "$image_name" &>/dev/null; then
+        return 0
+    fi
+
+    # Build the local profile
+    info "Building local profile: $profile"
+    if ! docker build -f "${local_profile_dir}/Dockerfile" -t "$image_name" "$local_profile_dir" >/dev/null 2>&1; then
+        error "Failed to build local profile: $profile" 3
+    fi
+    success "Local profile built: $profile"
+}
+
+# List available local profiles
+list_local_profiles() {
+    if [[ ! -d "$HAL9000_PROFILES_DIR" ]]; then
+        return 0
+    fi
+
+    echo ""
+    echo "Local profiles available in $HAL9000_PROFILES_DIR:"
+    for profile_dir in "$HAL9000_PROFILES_DIR"/*; do
+        if [[ -d "$profile_dir" && -f "${profile_dir}/Dockerfile" ]]; then
+            local profile_name=$(basename "$profile_dir")
+            local image_name="hal-9000-local-${profile_name}:latest"
+
+            if docker inspect "$image_name" &>/dev/null; then
+                echo "  ✓ $profile_name (built)"
+            else
+                echo "  ○ $profile_name (not yet built)"
+            fi
+        fi
+    done
+    echo ""
 }
 
 #==============================================================================
@@ -219,10 +315,40 @@ DAEMON EXAMPLES:
   hal-9000 daemon stop                        # Stop the orchestrator
   hal-9000 --via-parent ~/project             # Launch worker via parent (DinD mode)
 
+PROFILE COMMANDS:
+  hal-9000 profiles                           # List available local profiles
+  hal-9000 profiles list                      # List available local profiles (same as above)
+  hal-9000 profiles build <name>              # Build a specific local profile
+
+CUSTOM PROFILES:
+  Create profiles in ~/.hal9000/profiles/:
+    mkdir -p ~/.hal9000/profiles/ruby
+    cat > ~/.hal9000/profiles/ruby/Dockerfile << 'EOF'
+    FROM ghcr.io/hellblazer/hal-9000:base
+    RUN gem install rails bundler
+    EOF
+
+  Then hal-9000 automatically detects and uses it:
+    cd /path/to/ruby/project
+    hal-9000
+
+  See README-CUSTOM_PROFILES.md for complete guide.
+
 ENVIRONMENT:
-  ANTHROPIC_API_KEY      API key for Claude authentication
-  HAL9000_HOME           Override session storage (default: ~/.hal9000)
-  DOCKER_SOCKET          Docker socket path (default: /var/run/docker.sock)
+  ANTHROPIC_API_KEY              API key for Claude authentication
+  HAL9000_CONTAINER_IMAGE_BASE   Override Docker image registry/base
+                                 (e.g., "my-registry/my-hal-9000")
+  HAL9000_HOME                   Override session storage (default: ~/.hal9000)
+  DOCKER_SOCKET                  Docker socket path (default: /var/run/docker.sock)
+
+CONFIGURATION:
+  Config file: ~/.hal9000/config
+  Set persistent defaults (e.g., custom image registry):
+    cat > ~/.hal9000/config << 'EOF'
+    CONTAINER_IMAGE_BASE=my-registry/hal-9000
+    EOF
+
+  Precedence: environment variable > config file > default
 
 VOLUMES:
   hal9000-claude-home       Shared CLAUDE_HOME - plugins, credentials, config persist here
@@ -1066,7 +1192,18 @@ launch_container_session() {
     local abs_project_path
 
     abs_project_path=$(cd "$project_dir" && pwd)
-    local container_image="${CONTAINER_IMAGE_BASE}:${profile}"
+
+    # Determine container image: local profile > remote profile > base
+    local image_base=$(get_container_image_base)
+    local container_image="${image_base}:${profile}"
+
+    # Check for local profile and build if needed
+    if local_image=$(get_local_profile_image "$profile" 2>/dev/null); then
+        # Local profile exists - build it if not already built
+        build_local_profile "$profile"
+        container_image="$local_image"
+        info "Using local profile: $profile"
+    fi
 
     # Check if session already exists
     local session_exists=false
@@ -1085,7 +1222,7 @@ launch_container_session() {
     # Verify image exists or fall back to base
     if ! docker inspect "$container_image" &> /dev/null; then
         warn "Image not found: $container_image, using base profile"
-        container_image="${CONTAINER_IMAGE_BASE}:base"
+        container_image="${image_base}:base"
     fi
 
     info "Launching Claude in container..."
@@ -1238,6 +1375,26 @@ main() {
         shift
         kill_session "$@"
         exit 0
+    fi
+
+    if [[ "${1:-}" == "profiles" ]]; then
+        shift
+        case "${1:-}" in
+            build)
+                if [[ -z "${2:-}" ]]; then
+                    error "Usage: hal-9000 profiles build <profile-name>" 2
+                fi
+                build_local_profile "$2"
+                exit 0
+                ;;
+            list|"")
+                list_local_profiles
+                exit 0
+                ;;
+            *)
+                error "Unknown profiles command: $1" 2
+                ;;
+        esac
     fi
 
     # Handle claude subcommand passthrough (plugin, mcp, doctor, etc.)
