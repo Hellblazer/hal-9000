@@ -1,7 +1,7 @@
 # Security Policy
 
-**Version**: 1.5.0
-**Last Updated**: 2026-01-25
+**Version**: 2.0.0
+**Last Updated**: 2026-01-28
 
 ## Table of Contents
 
@@ -460,6 +460,6 @@ grep "permissionDecision.*deny" ~/.claude/logs/*.log
 
 ---
 
-**Document Version**: 1.0
-**Last Security Review**: 2026-01-24
-**Next Review Due**: 2026-04-24
+**Document Version**: 2.0.0
+**Last Security Review**: 2026-01-28
+**Next Review Due**: 2026-04-28

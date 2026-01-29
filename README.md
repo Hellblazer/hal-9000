@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Container Registry](https://img.shields.io/badge/ghcr.io-hellblazer%2Fhal--9000-blue?logo=docker)](https://github.com/Hellblazer/hal-9000/pkgs/container/hal-9000)
 
-Run Claude Code in isolated Docker containers with full marketplace support.
+Run Claude Code in isolated Docker containers with Docker-in-Docker orchestration, persistent session state, and full marketplace support.
 
 ## Quick Start
 
@@ -24,13 +24,30 @@ hal-9000
 
 Auth is stored in a shared Docker volume - login once, use everywhere.
 
-## Security Improvements (v1.5.0)
+## Upgrading from v1.x
 
-hal-9000 v1.5.0 includes **2 critical security fixes**:
-- **Code Injection via Config File** - Replaced unsafe `source` command with safe parsing
-- **Path Traversal in Local Profiles** - Added validation to prevent `../` attacks in profile names
+If you're running v1.x, upgrading to v2.0.0 is straightforward:
 
-All fixes validated with **30/30 tests passing**. [Read detailed security summary →](SECURITY_FIX_SUMMARY.md)
+```bash
+# Reinstall hal-9000
+curl -fsSL https://raw.githubusercontent.com/Hellblazer/hal-9000/main/install-hal-9000.sh | bash
+
+# Your existing profiles, plugins, and session state persist
+# Session credentials and MCP configurations automatically transfer
+```
+
+**Breaking Change**: All 16 custom agents have been removed in v2.0.0. See [migration guide](RELEASE_NOTES_v2.0.0.md#migration-from-v1x) for alternatives using marketplace plugins.
+
+All other features (Docker profiles, persistent session state, marketplace support) work unchanged.
+
+## Security
+
+hal-9000 includes comprehensive security hardening:
+- **Code Injection Prevention** - Safe config file parsing (no arbitrary code execution)
+- **Path Traversal Prevention** - Profile name validation blocks `../` attacks
+- **30/30 security tests passing** - Automated validation for all security features
+
+[Read detailed security summary →](SECURITY.md)
 
 ## Marketplace Support
 
@@ -53,111 +70,48 @@ All installations are stored in a persistent Docker volume shared by all workers
 
 ## What's Included
 
-Every container provides:
+Every container includes:
 
 - **Claude CLI** - Native binary, auto-updates
 - **Node.js 20 LTS** - For npm-based MCP servers
 - **Python + uv** - For Python MCP servers
-- **Persistent CLAUDE_HOME** - Marketplace installations persist
+- **Persistent plugins and settings** - Installed via marketplace, survive across sessions
 
-**Foundation MCP Servers** (available via setup script):
-- **ChromaDB** - Vector database server (requires setup via `scripts/setup-foundation-mcp.sh`)
-- **Memory Bank** - Persistent memory across sessions (requires setup)
-- **Sequential Thinking** - Step-by-step reasoning (pre-installed in workers)
+**Foundation MCP Servers** (host-level, one-time setup):
+- **ChromaDB** - Vector database for semantic search and embeddings
+- **Memory Bank** - Cross-session persistent memory shared across all workers
+- **Sequential Thinking** - Step-by-step reasoning (pre-installed in all workers)
 
-Additional MCP servers can be installed via marketplace.
+MCP server configurations persist across all sessions. Register once, use everywhere.
 
-### MCP Configuration Persistence
+## MCP Servers Overview
 
-MCP server configurations are automatically persisted across all hal-9000 sessions:
+**What are MCP Servers?**
+MCP (Model Context Protocol) servers extend Claude's capabilities by providing tools and knowledge access. There are two types in hal-9000:
 
-```bash
-# Session 1: Add a custom MCP server
-hal-9000 /path/to/project1
-# Inside Claude:
-# hal-9000 mcp add my-custom-server
-
-# Exit and start a new session
-hal-9000 /path/to/project2
-
-# MCP configuration from session 1 is automatically available
-# No need to re-register servers in each session
-```
-
-**What persists:**
-- All MCP server registrations and configurations
-- Custom MCP server settings and parameters
-- Tool search preferences and exclusions
-- Feature flag state
-- Performance tuning settings
-
-**Why this matters:**
-- Set up MCP servers once, use everywhere
-- Consistent Claude environment across all projects
-- No configuration drift between sessions
-- Faster startup (no reconfiguration needed)
+- **Foundation MCP Servers** - Shared infrastructure at the host level (ChromaDB, Memory Bank, Sequential Thinking). Set up once, available to all workers.
+- **Marketplace MCP Servers** - Install additional servers through hal-9000's plugin marketplace. Available within individual sessions.
 
 ## Foundation MCP Servers Setup
 
-Foundation MCP Servers (ChromaDB and Memory Bank) run at the host level, accessible to all worker containers. One-time setup is required after installing hal-9000:
+Foundation MCP Servers run at the host level, accessible to all workers. One-time setup after installing hal-9000:
 
 ```bash
-~/.hal9000/scripts/setup-foundation-mcp.sh              # Full setup
-~/.hal9000/scripts/setup-foundation-mcp.sh --status     # Check status
-```
-
-### What Gets Deployed
-
-**ChromaDB** - Vector database for semantic search and embeddings
-- Runs as Docker container on port 8000 (configurable)
-- Persistent local storage at `~/.hal9000/foundation-mcp/chromadb-data/`
-- Automatically restarts if stopped
-
-**Memory Bank** - Persistent memory across sessions
-- File-based storage at `~/.hal9000/foundation-mcp/memory-bank-data/`
-- Shared with all worker containers
-- Use for storing context, research findings, and persistent state
-
-**Sequential Thinking** - Step-by-step reasoning
-- Pre-installed as MCP server in all workers
-- Available immediately after setup script completes
-
-### Setup Script Commands
-
-```bash
-# Full setup (creates directories, deploys ChromaDB, initializes Memory Bank)
 ~/.hal9000/scripts/setup-foundation-mcp.sh
-
-# Customize ChromaDB port
-~/.hal9000/scripts/setup-foundation-mcp.sh --chromadb-port 8001
-
-# Check service status
-~/.hal9000/scripts/setup-foundation-mcp.sh --status
-
-# View logs
-~/.hal9000/scripts/setup-foundation-mcp.sh --logs chromadb        # ChromaDB logs
-~/.hal9000/scripts/setup-foundation-mcp.sh --logs memory-bank     # Memory Bank info
-~/.hal9000/scripts/setup-foundation-mcp.sh --logs all             # All services
-
-# Manage services
-~/.hal9000/scripts/setup-foundation-mcp.sh --start                # Start services
-~/.hal9000/scripts/setup-foundation-mcp.sh --stop                 # Stop services
-
-# Remove everything (destructive)
-~/.hal9000/scripts/setup-foundation-mcp.sh --cleanup
 ```
 
-### Verification
+This deploys:
+- **ChromaDB** (port 8000) - Vector database for semantic search
+- **Memory Bank** - Persistent storage for cross-session context
+- **Sequential Thinking** - Step-by-step reasoning (pre-installed in workers)
 
-After setup, verify services are accessible:
-
+Check status and manage services:
 ```bash
-# Check ChromaDB is responding
-curl http://localhost:8000/api/v1/heartbeat
-
-# Check Memory Bank storage
-ls ~/.hal9000/foundation-mcp/memory-bank-data/
+~/.hal9000/scripts/setup-foundation-mcp.sh --status    # Check status
+~/.hal9000/scripts/setup-foundation-mcp.sh --logs      # View logs
 ```
+
+See [Foundation MCP Servers documentation](plugins/hal-9000/docs/dind/CONFIGURATION.md) for advanced configuration and troubleshooting.
 
 ## Usage
 
@@ -239,27 +193,13 @@ export ANTHROPIC_API_KEY=sk-ant-api03-...
 
 ### Session State Persistence
 
-hal-9000 maintains full state across container instances using shared volumes:
+hal-9000 maintains state across container instances using shared volumes:
 
-- **`hal9000-claude-home`** - CLAUDE_HOME directory
-  - Marketplace plugins and commands
-  - User settings and preferences
-  - MCP server registrations
-  - Installed skills and agents
-  - Complete credentials (from `/login`)
+- **`hal9000-claude-home`** - Marketplace plugins, credentials, MCP configurations
+- **`hal9000-claude-session`** - Authentication tokens, session settings
+- **`hal9000-memory-bank`** - Cross-session persistent memory
 
-- **`hal9000-claude-session`** - Claude session state (`.claude.json`)
-  - **Critical**: Authentication token and expiration
-  - **Critical**: MCP server configurations
-  - Feature flags and experimental features
-  - Tool search preferences
-  - User identity and metadata
-
-- **`hal9000-memory-bank`** - Memory bank for cross-session context
-  - Persistent structured memory across sessions
-  - Available to all Claude processes
-
-**Key Benefit**: MCP configurations registered in one session are automatically available in all subsequent sessions.
+Set up MCP servers once—credentials and configurations persist across all sessions automatically.
 
 ### Profiles
 
@@ -295,9 +235,9 @@ Want a Ruby profile? Go profile? Anything else? You can create custom profiles f
 
 ## Companion Tools
 
-### hal-9000 Plugin - Agents & Commands
+### hal-9000 Plugin - Tools & Commands
 
-Custom agents, slash commands, and hooks for enhanced Claude workflows:
+Custom commands, MCP servers, and hooks for enhanced Claude workflows:
 
 ```bash
 # Install the plugin
@@ -306,8 +246,8 @@ hal-9000 plugin install hal-9000
 ```
 
 **Includes**:
-- 16 specialized agents (java-developer, code-review-expert, strategic-planner, etc.)
 - Slash commands (/check, /load, /sessions)
+- MCP servers and integrations
 - Safety hooks
 
 [hal-9000 documentation →](plugins/hal-9000/README.md)

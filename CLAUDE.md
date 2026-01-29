@@ -4,11 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**hal-9000: Hellbound Claude Marketplace**
+**hal-9000: Containerized Claude Infrastructure and Marketplace**
 
-This is a **Claude Code plugin marketplace** repository. It contains plugins that users can install through Claude Code's marketplace feature.
-
-**This is NOT a software project to build.** It's a marketplace definition with plugin packages.
+This repository contains:
+- Docker-in-Docker orchestration for Claude Code
+- Plugin marketplace infrastructure
+- Foundation MCP servers (ChromaDB, Memory Bank, Sequential Thinking)
+- Custom commands, hooks, and tools for enhanced Claude workflows
 
 ## Repository Structure
 
@@ -20,12 +22,12 @@ hal-9000/
 │   └── hal-9000/                 # Main plugin
 │       ├── .claude-plugin/
 │       │   └── plugin.json       # Plugin metadata
-│       ├── agents/               # 16 custom agent definitions
 │       ├── aod/                  # Army of Darkness multi-branch tool
 │       ├── commands/             # Slash commands (/check, /load, etc.)
 │       ├── hal9000/              # Containerized Claude launcher
 │       ├── hooks/                # Safety hooks
 │       ├── mcp-servers/          # MCP server configs & docs
+│       ├── docker/               # Docker build profiles
 │       └── README.md
 ├── templates/                    # CLAUDE.md templates for projects
 ├── CHEATSHEET.md                 # Quick reference guide
@@ -98,11 +100,10 @@ A Claude Code plugin marketplace is a repository that:
 - MCP server configs in `.claude-plugin/plugin.json`
 - MCP documentation in `mcp-servers/*/README.md`
 - Commands in `commands/*.md` (referenced in plugin.json)
-- Agents in `agents/*.md` (installed to ~/.claude/agents/)
 - Hooks in `hooks/*.py` (registered via hooks.json)
+- Docker profiles in `docker/`
 - To add MCP server: update plugin.json + add docs in mcp-servers/
 - To add command: create .md file in commands/ + update plugin.json
-- To add agent: create .md file in agents/
 
 ### Testing Changes
 
@@ -242,7 +243,7 @@ Follow semantic versioning:
 - Subscription login support → **MINOR**
 - Bug fixes in login/session handling → **MINOR**
 
-→ Result: `v1.3.2` → `v1.4.0` (minor version bump)
+→ Result: `v1.4.0` → `v2.0.0` (major version bump - Docker-in-Docker orchestration)
 
 ### 3. Build & Test
 
@@ -271,30 +272,33 @@ docker push ghcr.io/hellblazer/hal-9000:java
 
 ```bash
 git add README.md hal-9000
-git commit -m "Release v1.4.0: Add session persistence and MCP configuration
+git commit -m "Release v2.0.0: Docker-in-Docker orchestration and persistent session state
 
 Major features:
+- Docker-in-Docker parent-worker orchestration
 - Session state persists across container instances
 - Authentication tokens persist without re-login
 - MCP server configurations survive session boundaries
-- Subscription login support
-- Complete Docker image suite published
+- Foundation MCP servers (ChromaDB, Memory Bank, Sequential Thinking)
+- Complete Docker image suite (parent, worker, base, python, node, java)
 
-Images: ghcr.io/hellblazer/hal-9000:base|python|node|java"
+Images: ghcr.io/hellblazer/hal-9000:parent|worker|base|python|node|java"
 ```
 
 ### 6. Create Git Tag
 
 ```bash
-git tag -a v1.4.0 -m "Release v1.4.0 - Session Persistence
+git tag -a v2.0.0 -m "Release v2.0.0 - Docker-in-Docker Orchestration
 
-- Persistent Claude session state via hal9000-claude-session volume
-- Subscription login support with persistent authentication
-- MCP configuration survival across sessions
-- Published images: base, python, node, java"
+- Parent container orchestration with worker pool management
+- Persistent session state (authentication, MCP config, plugins)
+- Foundation MCP servers at host level (ChromaDB, Memory Bank, Sequential Thinking)
+- Complete Docker image suite (parent, worker, base, python, node, java)
+- Security hardening (code injection prevention, path traversal prevention)
+- All 16 custom agents removed - use marketplace plugins instead"
 
 # Push tag to remote
-git push origin v1.4.0
+git push origin v2.0.0
 ```
 
 ### 7. Update GitHub Release
@@ -322,12 +326,12 @@ scripts/release/verify-release.sh X.Y.Z
 This script validates **9 critical areas**:
 1. **Version Synchronization** - README, CLI, plugin, marketplace all match
 2. **JSON Configuration** - marketplace.json and plugin.json are valid
-3. **Docker Images** - All 4 profiles exist and are functional
+3. **Docker Images** - All 6 profiles exist and are functional (parent, worker, base, python, node, java)
 4. **Installation Script** - Installer exists, is executable, has valid syntax
 5. **Release Notes** - Complete documentation with all required sections
 6. **Git Repository** - Working tree clean, tag exists
 7. **Marketplace** - All required fields present
-8. **Documentation** - README, CLAUDE.md, CONTRIBUTING.md exist
+8. **Documentation** - README.md, RELEASE_NOTES, and key guides exist
 9. **Installer URL** - GitHub raw URL is accessible
 
 **Expected Output**: `100% - Ready for production`
@@ -356,6 +360,8 @@ hal-9000 /tmp/project2
 # Should: no re-login required (session persists)
 
 # Test 4: All profile images work
+docker run --rm ghcr.io/hellblazer/hal-9000:parent claude --version
+docker run --rm ghcr.io/hellblazer/hal-9000:worker claude --version
 docker run --rm ghcr.io/hellblazer/hal-9000:base claude --version
 docker run --rm ghcr.io/hellblazer/hal-9000:python python3 --version
 docker run --rm ghcr.io/hellblazer/hal-9000:node node --version
@@ -389,7 +395,7 @@ git push origin main
 
 **Build & Push**:
 - [ ] Built Docker images (`make build`)
-- [ ] All 4 profiles built successfully
+- [ ] All 6 profiles built successfully (parent, worker, base, python, node, java)
 - [ ] Pushed all images to ghcr.io
 - [ ] Images available in registry
 

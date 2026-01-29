@@ -767,4 +767,3 @@ git worktree prune
 - beads (bd) Documentation: `plugins/hal-9000/mcp-servers/beads/README.md`
 - tmux-cli Documentation: Run `tmux-cli --help`
 - Session Commands: `plugins/hal-9000/commands/*.md`
-- Agent Documentation: `plugins/hal-9000/AGENTS.md`

@@ -16,7 +16,6 @@ graph LR
                 subgraph plugin_meta[".claude-plugin/"]
                     pluginjson["plugin.json"]
                 end
-                agents["agents/<br/>Custom agents"]
                 aod["aod/<br/>Army of Darkness"]
                 commands["commands/<br/>Slash commands"]
                 hal9000dir["hal9000/<br/>Container launcher"]
@@ -34,36 +33,15 @@ graph LR
 
 ## How to Contribute
 
-### Adding a New Agent
+### Important: v2.0.0 Breaking Changes
 
-1. Create a new markdown file in `plugins/hal-9000/agents/`:
+**All 16 custom agents were removed in v2.0.0.** Contributors should use marketplace plugins or custom MCP servers for specialized functionality instead of creating agents.
 
-```markdown
----
-name: my-agent
-description: Brief description of what the agent does
-model: sonnet  # or opus, haiku
-color: blue    # optional
----
+### Adding Marketplace Plugins
 
-# Agent Name
+Create plugins with custom commands, MCP servers, or hooks. See plugin.json schema documentation.
 
-## Purpose
-What this agent does and when to use it.
-
-## Capabilities
-- Capability 1
-- Capability 2
-
-## Usage Examples
-Example prompts and scenarios.
-
-## MCP Servers Used
-List any MCP servers this agent relies on.
-```
-
-2. Test the agent by installing the plugin locally
-3. Submit a PR with your changes
+For specialized functionality, create marketplace plugins or custom MCP servers (not agents).
 
 ### Adding a New Hook
 
@@ -162,7 +140,6 @@ python -m pytest tests/test_hooks.py -v
    - Hooks block expected commands
    - Slash commands work
    - MCP servers start correctly
-   - Agents are available
 
 ## Pull Request Guidelines
 

@@ -42,7 +42,6 @@ logs/
 !SECURITY.md
 !SECURITY_FIX_SUMMARY.md
 !KNOWLEDGE_AUDIT_REPORT.md
-!AGENTS.md
 !RELEASE_NOTES_*.md
 !/plugins/*/README.md
 
@@ -68,6 +67,7 @@ logs/
 
 # Plugin implementation artifacts and test scaffolding
 plugins/*/lib/
+plugins/*/AGENTS.md
 plugins/*/mcp-servers/IMPLEMENTATION_PLAN.md
 plugins/*/mcp-servers/SCHEMA.md
 plugins/*/mcp-servers/schema/

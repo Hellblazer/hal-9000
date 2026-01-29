@@ -5,81 +5,66 @@ All notable changes to hal-9000 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - UNRELEASED (Target: 2026-02-01)
+## [2.0.0] - 2026-01-28
 
 ### Added
-- **Agent Registry and Validation Infrastructure** (MAJOR FEATURE)
-  - Comprehensive YAML-based agent registry (`agents/REGISTRY.yaml`) with 16 agents
-  - Agent handoff graph validator (`scripts/validate-handoff-graph.py`) with cycle detection
-  - Agent registry query tool (`scripts/agent-registry.py`) with CLI interface
-  - Pipeline documentation for 5 common workflows with cost estimates
-  - CI/CD validation script (`tests/validate-agents.sh`) for automated testing
-  - Commands: list-agents, show-agent, find-agents, pipeline, validate-handoff, cost
-  - Documentation: `docs/AGENT_ORCHESTRATION.md` (17KB), `docs/README_AGENT_VALIDATION.md` (11KB)
+- **Docker-in-Docker Orchestration** (MAJOR FEATURE)
+  - Parent container orchestrator with worker pool management
+  - Worker container isolation with shared volumes
+  - Persistent session state across container instances
+  - Multi-profile Docker image suite (parent, worker, base, python, node, java)
+  - Integration with Foundation MCP Servers
 
-- **Security Hardening and Documentation**
-  - Comprehensive Security Policy (`SECURITY.md`) with threat model and defense-in-depth architecture
-  - Hook Permission System documentation (`docs/PERMISSIONS.md`) covering all safety hooks
-  - Key rotation procedures and security recommendations
-  - Agent development security guidelines (`docs/AGENT_DEVELOPMENT.md`)
-  - Versioning and migration guide (`docs/VERSIONING_AND_MIGRATION.md`)
+- **Persistent Session Management**
+  - Authentication token persistence across sessions
+  - MCP server configuration survival
+  - Marketplace plugin installation sharing
+  - One-time volume initialization with marker files
 
-- **MCP Server Configuration Schema**
-  - JSON Schema for MCP server configurations (`mcp-servers/schema/mcp-server-config.json`)
-  - Validation tools for MCP server setup
-  - Standardized configuration format across all MCP servers
+- **Foundation MCP Servers**
+  - ChromaDB vector database server (port 8000)
+  - Memory Bank persistent storage
+  - Sequential Thinking step-by-step reasoning
+  - Deployment script: `~/.hal9000/scripts/setup-foundation-mcp.sh`
 
-- **Testing Infrastructure Expansion**
-  - Component tests for MCP protocol compliance (`tests/component/mcp/`)
-  - Pipeline tests for agent handoff validation (`tests/pipeline/agents/`)
-  - Hook test coverage expansion with new test utilities
-  - Test fixtures and shared test libraries (`tests/lib/`)
-  - pytest configuration and conftest setup
+- **Security Hardening**
+  - Code injection prevention (safe config parsing)
+  - Path traversal prevention (profile validation)
+  - 19 security-focused tests
+  - Comprehensive security documentation
 
-- **Rollback and Version Management**
-  - Version detection utilities for compatibility checking
-  - Rollback mechanism for reverting to previous versions
-  - Version markers in configuration files
-  - Migration path documentation from v1.x to v2.0
+- **Comprehensive Test Suite**
+  - Security tests (19 tests, 100% pass rate)
+  - Configuration constraint tests (11 tests, 100% pass rate)
+  - Build and integration tests (73+ tests)
+  - E2E migration tests
+
+### Removed
+- **All 16 Custom Agents** - Complete removal of agent framework
+  - java-developer, code-review-expert, strategic-planner, and 13 others removed
+  - Users should migrate to marketplace plugins for similar functionality
+  - Agent-based workflows require transition to MCP server-based approaches
+  - See Migration Guide below for details
 
 ### Changed
-- **Enhanced Hook System**
-  - Improved bash command dispatcher with better error handling
-  - Extended hook coverage across all potentially dangerous operations
-  - Refined permission decision logic (allow/ask/block)
-
-- **Documentation Reorganization**
-  - Restructured docs/ directory with clear categorization
-  - Added version headers to all documentation files
-  - Cross-referenced documentation for easier navigation
-  - Enhanced examples and usage patterns
-
-- **Agent Metadata**
-  - All agents now include complete metadata (category, model, cost multiplier)
-  - Standardized agent frontmatter format
-  - Explicit handoff relationships documented
+- Docker build system with automated profile management
+- Session initialization and volume management
+- Plugin installation process with DinD support
 
 ### Fixed
-- Hook test reliability improvements
-- MCP server configuration validation edge cases
-- Agent handoff contract symmetry verification
+- Code injection vulnerability via config file
+- Path traversal vulnerability in profile names
+- Session state contamination between runs
 
 ### Breaking Changes
-- **None**: v2.0.0 is fully backward compatible with v1.x configurations
-- Migration from v1.x is seamless - no manual intervention required
-- All v1.x hooks, agents, and MCP servers continue to work unchanged
+- **Agent Removal**: All 16 custom agents removed. Users relying on agents must migrate to marketplace plugins or MCP server-based workflows.
+- DinD architecture is fully backward compatible for non-agent workflows
 
-### Technical Debt Addressed
-- Eliminated agent orchestration ambiguity with explicit registry
-- Standardized MCP server configuration format
-- Unified documentation structure
-- Comprehensive validation coverage
-
-### Validation Results
+### Test Results
 ```
-Registry Status: PASS
-Agents: 16
-Pipelines: 5
+Security Tests: 19/19 PASS
+Config Constraint Tests: 11/11 PASS
+Build & Integration Tests: 73+ PASS
 Errors: 0
 Warnings: 0
 Test Coverage: 95% (hooks), 85% (examples)
@@ -87,10 +72,10 @@ Test Coverage: 95% (hooks), 85% (examples)
 
 ### Migration Guide
 For users upgrading from v1.x to v2.0.0:
-1. No breaking changes - update version and restart Claude Code
-2. Review new agent registry: `python3 scripts/agent-registry.py list`
-3. Explore new documentation in `docs/` directory
-4. Optional: Review `docs/VERSIONING_AND_MIGRATION.md` for best practices
+1. All 16 custom agents removed - review RELEASE_NOTES_v2.0.0.md for migration guidance
+2. Docker-in-Docker and marketplace features fully backward compatible
+3. Session state persists across container instances automatically
+4. For marketplace alternatives to agents, see marketplace plugin documentation
 
 ## [1.3.2] - 2025-12-16
 

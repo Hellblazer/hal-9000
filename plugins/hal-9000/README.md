@@ -1,11 +1,10 @@
 # HAL-9000 Plugin
 
-[![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
-[![Container](https://img.shields.io/badge/docker-optimized-success?logo=docker)](../../docker/README.md)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
+[![Container](https://img.shields.io/badge/docker-dind-success?logo=docker)](../../docker/README.md)
 [![MCP Servers](https://img.shields.io/badge/MCP-4%20servers-purple)](mcp-servers/)
-[![Custom Agents](https://img.shields.io/badge/agents-12-orange)](AGENTS.md)
 
-Productivity tools for Claude Code: aod multi-branch development, MCP servers, custom agents, terminal automation, and safety tools.
+Containerized Claude with Docker-in-Docker orchestration, persistent session state, MCP servers, multi-branch development, and safety tools.
 
 ## Components
 
@@ -30,10 +29,6 @@ Productivity tools for Claude Code: aod multi-branch development, MCP servers, c
 - Document research integration
 - Knowledge graph construction
 - Requires DEVONthink Pro/Server
-
-### Custom Agents
-
-16 specialized agent configurations for Java development, code review, research, and analysis. Installed to `~/.claude/agents/`. See AGENTS.md for details.
 
 ### Session Commands
 
@@ -124,14 +119,6 @@ Store this in ChromaDB with ID "design-notes"
 Save this decision to memory bank project "my-app"
 ```
 
-### Custom Agents
-
-Launch via Task tool:
-```
-Use java-developer agent to implement UserService
-Use code-review-expert agent to review PaymentService
-```
-
 ### Terminal Tools
 
 ```bash
@@ -162,7 +149,7 @@ aod-broadcast "cmd"              # Send to all sessions
 aod-cleanup                      # Stop all sessions
 ```
 
-**v1.3.0 Architecture:** MCP servers (Memory Bank, ChromaDB, Sequential Thinking) pre-installed in Docker image and auto-configured on container startup. Shared Memory Bank via host mount for cross-container coordination.
+**v2.0.0 Architecture:** Docker-in-Docker parent-worker orchestration with Foundation MCP servers (ChromaDB, Memory Bank, Sequential Thinking) running at host level. All workers share persistent volumes for credentials, plugins, and cross-session state.
 
 ### hal9000 Sessions
 
@@ -182,7 +169,6 @@ See [hal9000 documentation](hal9000/README.md) for session management commands.
 
 - **[Cheat Sheet](../../CHEATSHEET.md)** - Quick reference for aod, tmux, tmux-cli, and terminal tools
 - MCP Servers: `mcp-servers/*/README.md`
-- Agents: `AGENTS.md`
 - Commands: `commands/*.md`
 - aod (Army of Darkness): `aod/README.md`
 
@@ -192,10 +178,6 @@ See [hal9000 documentation](hal9000/README.md) for session management commands.
 - Restart Claude Code
 - Check environment variables are set
 - Verify prerequisites installed
-
-### Agents not found
-- Check `~/.claude/agents/` contains .md files
-- Restart Claude Code
 
 ### Commands not working
 - Check `~/.claude/commands/` contains .md files
