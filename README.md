@@ -143,7 +143,31 @@ hal-9000 pool scale 3        # Maintain 3 warm workers
 
 ## Architecture
 
-![hal-9000 Architecture](docs/diagrams/architecture.png)
+```mermaid
+%%{init: {'logLevel': 'error', 'securityLevel': 'loose', 'theme': 'dark', 'primaryColor': '#f0f0f0', 'primaryBorderColor': '#7c0000', 'background': 'white', 'mainBkg': '#f0f0f0', 'secondBkg': '#f0f0f0'}}%%
+graph TB
+    subgraph Host["Host Machine"]
+        Parent["Parent Container<br/>Orchestrator + ChromaDB:8000"]
+
+        W1["Worker 1<br/>Claude + MCP"]
+        W2["Worker 2<br/>Claude + MCP"]
+        W3["Worker 3<br/>Claude + MCP"]
+
+        Parent -->|manage| W1
+        Parent -->|manage| W2
+        Parent -->|manage| W3
+
+        Vols["Shared Volumes"]
+
+        W1 -->|read/write| Vols
+        W2 -->|read/write| Vols
+        W3 -->|read/write| Vols
+
+        Vols -.->|CLAUDE_HOME| CH["Plugins<br/>Credentials"]
+        Vols -.->|Session| CS["Auth<br/>Settings"]
+        Vols -.->|Memory| MB["Context"]
+    end
+```
 
 - **Parent**: Runs ChromaDB server, manages workers
 - **Workers**: Run Claude with marketplace-installed MCP servers
