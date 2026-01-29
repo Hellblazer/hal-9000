@@ -23,7 +23,6 @@ echo ""
 echo -e "${YELLOW}This will remove:${NC}"
 echo "  - Commands (check, load, sessions, session-delete)"
 echo "  - Custom agents (12 specialized agents)"
-echo "  - ClaudeBox Squad scripts (if installed)"
 echo "  - Backup directories"
 echo ""
 echo -e "${YELLOW}MCP servers must be removed manually from Claude's config.${NC}"
@@ -74,36 +73,6 @@ if [[ $removed_agents -gt 0 ]]; then
     echo -e "${GREEN}✓ Removed $removed_agents agent(s)${NC}"
 else
     echo -e "${YELLOW}No HAL-9000 agents found${NC}"
-fi
-
-# Remove ClaudeBox Squad scripts
-echo ""
-echo -e "${YELLOW}Removing ClaudeBox Squad scripts...${NC}"
-
-# Check common install locations
-INSTALL_LOCATIONS=()
-if command -v brew &> /dev/null; then
-    INSTALL_LOCATIONS+=("$(brew --prefix)/bin")
-fi
-INSTALL_LOCATIONS+=("$HOME/.local/bin")
-
-SQUAD_SCRIPTS=("claudebox-squad" "cs-list" "cs-attach" "cs-stop" "cs-cleanup")
-removed_scripts=0
-for location in "${INSTALL_LOCATIONS[@]}"; do
-    for script in "${SQUAD_SCRIPTS[@]}"; do
-        script_path="$location/$script"
-        if [[ -f "$script_path" ]]; then
-            rm "$script_path"
-            echo "  ✓ Removed $script from $location"
-            ((removed_scripts++))
-        fi
-    done
-done
-
-if [[ $removed_scripts -gt 0 ]]; then
-    echo -e "${GREEN}✓ Removed $removed_scripts ClaudeBox Squad script(s)${NC}"
-else
-    echo -e "${YELLOW}No ClaudeBox Squad scripts found${NC}"
 fi
 
 echo ""

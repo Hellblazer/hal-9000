@@ -67,26 +67,12 @@ docker build -f docker/Dockerfile.python -t ghcr.io/hellblazer/hal-9000:python .
 aod aod.conf
 ```
 
-**Alternative: Custom profile** (if you want to override)
-Create `~/.claudebox/profiles/hal9000.json`:
-```json
-{
-  "name": "hal9000",
-  "image": "ghcr.io/hellblazer/hal-9000:latest",
-  "description": "HAL-9000 optimized profile with pre-installed tools"
-}
-```
-
-Then use in aod.conf:
-```
-feature/auth:hal9000:Add authentication
-```
-
-**Option 3: Direct docker run**
+**Alternative: Direct docker run**
 ```bash
 docker run -it --rm \
-  -v ~/.claudebox/hal-9000:/hal-9000:ro \
   -v $(pwd):/workspace \
+  -v "$HOME/.claude:/root/.claude" \
+  -v "hal9000-claude-home:/root/.claude/marketplace" \
   ghcr.io/hellblazer/hal-9000:latest
 ```
 
