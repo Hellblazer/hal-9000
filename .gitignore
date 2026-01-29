@@ -49,6 +49,7 @@ logs/
 /agents/
 /commands/
 /docs/
+!/docs/diagrams/
 /scripts/*
 !/scripts/build/
 !/scripts/release/

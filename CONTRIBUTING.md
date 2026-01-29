@@ -4,47 +4,7 @@ Thank you for your interest in contributing to the hal-9000 Claude Code plugin m
 
 ## Repository Structure
 
-```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '14px'}, 'logLevel': 'debug'}}%%
-graph TD
-    Root["hal-9000/"]
-
-    Config["Configuration"]
-    Marketplace["marketplace.json"]
-    Claude["CLAUDE.md"]
-
-    Plugin["plugins/hal-9000/"]
-    Meta[".claude-plugin/plugin.json"]
-
-    Components["Components"]
-    Aod["aod/"]
-    Commands["commands/"]
-    Hal9000["hal9000/"]
-    Hooks["hooks/"]
-    Lib["lib/"]
-    Mcp["mcp-servers/"]
-    Tests["tests/"]
-
-    Templates["templates/"]
-
-    Root --> Config
-    Root --> Plugin
-    Root --> Templates
-    Root --> Claude
-
-    Config --> Marketplace
-
-    Plugin --> Meta
-    Plugin --> Components
-
-    Components --> Aod
-    Components --> Commands
-    Components --> Hal9000
-    Components --> Hooks
-    Components --> Lib
-    Components --> Mcp
-    Components --> Tests
-```
+![hal-9000 Repository Structure](../docs/diagrams/contributing-structure.png)
 
 ## How to Contribute
 

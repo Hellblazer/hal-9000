@@ -219,25 +219,7 @@ All workers share these volumes, so plugins installed in any session persist eve
 
 ### Architecture
 
-```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '14px'}, 'logLevel': 'debug'}}%%
-graph LR
-    S1["Session 1"]
-    S2["Session 2"]
-
-    V1["Shared Volume:<br/>CLAUDE_HOME<br/>(.claude/)"]
-    V2["Shared Volume:<br/>Memory Bank"]
-
-    Host["Host:<br/>~/.hal9000/"]
-
-    S1 -->|share| V1
-    S2 -->|share| V1
-    S1 -->|share| V2
-    S2 -->|share| V2
-
-    V1 --> Host
-    V2 --> Host
-```
+![hal-9000 Sessions Architecture](../docs/diagrams/hal9000-sessions.png)
 
 ### Execution Flow
 
