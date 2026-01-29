@@ -8,8 +8,6 @@ aod (Army of Darkness) orchestrates multiple isolated development environments s
 
 Inspired by claude-squad's multi-session workflow concept, aod is an independent implementation using bash scripting, tmux, and Docker containers. Each branch runs in complete isolation with its own container, filesystem state, and terminal session.
 
-**v1.3.0:** Containers now include pre-installed MCP servers (Memory Bank, ChromaDB, Sequential Thinking) with automatic configuration. Zero manual setup required.
-
 ## Architecture
 
 ```mermaid
@@ -18,17 +16,14 @@ graph LR
 
     subgraph B1["Branch: feature/auth"]
         WT1["Git Worktree"] --> TM1["tmux session"] --> C1["hal-9000 container<br/>(Slot 1)"]
-        C1 --> MCP1["Claude CLI + MCP servers"]
     end
 
     subgraph B2["Branch: feature/api"]
         WT2["Git Worktree"] --> TM2["tmux session"] --> C2["hal-9000 container<br/>(Slot 2)"]
-        C2 --> MCP2["Claude CLI + MCP servers"]
     end
 
     subgraph B3["Branch: bugfix/validation"]
         WT3["Git Worktree"] --> TM3["tmux session"] --> C3["hal-9000 container<br/>(Slot 3)"]
-        C3 --> MCP3["Claude CLI + MCP servers"]
     end
 
     AOD --> B1
@@ -39,12 +34,11 @@ graph LR
 **Components:**
 - **Git Worktrees** - Independent checkouts sharing one .git directory
 - **Tmux Sessions** - Persistent terminals that survive disconnections
-- **hal-9000 Containers** - Docker containers with Claude CLI and pre-installed MCP servers
+- **hal-9000 Containers** - Docker containers with Claude CLI
 - **Slot System** - Auto-assigned unique identifiers preventing port conflicts
 - **Session Context** - Auto-generated `CLAUDE.md` in each worktree with session info
-- **Shared Memory Bank** - Host's `~/memory-bank` mounted for cross-container data sharing
 
-**v1.3.0 Container Architecture:**
+**Container Architecture:**
 
 ```mermaid
 graph TB
@@ -204,11 +198,11 @@ Sessions persist across terminal disconnections. Attach and detach freely withou
 
 Each session runs a hal-9000 container with:
 - Auto-assigned slot number (prevents port conflicts)
-- Pre-installed Claude CLI and MCP servers
+- Pre-installed Claude CLI
 - Specified language profile (python, node, etc.)
 - Isolated filesystem and network
 - Unique container name
-- Auto-configured MCP servers (Memory Bank, ChromaDB, Sequential Thinking)
+- Auto-configured container environment
 
 ```bash
 docker ps
@@ -219,8 +213,8 @@ docker ps
 
 Containers mount the host's `~/.claudebox/hal-9000` directory for agents and tools, plus `~/memory-bank` for shared Memory Bank access across containers.
 
-**v1.3.0 Features:**
-- MCP servers pre-installed in Docker image (no download delay)
+**Features:**
+- Essential development tools pre-installed (no download delay)
 - Auto-configured on container startup
 - Shared Memory Bank for cross-container coordination
 - ChromaDB supports ephemeral or cloud mode (auto-detected from env vars)
@@ -783,21 +777,14 @@ Don't run untrusted code in aod sessions without additional sandboxing.
 - Tmux session: <1s
 - hal-9000 container: 3-7s
 
-**v1.3.0 Architecture - Pre-installed MCP Servers:**
+**Container Architecture:**
 
-All tools and MCP servers are pre-installed in the Docker image:
-- Claude CLI, claude-code-tools, Memory Bank, ChromaDB, Sequential Thinking
+All tools are pre-installed in the Docker image:
+- Claude CLI and claude-code-tools
 - Zero per-container downloads - instant availability
-- MCP servers auto-configured on container startup
+- Container environment pre-configured at startup
 - First container: ~5 seconds (image pull once, then instant)
 - Nth container: ~5 seconds (reuses cached image)
-
-**v1.3.0 MCP Server Architecture:**
-- MCP servers run INSIDE each container (not on host)
-- Each container has independent MCP server instances
-- Memory Bank shared via host mount (`~/memory-bank`)
-- ChromaDB ephemeral by default, or cloud mode with env vars
-- No host-side MCP server setup required
 
 **Resource usage per session:**
 - Disk: ~500MB (worktree copy-on-write)
