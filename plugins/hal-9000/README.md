@@ -2,33 +2,10 @@
 
 [![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
 [![Container](https://img.shields.io/badge/docker-dind-success?logo=docker)](../../docker/README.md)
-[![MCP Servers](https://img.shields.io/badge/MCP-4%20servers-purple)](mcp-servers/)
 
-Containerized Claude with Docker-in-Docker orchestration, persistent session state, MCP servers, multi-branch development, and safety tools.
+Containerized Claude with Docker-in-Docker orchestration, persistent session state, multi-branch development, and safety tools.
 
 ## Components
-
-### MCP Servers
-
-**ChromaDB**
-- Vector database for semantic search
-- Document storage with embeddings
-- Hybrid search combining semantic and keyword matching
-
-**Memory Bank**
-- Persistent memory across sessions
-- Project-based knowledge organization
-- Multi-agent coordination
-
-**Sequential Thinking**
-- Step-by-step reasoning
-- Problem decomposition
-- Hypothesis verification
-
-**DEVONthink** (macOS only)
-- Document research integration
-- Knowledge graph construction
-- Requires DEVONthink Pro/Server
 
 ### Session Commands
 
@@ -55,7 +32,7 @@ Containerized Claude with Docker-in-Docker orchestration, persistent session sta
 - [hal9000 documentation →](hal9000/README.md)
 
 **aod (Army of Darkness)** - Multi-branch parallel development
-- Uses git worktrees + tmux + hal-9000 containers with pre-installed MCP servers
+- Uses git worktrees + tmux + hal-9000 containers
 - Good for: working on multiple branches of same repo simultaneously
 - [aod documentation →](aod/README.md)
 
@@ -73,51 +50,11 @@ Install through the hal-9000 marketplace in Claude Code. The installer provides 
 
 ## Requirements
 
-- Python 3.8+ (ChromaDB)
-- Node.js 16+ (Memory Bank, Sequential Thinking)
-- Docker (ClaudeBox, optional)
+- Docker (optional, for containerized sessions)
 - tmux (auto-installed if missing)
 - gh - GitHub CLI (auto-installed if missing)
 
-## Configuration
-
-### ChromaDB Cloud
-
-Set environment variables:
-```bash
-CHROMADB_TENANT=your-tenant-id
-CHROMADB_DATABASE=your-database-name
-CHROMADB_API_KEY=your-api-key
-```
-
-### ChromaDB Local
-
-Use local storage at `~/.chromadb` instead of cloud. The installer can configure this.
-
-### Memory Bank
-
-Default: `~/memory-bank`
-
-Override with `MEMORY_BANK_ROOT` environment variable.
-
-### DEVONthink
-
-DEVONthink MCP server is included in `mcp-servers/devonthink/`. Requires:
-- macOS with DEVONthink Pro/Server installed
-- Python 3.8+ (pre-installed on macOS)
-- Grant automation permissions in System Settings
-
-The server is automatically configured during hal-9000 installation.
-
 ## Usage
-
-### MCP Servers
-
-ChromaDB and Memory Bank tools become available automatically. Use naturally in prompts:
-```
-Store this in ChromaDB with ID "design-notes"
-Save this decision to memory bank project "my-app"
-```
 
 ### Terminal Tools
 
@@ -149,7 +86,7 @@ aod-broadcast "cmd"              # Send to all sessions
 aod-cleanup                      # Stop all sessions
 ```
 
-**v2.0.0 Architecture:** Docker-in-Docker parent-worker orchestration with Foundation MCP servers (ChromaDB, Memory Bank, Sequential Thinking) running at host level. All workers share persistent volumes for credentials, plugins, and cross-session state.
+**v2.0.0 Architecture:** Docker-in-Docker parent-worker orchestration with shared persistent volumes for credentials, plugins, and cross-session state across all workers.
 
 ### hal9000 Sessions
 
@@ -168,16 +105,10 @@ See [hal9000 documentation](hal9000/README.md) for session management commands.
 ## Documentation
 
 - **[Cheat Sheet](../../CHEATSHEET.md)** - Quick reference for aod, tmux, tmux-cli, and terminal tools
-- MCP Servers: `mcp-servers/*/README.md`
 - Commands: `commands/*.md`
 - aod (Army of Darkness): `aod/README.md`
 
 ## Troubleshooting
-
-### MCP servers not available
-- Restart Claude Code
-- Check environment variables are set
-- Verify prerequisites installed
 
 ### Commands not working
 - Check `~/.claude/commands/` contains .md files
