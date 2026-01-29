@@ -60,21 +60,6 @@ description: Save intent and clear any previous context (user)
       echo ""
     fi
 
-    # Beads status with error handling
-    echo "**Beads Status:**"
-    echo "\`\`\`"
-    if command -v bd &> /dev/null; then
-      if bd ready --limit 5 2>/dev/null; then
-        true
-      else
-        echo "No beads tasks available or beads not initialized"
-      fi
-    else
-      echo "Beads not available (bd command not found)"
-    fi
-    echo "\`\`\`"
-    echo ""
-
     # Recent files modified
     if git rev-parse --git-dir > /dev/null 2>&1; then
       echo "**Recent Files Modified:**"

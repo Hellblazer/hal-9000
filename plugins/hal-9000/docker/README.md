@@ -1,10 +1,10 @@
 # HAL-9000 Docker Images
 
-Pre-built Docker images for aod multi-branch development with Claude CLI and MCP servers.
+Pre-built Docker images for aod multi-branch development with Claude CLI and development tools.
 
 ## ghcr.io/hellblazer/hal-9000 Profile Images
 
-Optimized container images with pre-installed Claude CLI, MCP servers, and tools for instant startup. Available in multiple language profiles.
+Optimized container images with pre-installed Claude CLI and tools for instant startup. Available in multiple language profiles.
 
 **Published to GitHub Container Registry**
 
@@ -12,16 +12,14 @@ Optimized container images with pre-installed Claude CLI, MCP servers, and tools
 
 | Image | Profile | Includes |
 |-------|---------|----------|
-| `ghcr.io/hellblazer/hal-9000:latest` | **Base** | Claude CLI, MCP servers, claude-code-tools, git, tmux, uv |
+| `ghcr.io/hellblazer/hal-9000:latest` | **Base** | Claude CLI, claude-code-tools, git, tmux, uv |
 | `ghcr.io/hellblazer/hal-9000:python` | **Python** | Base + Python 3.11, pip, venv |
 | `ghcr.io/hellblazer/hal-9000:node` | **Node.js** | Base + Node 20 LTS, npm, yarn, pnpm |
 | `ghcr.io/hellblazer/hal-9000:java` | **Java** | Base + Java 21 LTS, Maven, Gradle |
 
-### Features (v1.3.0)
+### Features
 
 - ✅ **Claude CLI pre-installed** - No per-container Claude installation
-- ✅ **MCP servers included** - Memory Bank, ChromaDB, Sequential Thinking
-- ✅ **Auto-configured** - MCP servers auto-configured on container startup
 - ✅ **Zero download time** - All tools pre-installed
 - ✅ **Language profiles** - Python, Node.js, Java ready to use
 - ✅ **Docker layer caching** - Efficient builds

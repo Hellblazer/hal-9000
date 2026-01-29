@@ -10,7 +10,6 @@ Save current context and task for later resumption.
 **Saves:**
 - Current working directory
 - Git status and recent changes
-- Beads task status (if using beads)
 - Continuation prompt
 
 **Example:**
@@ -105,7 +104,6 @@ Restart Claude Code or use `/help` to see new commands.
 - Save sessions at logical stopping points
 - Include specific task descriptions in `/check`
 - Review `/sessions` periodically and clean up old ones
-- Use beads task tracking for structured workflows
 
 ## File Locations
 
@@ -121,7 +119,6 @@ Restart Claude Code or use `/help` to see new commands.
 - Claude Code
 - Bash shell
 - git (for git-related context capture)
-- beads (optional, for beads status capture)
 
 ## Troubleshooting
 
