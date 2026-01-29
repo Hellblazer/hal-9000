@@ -24,22 +24,6 @@ hal-9000
 
 Auth is stored in a shared Docker volume - login once, use everywhere.
 
-## Upgrading from v1.x
-
-If you're running v1.x, upgrading to v2.0.0 is straightforward:
-
-```bash
-# Reinstall hal-9000
-curl -fsSL https://raw.githubusercontent.com/Hellblazer/hal-9000/main/install-hal-9000.sh | bash
-
-# Your existing profiles, plugins, and session state persist
-# Session credentials and MCP configurations automatically transfer
-```
-
-**Breaking Change**: All 16 custom agents have been removed in v2.0.0. See [migration guide](RELEASE_NOTES_v2.0.0.md#migration-from-v1x) for alternatives using marketplace plugins.
-
-All other features (Docker profiles, persistent session state, marketplace support) work unchanged.
-
 ## Security
 
 hal-9000 includes comprehensive security hardening:
