@@ -1,1 +1,0 @@
-# DEVONthink MCP Server Tests

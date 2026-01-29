@@ -1,4 +1,0 @@
-# Minimal DEVONthink MCP Server - Python
-# Just one dependency!
-
-mcp>=1.0.0
