@@ -220,6 +220,7 @@ All workers share these volumes, so plugins installed in any session persist eve
 ### Architecture
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '14px'}, 'logLevel': 'debug'}}%%
 graph LR
     S1["Session 1"]
     S2["Session 2"]

@@ -5,6 +5,7 @@ Thank you for your interest in contributing to the hal-9000 Claude Code plugin m
 ## Repository Structure
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '14px'}, 'logLevel': 'debug'}}%%
 graph TD
     Root["hal-9000/"]
 

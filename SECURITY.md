@@ -28,6 +28,7 @@ HAL-9000 implements a defense-in-depth security model through multiple layers:
 ### Security Boundaries
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '14px'}, 'logLevel': 'debug'}}%%
 graph LR
     LLM["Claude Code<br/>(Untrusted)"]
 

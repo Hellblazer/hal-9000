@@ -144,6 +144,7 @@ hal-9000 pool scale 3        # Maintain 3 warm workers
 ## Architecture
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '14px'}, 'logLevel': 'debug'}}%%
 graph TB
     subgraph Host["Host Machine"]
         Parent["Parent Container<br/>Orchestrator + ChromaDB:8000"]
