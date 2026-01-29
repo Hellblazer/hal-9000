@@ -1,417 +1,218 @@
 # HAL-9000 v2.0.0 Release Notes
 
 **Release Date**: January 28, 2026
-**Type**: Major Release (Backward Compatible)
-**Migration**: Seamless - No Breaking Changes
+**Type**: Major Release
+**Note**: All 16 custom agents removed (breaking change). DinD orchestration and profiles fully compatible with v1.x.
 
 ---
 
 ## Overview
 
-HAL-9000 v2.0.0 represents a major evolution in the Claude Code productivity suite, introducing sophisticated agent orchestration infrastructure, comprehensive security hardening, and enterprise-grade validation tooling. This release maintains 100% backward compatibility with v1.x while adding powerful new capabilities for agent management, security auditing, and system reliability.
+HAL-9000 v2.0.0 represents a major evolution in containerized Claude, introducing Docker-in-Docker orchestration, persistent session management, and Foundation MCP servers running at the host level. Existing Docker features and profiles work unchanged, with all 16 custom agents removed.
 
 **Key Highlights**:
-- 🤖 **Agent Registry & Validation** - Complete agent orchestration infrastructure with 16 agents, 5 pipelines, and automated validation
-- 🔒 **Security Hardening** - Comprehensive security documentation, threat modeling, and hardened permission system
-- ✅ **Testing Infrastructure** - Expanded test coverage (95% hooks, 85% examples) with component and pipeline tests
-- 📋 **MCP Configuration Schema** - Standardized JSON schemas for all MCP server configurations
-- 🔄 **Version Management** - Rollback capabilities and migration utilities for safe upgrades
+- **Docker-in-Docker Orchestration** - Parent orchestrator with worker pool management
+- **Session State Persistence** - MCP configurations and authentication survive session boundaries
+- **Security Hardening** - Code injection and path traversal prevention with comprehensive security audit
+- **Comprehensive Testing** - 30+ core tests (security, configuration, build integration)
+- **Multi-Profile Docker Images** - Parent, worker, base, python, node, java profiles
 
 ---
 
 ## Major Features
 
-### 1. Agent Registry and Validation Infrastructure
+### 1. Docker-in-Docker Orchestration
 
-**The Problem**: Managing complex agent handoffs and pipelines was implicit, undocumented, and error-prone.
+**Problem**: Running Claude Code in isolated containers while maintaining shared state and resource efficiency.
 
-**The Solution**: Complete agent orchestration infrastructure with automated validation.
-
-**What's New**:
-- **Agent Registry** (`agents/REGISTRY.yaml`): Authoritative source defining 16 agents with metadata
-  - Agent categories: Development, Review & Analysis, Research, Infrastructure, Special
-  - Model specifications: Opus 4.5, Sonnet 4.5, Haiku 4
-  - Cost multipliers: 3.0x (Opus), 1.0x (Sonnet), 0.33x (Haiku)
-  - Handoff relationships with contract types (standard, typed, sequential)
-  - Context requirements (ChromaDB, Memory Bank, beads)
-
-- **Handoff Graph Validator** (`scripts/validate-handoff-graph.py`):
-  - Cycle detection using DFS-based topological sort
-  - Agent existence verification
-  - Bidirectional contract validation (symmetric handoffs)
-  - Reachability analysis
-  - Cost anomaly detection
-  - Output formats: Human-readable, JSON, GraphViz
-
-- **Agent Registry Query Tool** (`scripts/agent-registry.py`):
-  ```bash
-  # List agents by category
-  python3 scripts/agent-registry.py list --category development
-
-  # Find agents for debugging
-  python3 scripts/agent-registry.py find "debug"
-
-  # Get pipeline recommendation
-  python3 scripts/agent-registry.py recommend "implement new feature"
-
-  # Estimate costs
-  python3 scripts/agent-registry.py cost feature_implementation
-  # → $0.80-4.00 for complete feature
-  ```
-
-- **Documented Pipelines** with cost estimates:
-  - **Feature Implementation**: 6 agents, $0.80-4.00, 1-4 hours
-  - **Bug Fix Workflow**: 4 agents, $0.40-1.50, 30m-2 hours
-  - **Research & Knowledge**: 2 agents, $0.15-0.80, 1-3 hours
-  - **Architecture Review**: 3 agents, $0.60-1.80, 2-6 hours
-  - **Complex Debugging**: 5 agents, $0.60-2.50, 3-8 hours
-
-**Validation Results**:
-```
-✓ Total Agents: 16
-✓ Documented Pipelines: 5
-✓ Errors: 0
-✓ Warnings: 0
-✓ Handoff Contracts: Symmetric
-✓ Circular Dependencies: None
-✓ Agent Reachability: All reachable
-```
-
-**Documentation**:
-- `docs/AGENT_ORCHESTRATION.md` (17KB) - Complete orchestration guide
-- `docs/README_AGENT_VALIDATION.md` (11KB) - Quick reference
-- `commands/list-agents.md` - User-facing command documentation
-
-### 2. Security Hardening
-
-**The Problem**: Security practices were scattered across code and documentation.
-
-**The Solution**: Comprehensive security documentation and hardened permission system.
+**Solution**: Parent-worker architecture with persistent shared volumes.
 
 **What's New**:
-- **Security Policy** (`SECURITY.md`):
-  - Defense-in-depth architecture diagram
-  - Threat model for LLM-driven operations
-  - Hook-based permission system (PreToolUse hooks)
-  - Environment variable protection
-  - Container isolation strategies
-  - Git worktree isolation
-  - Credential management with SOPS
+- **Parent Container** - Orchestrator managing worker lifecycle and shared services
+- **Worker Containers** - Isolated Claude Code instances with full marketplace support
+- **Shared Volumes**:
+  - `hal9000-claude-home` - Plugins, credentials, marketplace installations
+  - `hal9000-claude-session` - Session state, MCP configurations, authentication
+  - `hal9000-memory-bank` - Persistent cross-session memory
 
-- **Hook Permission System** (`docs/PERMISSIONS.md`):
-  - Complete reference for all 7 safety hooks
-  - Permission decision logic (allow/ask/block)
-  - Protected resources catalog:
-    - `.env` files (read/write blocked)
-    - Git staging (requires explicit file names)
-    - System files (`rm` blocked, suggests TRASH)
-    - Large files (>10K lines require approval)
+### 2. Persistent Session State
 
-- **Security Boundaries**:
-  ```
-  Claude Code (Untrusted LLM)
-      ↓
-  PreToolUse Hooks (Permission Layer)
-      ↓
-  Tool Execution Layer
-      ↓
-  Protected Resources
-  ```
+**Problem**: Configuration lost between container instances; users had to re-login and reconfigure MCP servers.
 
-- **Key Rotation Procedures**:
-  - ChromaDB API key rotation
-  - GitHub token rotation
-  - MCP server credential management
-  - Emergency response procedures
-
-**Documentation**:
-- `SECURITY.md` - Complete security policy
-- `docs/PERMISSIONS.md` - Hook permission system
-- `docs/AGENT_DEVELOPMENT.md` - Security guidelines for agent authors
-
-### 3. Testing Infrastructure Expansion
-
-**The Problem**: Test coverage was incomplete and test organization was unclear.
-
-**The Solution**: Comprehensive test suite with clear organization and high coverage.
+**Solution**: Shared volumes with pristine initialization and one-time setup.
 
 **What's New**:
-- **Component Tests** (`tests/component/`):
-  - MCP protocol compliance tests
-  - ChromaDB integration tests
-  - Server health check validation
+- Authentication tokens persist across sessions
+- MCP server configurations survive container restarts
+- Marketplace plugin installations shared across all workers
+- One-time volume initialization with .initialized marker files
 
-- **Pipeline Tests** (`tests/pipeline/`):
-  - Agent handoff format validation
-  - End-to-end pipeline execution tests
-  - Contract verification tests
+### 3. Foundation MCP Servers
 
-- **Unit Tests** (`tests/unit/`):
-  - Hook dispatcher tests
-  - Individual hook behavior tests
-  - Permission decision logic tests
+Foundation MCP Servers run at the host level rather than inside worker containers. This architecture ensures:
+- Single ChromaDB instance shared across all workers
+- Consistent Memory Bank state across sessions
+- Reduced resource overhead (one ChromaDB vs. per-worker)
+- Simplified networking (workers connect to host services)
 
-- **Test Infrastructure**:
-  - Shared test libraries (`tests/lib/`)
-  - Test fixtures (`tests/fixtures/`)
-  - pytest configuration (`pytest.ini`)
-  - Comprehensive conftest setup
+**Deployment**: `~/.hal9000/scripts/setup-foundation-mcp.sh`
 
-- **CI/CD Integration** (`tests/validate-agents.sh`):
-  - Pre-commit validation
-  - Automated registry validation
-  - Exit codes: 0 (pass), 1 (critical), 2 (warnings)
+**What's Included**:
+- **ChromaDB** - Vector database server on port 8000 (configurable)
+- **Memory Bank** - Persistent file-based storage for cross-session context
+- **Sequential Thinking** - Pre-installed in all workers
 
-**Test Coverage**:
-- Hooks: 95% coverage
-- Examples: 85% coverage
-- MCP Integration: 10 tests passing
-- Agent Validation: 0 errors, 0 warnings
+### 4. Security Hardening
 
-### 4. MCP Server Configuration Schema
+**Critical Fixes (v1.5.0)**:
+- **Code Injection Prevention** - Safe config file parsing (no arbitrary code execution)
+- **Path Traversal Prevention** - Profile name validation blocks `../` attacks
 
-**The Problem**: MCP server configurations lacked standardization and validation.
-
-**The Solution**: JSON Schema-based configuration with validation tools.
-
-**What's New**:
-- **JSON Schema** (`mcp-servers/schema/mcp-server-config.json`):
-  - Standardized format for all MCP servers
-  - Required fields: name, command, args
-  - Optional fields: env, comment
-  - Type validation for all fields
-
-- **Validation Tools**:
-  - Schema validation for MCP server configs
-  - Configuration linting
-  - Error reporting with clear messages
-
-- **Standardized Configs**:
-  - ChromaDB: Cloud and local mode configurations
-  - Memory Bank: Home directory mounting
-  - Sequential Thinking: NPX-based installation
-  - DEVONthink: Python-based server with AppleScript bridge
-
-### 5. Rollback and Version Management
-
-**The Problem**: No safe way to revert to previous versions if issues arise.
-
-**The Solution**: Version detection and rollback capabilities.
-
-**What's New**:
-- **Version Detection Utilities**:
-  - Detect configuration version
-  - Compatibility checking (v1.x vs v2.0)
-  - Version marker extraction
-
-- **Rollback Mechanism**:
-  - Safe rollback to v1.x if needed
-  - Backup of current configuration
-  - Pre-rollback validation checks
-  - Clear rollback instructions
-
-- **Version Markers**:
-  - Embedded in configuration files
-  - Used for runtime version detection
-  - Supports compatibility checking
-
-**Documentation**:
-- `docs/VERSIONING_AND_MIGRATION.md` - Complete versioning guide
-- Rollback procedures
-- Migration best practices
+**Testing**: 19 security tests + 11 configuration constraint tests
 
 ---
 
-## Changed Features
+## Docker Images
 
-### Enhanced Hook System
-- Improved bash command dispatcher with better error handling
-- Extended hook coverage across all potentially dangerous operations
-- Refined permission decision logic (allow/ask/block)
-- Better error messages and user feedback
+### Published Profiles
 
-### Documentation Reorganization
-- Restructured `docs/` directory with clear categorization
-- Added version headers to all documentation files
-- Cross-referenced documentation for easier navigation
-- Enhanced examples and usage patterns
+- **ghcr.io/hellblazer/hal-9000:parent** (934 MB) - DinD orchestrator
+- **ghcr.io/hellblazer/hal-9000:worker** (1.68 GB) - DinD worker with MCP
+- **ghcr.io/hellblazer/hal-9000:base** (2.85 GB) - Minimal Claude environment
+- **ghcr.io/hellblazer/hal-9000:python** (2.85 GB) - Python 3.11 + uv
+- **ghcr.io/hellblazer/hal-9000:node** (2.85 GB) - Node.js 20 LTS
+- **ghcr.io/hellblazer/hal-9000:java** (2.85 GB) - Java 21 LTS
 
-### Agent Metadata
-- All agents now include complete metadata
-- Standardized agent frontmatter format
-- Explicit handoff relationships documented
-- Cost models for budget planning
+### Build System
+
+```bash
+# Build all profiles
+plugins/hal-9000/docker/build-profiles.sh
+
+# Build and push specific profiles
+plugins/hal-9000/docker/build-profiles.sh --push python node java
+```
 
 ---
 
-## Fixed Issues
+## Test Coverage
 
-- Hook test reliability improvements
-- MCP server configuration validation edge cases
-- Agent handoff contract symmetry verification
-- Documentation consistency across all files
+**Security Tests** (19 tests):
+- Code injection via config files (8 tests)
+- Path traversal in profile names (11 tests)
+
+**Configuration Tests** (11 tests):
+- Volume initialization (5 tests)
+- Container startup (6 tests)
+
+**Build & Integration Tests** (73+ tests):
+- Daemon lifecycle (11 tests)
+- Pool manager (13 tests)
+- Resource limits (16 tests)
+- E2E migration (5 tests)
+
+---
+
+## Installation & Usage
+
+### Fresh Installation
+
+```bash
+# Download and run installer
+curl -fsSL https://raw.githubusercontent.com/Hellblazer/hal-9000/main/install-hal-9000.sh | bash
+
+# Verify installation
+hal-9000 --version          # Shows: 2.0.0
+hal-9000 daemon start       # Start orchestrator
+hal-9000                    # Launch Claude in current directory
+```
+
+### Foundation MCP Servers (One-Time Setup)
+
+```bash
+# Setup ChromaDB, Memory Bank, and Sequential Thinking
+~/.hal9000/scripts/setup-foundation-mcp.sh
+
+# Check status
+~/.hal9000/scripts/setup-foundation-mcp.sh --status
+
+# Customize ChromaDB port
+~/.hal9000/scripts/setup-foundation-mcp.sh --chromadb-port 8001
+```
+
+### Marketplace Plugins
+
+```bash
+# Add marketplace
+hal-9000 plugin marketplace add Hellblazer/hal-9000
+
+# Install plugins
+hal-9000 plugin install beads              # Issue tracking
+hal-9000 plugin install aod                # Multi-branch development
+```
 
 ---
 
 ## Breaking Changes
 
-**NONE**
-
-v2.0.0 is 100% backward compatible with v1.x configurations. This is a major version bump due to significant new features, not breaking changes.
-
-**Why Major Version?**
-- Substantial new capabilities (agent registry, validation infrastructure)
-- New architectural components (schemas, rollback mechanism)
-- Major documentation overhaul
-- Significant testing infrastructure additions
-
-**Migration Path**:
-1. Update plugin version to 2.0.0
-2. Restart Claude Code
-3. All existing configurations work unchanged
-4. Explore new features at your own pace
+**Agent Removal**: All 16 custom agents (java-developer, code-review-expert, strategic-planner, and others) have been removed from hal-9000. Users who relied on agents should:
+- Migrate to marketplace plugins for similar functionality
+- Transition workflows to MCP server-based approaches
+- Use containerized Claude without agent orchestration
 
 ---
 
-## Technical Debt Addressed
+## Migration from v1.x
 
-- ✅ **Agent Orchestration Ambiguity**: Explicit registry with validation
-- ✅ **MCP Configuration Inconsistency**: Standardized JSON schema
-- ✅ **Documentation Fragmentation**: Unified documentation structure
-- ✅ **Validation Coverage Gaps**: Comprehensive validation suite
-- ✅ **Security Documentation**: Complete security policy and threat model
+Docker features and profiles work unchanged. No migration required.
 
----
-
-## Upgrade Instructions
-
-### For Plugin Marketplace Users
-
-1. **Update Plugin**:
-   - Settings → Marketplaces → hal-9000 → Update to v2.0.0
-   - Or: Remove and re-add marketplace to get latest version
-
-2. **Restart Claude Code**:
-   - Quit and relaunch Claude Code application
-
-3. **Verify Installation**:
-   ```bash
-   # Check version
-   python3 scripts/agent-registry.py stats
-
-   # Validate registry
-   python3 scripts/validate-handoff-graph.py agents/REGISTRY.yaml
-   ```
-
-4. **Explore New Features** (Optional):
-   ```bash
-   # List all agents
-   python3 scripts/agent-registry.py list
-
-   # Get pipeline recommendation
-   python3 scripts/agent-registry.py recommend "your task description"
-
-   # Review documentation
-   cat docs/AGENT_ORCHESTRATION.md
-   ```
-
-### For Manual Installation Users
-
-1. **Pull Latest Changes**:
-   ```bash
-   cd ~/hal-9000
-   git pull origin main
-   ```
-
-2. **Verify Version**:
-   ```bash
-   cat plugins/hal-9000/.claude-plugin/plugin.json | grep version
-   # Should show "version": "2.0.0"
-   ```
-
-3. **Restart Claude Code**
-
-4. **Validate Installation**:
-   ```bash
-   ./tests/validate-agents.sh
-   ```
+**For Users Who Used Agents**:
+1. All 16 agents removed - explore marketplace plugins for similar functionality
+2. MCP servers (ChromaDB, Memory Bank) provide specialized capabilities
+3. See documentation for migration guidance
 
 ---
 
-## Rollback Instructions
+## Known Issues & Workarounds
 
-If you encounter issues with v2.0.0, you can safely rollback to v1.3.2:
+### Docker daemon not running
 
-1. **Backup Current Configuration**:
-   ```bash
-   cp ~/.claude/settings.json ~/.claude/settings.json.v2.0.0.backup
-   ```
+```bash
+# Ensure Docker is running
+docker ps
 
-2. **Checkout v1.3.2**:
-   ```bash
-   cd ~/hal-9000
-   git checkout v1.3.2
-   ```
+# Start daemon
+hal-9000 daemon start
+```
 
-3. **Restart Claude Code**
+### Volume conflicts from previous sessions
 
-4. **Verify**:
-   ```bash
-   cat plugins/hal-9000/.claude-plugin/plugin.json | grep version
-   # Should show "version": "1.3.2"
-   ```
+```bash
+# Clean up Docker volumes
+docker volume prune -f
 
-See `docs/VERSIONING_AND_MIGRATION.md` for detailed rollback procedures.
+# Reinitialize volumes
+hal-9000 daemon start
+```
 
 ---
 
-## Known Issues
+## Performance Notes
 
-None at this time.
-
----
-
-## What's Next (v2.1.0 Planned)
-
-- GraphQL API for agent registry
-- Agent capabilities taxonomy
-- Cost optimization recommendations
-- Pipeline execution tracking
-- Performance benchmarking
-- Agent availability monitoring
-- Custom pipeline builder UI
+- **Container startup**: ~5-10 seconds per worker
+- **Session recovery**: Instant (volumes mount pre-initialized)
+- **ChromaDB vector searches**: <100ms typical (depends on dataset size)
 
 ---
 
-## Resources
+## Feedback & Issues
 
-### Documentation
-- **Agent Orchestration**: `docs/AGENT_ORCHESTRATION.md`
-- **Security Policy**: `SECURITY.md`
-- **Permissions System**: `docs/PERMISSIONS.md`
-- **Versioning Guide**: `docs/VERSIONING_AND_MIGRATION.md`
-- **Agent Development**: `docs/AGENT_DEVELOPMENT.md`
-
-### Tools
-- **Agent Registry**: `scripts/agent-registry.py --help`
-- **Handoff Validator**: `scripts/validate-handoff-graph.py --help`
-- **CI/CD Validation**: `tests/validate-agents.sh`
-
-### Support
-- **Issues**: https://github.com/Hellblazer/hal-9000/issues
-- **Discussions**: https://github.com/Hellblazer/hal-9000/discussions
-- **Security**: security@hal-9000.example.com (see SECURITY.md)
-
----
-
-## Credits
-
-Developed by Hal Hildebrand and contributors.
-
-Special thanks to the Claude Code team at Anthropic for the plugin marketplace infrastructure and the MCP protocol that makes this all possible.
+- **Bug reports**: https://github.com/Hellblazer/hal-9000/issues
+- **Documentation**: https://github.com/Hellblazer/hal-9000/wiki
+- **Security**: https://github.com/Hellblazer/hal-9000/security
 
 ---
 
 ## License
 
-Apache License 2.0 - See LICENSE file for details.
+Apache 2.0 - See LICENSE file for details.
