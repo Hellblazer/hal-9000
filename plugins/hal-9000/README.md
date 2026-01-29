@@ -23,6 +23,16 @@ Containerized Claude with Docker-in-Docker orchestration, persistent session sta
 - **find-session** - Search across agent sessions
 - **Safety hooks** - Git, file, and environment protection
 
+### Foundation MCP Servers
+
+Core infrastructure MCP servers running at host level (set up via `setup-foundation-mcp.sh`):
+
+- **ChromaDB** - Vector database for semantic search and document storage
+- **Memory Bank** - Persistent cross-session memory with project-based organization
+- **Sequential Thinking** - Step-by-step reasoning for complex problem-solving
+
+These servers are automatically available in all worker containers and persist across sessions.
+
 ### Development Environments
 
 **hal9000** - Containerized Claude sessions
@@ -86,7 +96,7 @@ aod-broadcast "cmd"              # Send to all sessions
 aod-cleanup                      # Stop all sessions
 ```
 
-**v2.0.0 Architecture:** Docker-in-Docker parent-worker orchestration with shared persistent volumes for credentials, plugins, and cross-session state across all workers.
+**v2.0.0 Architecture:** Docker-in-Docker parent-worker orchestration with Foundation MCP servers (ChromaDB, Memory Bank, Sequential Thinking) running at host level. Workers share persistent volumes for credentials, plugins, and cross-session state.
 
 ### hal9000 Sessions
 

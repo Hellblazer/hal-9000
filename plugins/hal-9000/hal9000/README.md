@@ -1,6 +1,6 @@
 # hal9000 - Containerized Claude with Full hal-9000 Stack
 
-Launch Docker containers with the complete hal-9000 experience: MCP servers, agents, and tools pre-installed.
+Launch Docker containers with the complete hal-9000 experience: Foundation MCP servers, tools, and plugins pre-installed and auto-configured.
 
 ## Quick Start
 
@@ -82,15 +82,15 @@ backend:java:Backend services
 ## What's Inside Each Container
 
 - **Claude CLI** - Full Claude Code experience
-- **MCP Servers** (pre-configured):
-  - `memory-bank` - Persistent memory
-  - `sequential-thinking` - Step-by-step reasoning
-  - `chromadb` - Vector database
+- **Foundation MCP Servers** (host-level, auto-accessible):
+  - `memory-bank` - Persistent cross-session memory
+  - `sequential-thinking` - Step-by-step reasoning for complex tasks
+  - `chromadb` - Vector database for semantic search
 - **Tools**:
   - `tmux-cli` - Interactive CLI control
   - `vault` - Encrypted .env backup
   - `env-safe` - Safe .env inspection
-- **Your agents** - Copied from `~/.claude/agents/`
+- **Marketplace plugins** - Installed from Claude Code marketplace
 
 ## Session Coordination
 
@@ -141,7 +141,7 @@ Pass through automatically:
 | Feature | hal9000 | aod |
 |---------|---------|-----|
 | Container launch | ✓ | ✓ |
-| MCP servers | ✓ | ✓ |
+| Foundation MCP servers | ✓ | ✓ |
 | Multi-session | ✓ | ✓ |
 | tmux integration | ✓ | ✓ |
 | Git worktrees | ✗ | ✓ |
@@ -165,8 +165,10 @@ docker ps --filter "name=hal9000"
 hal9000-cleanup --force
 ```
 
-**MCP servers not working:**
-- Check `~/.hal9000/claude/<session>/settings.json`
+**Foundation MCP servers not available:**
+- Verify host-level setup: `~/.hal9000/scripts/setup-foundation-mcp.sh --status`
+- Check container can access host services: `curl http://localhost:8000/api/v2/heartbeat`
+- Review container settings: `~/.hal9000/claude/<session>/settings.json`
 - Verify `ANTHROPIC_API_KEY` is set
 
 **Session not found:**

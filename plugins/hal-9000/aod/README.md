@@ -34,9 +34,10 @@ graph LR
 **Components:**
 - **Git Worktrees** - Independent checkouts sharing one .git directory
 - **Tmux Sessions** - Persistent terminals that survive disconnections
-- **hal-9000 Containers** - Docker containers with Claude CLI
+- **hal-9000 Containers** - Docker containers with Claude CLI and Foundation MCP servers
 - **Slot System** - Auto-assigned unique identifiers preventing port conflicts
 - **Session Context** - Auto-generated `CLAUDE.md` in each worktree with session info
+- **Foundation MCP Servers** - ChromaDB, Memory Bank, Sequential Thinking (host-level infrastructure)
 
 **Container Architecture:**
 
@@ -215,9 +216,10 @@ Containers mount the host's `~/.claudebox/hal-9000` directory for agents and too
 
 **Features:**
 - Essential development tools pre-installed (no download delay)
-- Auto-configured on container startup
+- Foundation MCP servers (ChromaDB, Memory Bank, Sequential Thinking) available automatically
 - Shared Memory Bank for cross-container coordination
 - ChromaDB supports ephemeral or cloud mode (auto-detected from env vars)
+- Sequential Thinking for complex reasoning tasks
 
 ### State Tracking
 
