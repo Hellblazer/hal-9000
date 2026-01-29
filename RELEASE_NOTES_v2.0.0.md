@@ -75,7 +75,7 @@ Foundation MCP Servers run at the host level rather than inside worker container
 ### Published Profiles
 
 - **ghcr.io/hellblazer/hal-9000:parent** (934 MB) - DinD orchestrator
-- **ghcr.io/hellblazer/hal-9000:worker** (1.68 GB) - DinD worker with MCP
+- **ghcr.io/hellblazer/hal-9000:worker** (1.68 GB) - DinD worker with Foundation MCP server access
 - **ghcr.io/hellblazer/hal-9000:base** (2.85 GB) - Minimal Claude environment
 - **ghcr.io/hellblazer/hal-9000:python** (2.85 GB) - Python 3.11 + uv
 - **ghcr.io/hellblazer/hal-9000:node** (2.85 GB) - Node.js 20 LTS
