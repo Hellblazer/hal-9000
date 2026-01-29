@@ -48,11 +48,7 @@ These servers are automatically available in all worker containers and persist a
 
 ## Installation
 
-Install through the hal-9000 marketplace in Claude Code. The installer provides three modes:
-
-1. **Complete** - Host installation plus ClaudeBox shared directory
-2. **Host Only** - Host installation without ClaudeBox sharing
-3. **ClaudeBox Shared Only** - Shared directory for containers
+Install through the hal-9000 marketplace in Claude Code.
 
 ## Requirements
 
@@ -96,7 +92,7 @@ aod-cleanup                      # Stop all sessions
 
 ### hal9000 Sessions
 
-hal9000 wraps ClaudeBox for containerized Claude with the full hal-9000 stack:
+hal9000 provides containerized Claude with persistent plugins and Foundation MCP servers:
 
 ```bash
 # Single container

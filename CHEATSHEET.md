@@ -527,7 +527,7 @@ tmux kill-session -t aod-feature-auth    # Kill specific
 aod-cleanup
 
 # Container port conflict
-docker ps --filter "name=claudebox"      # List containers
+docker ps --filter "name=aod-"      # List containers
 docker rm -f <container-name>            # Force remove
 # OR
 aod-cleanup
@@ -650,13 +650,13 @@ aod experiments.conf
 
 ```bash
 # Check container resource usage
-docker stats --filter "name=claudebox"
+docker stats --filter "name=aod-"
 
 # Check disk space in worktrees
 du -sh ~/.aod/worktrees/*
 
 # Kill idle containers
-docker ps --filter "name=claudebox" -q | xargs docker kill
+docker ps --filter "name=aod-" -q | xargs docker kill
 
 # Prune stale worktrees
 git worktree prune
