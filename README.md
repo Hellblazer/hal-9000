@@ -57,8 +57,8 @@ All installations are stored in a persistent Docker volume shared by all workers
 Every container includes:
 
 - **Claude CLI** - Native binary, auto-updates
-- **Node.js 20 LTS** - For npm-based MCP servers
-- **Python + uv** - For Python MCP servers
+- **Node.js 20 LTS** - For npm-based tools and marketplace plugins
+- **Python + uv** - For Python-based tools and marketplace plugins
 - **Persistent plugins and settings** - Installed via marketplace, survive across sessions
 
 **Foundation MCP Servers** (host-level, one-time setup):
@@ -68,13 +68,16 @@ Every container includes:
 
 MCP server configurations persist across all sessions. Register once, use everywhere.
 
-## MCP Servers Overview
+## Foundation MCP Servers
 
-**What are MCP Servers?**
-MCP (Model Context Protocol) servers extend Claude's capabilities by providing tools and knowledge access. There are two types in hal-9000:
+**What are Foundation MCP Servers?**
+MCP (Model Context Protocol) servers extend Claude's capabilities by providing tools and knowledge access. hal-9000 includes three core Foundation MCP servers:
 
-- **Foundation MCP Servers** - Shared infrastructure at the host level (ChromaDB, Memory Bank, Sequential Thinking). Set up once, available to all workers.
-- **Marketplace MCP Servers** - Install additional servers through hal-9000's plugin marketplace. Available within individual sessions.
+- **ChromaDB** - Vector database for semantic search
+- **Memory Bank** - Cross-session persistent memory
+- **Sequential Thinking** - Step-by-step reasoning
+
+These are set up once at the host level via `setup-foundation-mcp.sh` and automatically available to all workers.
 
 ## Foundation MCP Servers Setup
 
