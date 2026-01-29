@@ -345,7 +345,7 @@ launch_session() {
         --network host
         -v "$worktree_dir:/workspace"
         -v "$container_claude_dir:/root/.claude"
-        -v "$HOME/.claudebox/hal-9000:/hal-9000:ro"
+        -v "hal9000-claude-home:/root/.claude/marketplace"
         -v "$HOME/memory-bank:/root/memory-bank"
         -w /workspace
         -e "AOD_SESSION=$session_name"

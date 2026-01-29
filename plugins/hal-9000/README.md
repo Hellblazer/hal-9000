@@ -46,10 +46,6 @@ These servers are automatically available in all worker containers and persist a
 - Good for: working on multiple branches of same repo simultaneously
 - [aod documentation →](aod/README.md)
 
-**ClaudeBox** - Foundation tool (external)
-- hal9000 and aod build on ClaudeBox container infrastructure
-- [ClaudeBox documentation →](https://github.com/RchGrav/claudebox)
-
 ## Installation
 
 Install through the hal-9000 marketplace in Claude Code. The installer provides three modes:

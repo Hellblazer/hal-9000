@@ -212,7 +212,7 @@ docker ps
 # aod-myproject-ghi789-slot3  # bugfix/validation
 ```
 
-Containers mount the host's `~/.claudebox/hal-9000` directory for agents and tools, plus `~/memory-bank` for shared Memory Bank access across containers.
+Containers access persistent Docker volumes: `hal9000-claude-home` for marketplace plugins and tools, plus `~/memory-bank` for shared Memory Bank access across containers.
 
 **Features:**
 - Essential development tools pre-installed (no download delay)
@@ -250,7 +250,7 @@ Each worktree automatically gets a `CLAUDE.md` file with session-specific contex
 - Available aod commands with examples
 - Common workflows for coordination
 
-**Purpose:** When Claude Code runs in an aod session (via ClaudeBox), it reads the CLAUDE.md and knows:
+**Purpose:** When Claude Code runs in an aod session, it reads the CLAUDE.md and knows:
 - Which session it's running in
 - What other sessions are available
 - How to coordinate across sessions using aod-send/aod-broadcast
@@ -357,7 +357,7 @@ aod-cleanup
 
 Prompts for confirmation before:
 - Killing all aod tmux sessions
-- Removing all ClaudeBox containers
+- Removing all aod containers
 - Removing all git worktrees
 - Cleaning state directory
 
@@ -488,7 +488,7 @@ Commits are shared across worktrees (same repository). Pushes update all worktre
 Monitor container resource usage:
 
 ```bash
-docker stats --filter "name=claudebox"
+docker stats --filter "name=aod-"
 ```
 
 Reasonable limits (16GB RAM machine):
@@ -538,12 +538,12 @@ aod-cleanup
 
 **Error:** Container port conflict or slot already assigned.
 
-**Cause:** ClaudeBox container from previous session still running.
+**Cause:** aod container from previous session still running.
 
 **Solution:**
 ```bash
 # List containers
-docker ps --filter "name=claudebox"
+docker ps --filter "name=aod-"
 
 # Force remove container
 docker rm -f <container-name>
@@ -583,12 +583,12 @@ git worktree prune
 
 ### Containers Not Stopping
 
-**Problem:** ClaudeBox containers persist after killing tmux session.
+**Problem:** aod containers persist after killing tmux session.
 
 **Solution:**
 ```bash
-# Force remove all ClaudeBox containers
-docker ps -a --filter "name=claudebox" -q | xargs docker rm -f
+# Force remove all aod containers
+docker ps -a --filter "name=aod-" -q | xargs docker rm -f
 
 # Or use cleanup script
 aod-cleanup
@@ -636,7 +636,7 @@ Access container directly:
 
 ```bash
 # List containers
-docker ps --filter "name=claudebox"
+docker ps --filter "name=aod-"
 
 # Execute command in container
 docker exec -it <container-name> bash
@@ -765,10 +765,10 @@ Git worktrees share the repository's `.git` directory:
 
 ## Security Considerations
 
-ClaudeBox containers provide isolation but share:
+aod containers provide isolation but share:
 - Host network (for development convenience)
-- Docker socket access (if ClaudeBox configured)
-- Mounted hal-9000 directory
+- Persistent Docker volumes (hal9000-claude-home, hal9000-claude-session)
+- Memory Bank directory for cross-session coordination
 
 Don't run untrusted code in aod sessions without additional sandboxing.
 
@@ -981,6 +981,5 @@ The `▶` arrows are Powerline separators that create a polished visual flow.
 
 Inspired by:
 - [claude-squad](https://github.com/smtg-ai/claude-squad) - Multi-agent TUI
-- [ClaudeBox](https://github.com/RchGrav/claudebox) - Containerized development
 - [git worktrees](https://git-scm.com/docs/git-worktree) - Multiple checkouts
 - [tmux](https://github.com/tmux/tmux) - Terminal multiplexer
