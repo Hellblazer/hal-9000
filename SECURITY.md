@@ -27,7 +27,20 @@ HAL-9000 implements a defense-in-depth security model through multiple layers:
 
 ### Security Boundaries
 
-![Security Boundaries](../docs/diagrams/security-boundaries.png)
+```mermaid
+graph LR
+    LLM["Claude Code<br/>(Untrusted Input)"]
+
+    Hooks["Hooks Layer<br/>Bash Blocking<br/>File Limits<br/>Git Safety"]
+
+    Tools["Tool Layer<br/>Restricted Bash<br/>Limited Edit/Write<br/>Safe Read"]
+
+    Resources["Protected Resources<br/>.env Blocked<br/>Git Staging Controlled<br/>Large Files Approved"]
+
+    LLM -->|all requests| Hooks
+    Hooks -->|approved| Tools
+    Tools -->|access| Resources
+```
 
 ---
 

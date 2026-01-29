@@ -4,7 +4,27 @@ Thank you for your interest in contributing to the hal-9000 Claude Code plugin m
 
 ## Repository Structure
 
-![hal-9000 Repository Structure](../docs/diagrams/contributing-structure.png)
+```mermaid
+graph TD
+    Root["<b>hal-9000/</b>"]
+
+    Conf["<b>.claude-plugin/</b><br/>marketplace.json"]
+    Plugin["<b>plugins/hal-9000/</b>"]
+    Templates["<b>templates/</b>"]
+    Docs["<b>CLAUDE.md</b>"]
+
+    Meta["<b>.claude-plugin/</b><br/>plugin.json"]
+
+    Dirs["<b>Components</b><br/>aod, commands, hooks,<br/>mcp-servers, tests"]
+
+    Root --> Conf
+    Root --> Plugin
+    Root --> Templates
+    Root --> Docs
+
+    Plugin --> Meta
+    Plugin --> Dirs
+```
 
 ## How to Contribute
 

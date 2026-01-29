@@ -13,32 +13,21 @@ The Docker-in-Docker (DinD) architecture provides:
 
 ```mermaid
 graph TB
-    subgraph Host["Host Machine"]
-        subgraph Docker["Docker Daemon"]
-            subgraph Parent["Parent Container (hal9000-parent)"]
-                ChromaDB["ChromaDB Server<br/>localhost:8000"]
-                Pool["Pool Manager<br/>(optional)"]
-                Coord["Coordinator"]
-            end
+    Parent["<b>Parent Container</b><br/>ChromaDB + Coordinator<br/>+ Pool Manager"]
 
-            W1["Worker 1"]
-            W2["Worker 2"]
-            W3["Worker N..."]
-        end
+    W1["Worker 1<br/>Claude"]
+    W2["Worker 2<br/>Claude"]
+    W3["Worker N<br/>Claude"]
 
-        subgraph MCP["Foundation MCP Servers"]
-            MB["memory-bank"]
-            ST["sequential-thinking"]
-            CM["chroma-mcp"]
-        end
-    end
+    MCP["<b>Foundation MCP</b><br/>memory-bank<br/>sequential-thinking"]
 
-    Parent --> W1
-    Parent --> W2
-    Parent --> W3
-    W1 --> MCP
-    W2 --> MCP
-    W3 --> MCP
+    Parent -->|spawn/manage| W1
+    Parent -->|spawn/manage| W2
+    Parent -->|spawn/manage| W3
+
+    W1 -->|access| MCP
+    W2 -->|access| MCP
+    W3 -->|access| MCP
 ```
 
 ## Parent Container
@@ -62,27 +51,14 @@ graph TB
 
 ```mermaid
 flowchart LR
-    subgraph Phase1["Phase 1: Critical Init (~100ms)"]
-        A1[Create directories] --> A2[Verify Docker socket]
-    end
+    A["Phase 1<br/>Create dirs<br/>Verify Docker"] -->
+    B["Phase 2<br/>Start ChromaDB<br/>Init tmux"] -->
+    C["Phase 3<br/>ChromaDB ready<br/>Heartbeat OK"] -->
+    D["Phase 4<br/>Pool Manager<br/>Background"]
 
-    subgraph Phase2["Phase 2: Parallel Init (~500ms)"]
-        B1[Start ChromaDB]
-        B2[Initialize tmux]
-        B3[Check worker image]
-    end
-
-    subgraph Phase3["Phase 3: Service Ready"]
-        C1[Wait for ChromaDB heartbeat]
-    end
-
-    subgraph Phase4["Phase 4: Background"]
-        D1[Start pool manager]
-    end
-
-    Phase1 --> Phase2
-    Phase2 --> Phase3
-    Phase3 --> Phase4
+    A ---|~100ms| B
+    B ---|~500ms| C
+    C ---|ready| D
 ```
 
 ## Worker Containers

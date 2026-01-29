@@ -144,29 +144,22 @@ hal-9000 pool scale 3        # Maintain 3 warm workers
 ## Architecture
 
 ```mermaid
-%%{init: {'logLevel': 'error', 'securityLevel': 'loose', 'theme': 'dark', 'primaryColor': '#f0f0f0', 'primaryBorderColor': '#7c0000', 'background': 'white', 'mainBkg': '#f0f0f0', 'secondBkg': '#f0f0f0'}}%%
-graph TB
-    subgraph Host["Host Machine"]
-        Parent["Parent Container<br/>Orchestrator + ChromaDB:8000"]
+graph LR
+    Parent["<b>Parent Container</b><br/>Orchestrator<br/>ChromaDB:8000"]
 
-        W1["Worker 1<br/>Claude + MCP"]
-        W2["Worker 2<br/>Claude + MCP"]
-        W3["Worker 3<br/>Claude + MCP"]
+    W1["Worker 1<br/>Claude"]
+    W2["Worker 2<br/>Claude"]
+    W3["Worker 3<br/>Claude"]
 
-        Parent -->|manage| W1
-        Parent -->|manage| W2
-        Parent -->|manage| W3
+    Vols["<b>Shared Volumes</b>"]
 
-        Vols["Shared Volumes"]
+    Parent ---|manage| W1
+    Parent ---|manage| W2
+    Parent ---|manage| W3
 
-        W1 -->|read/write| Vols
-        W2 -->|read/write| Vols
-        W3 -->|read/write| Vols
-
-        Vols -.->|CLAUDE_HOME| CH["Plugins<br/>Credentials"]
-        Vols -.->|Session| CS["Auth<br/>Settings"]
-        Vols -.->|Memory| MB["Context"]
-    end
+    W1 ---|access| Vols
+    W2 ---|access| Vols
+    W3 ---|access| Vols
 ```
 
 - **Parent**: Runs ChromaDB server, manages workers
