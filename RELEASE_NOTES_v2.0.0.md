@@ -145,7 +145,6 @@ hal-9000                    # Launch Claude in current directory
 hal-9000 plugin marketplace add Hellblazer/hal-9000
 
 # Install plugins
-hal-9000 plugin install beads              # Issue tracking
 hal-9000 plugin install aod                # Multi-branch development
 ```
 

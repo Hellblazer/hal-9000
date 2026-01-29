@@ -232,19 +232,6 @@ hal-9000 plugin install hal-9000
 
 [hal-9000 documentation →](plugins/hal-9000/README.md)
 
-### beads (bd) - Issue Tracking
-
-AI-optimized issue tracker with dependency support:
-
-```bash
-bd init                           # Initialize in project
-bd create "Task" -t feature -p 1  # Create issue
-bd ready                          # Show unblocked work
-bd close <id>                     # Complete issue
-```
-
-[beads documentation →](plugins/hal-9000/mcp-servers/beads/README.md)
-
 ### aod - Multi-Branch Development
 
 Parallel development across git branches:

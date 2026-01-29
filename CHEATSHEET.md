@@ -1,6 +1,6 @@
 # HAL-9000 Cheat Sheet
 
-Quick reference for aod, hal9000, beads (bd), tmux, tmux-cli, and terminal tools.
+Quick reference for aod, hal9000, tmux, tmux-cli, and terminal tools.
 
 ## aod (Army of Darkness)
 
@@ -308,91 +308,6 @@ tmux-cli send "slow command" --pane=2 --delay-enter=1.0
 # Send without Enter
 tmux-cli send "partial input" --pane=2 --enter=False
 ```
-
-## beads (bd) - Issue Tracking
-
-AI-optimized issue tracker with dependency support. "Issues chained together like beads."
-
-### Setup
-
-```bash
-# Initialize in project
-bd init
-
-# Get onboarding guide
-bd onboard
-```
-
-### Creating Issues
-
-```bash
-# Create issue
-bd create "Add OAuth2 authentication" -t feature -p 1
-
-# Types: bug, feature, task, epic, chore
-# Priority: 0 (critical) to 4 (backlog)
-
-# With description
-bd create "Fix login bug" -t bug -p 0 -d "Users can't log in after password reset"
-```
-
-### Working on Issues
-
-```bash
-# Show ready work (no blockers)
-bd ready
-
-# Claim a task
-bd update <id> --status in_progress
-
-# View issue details
-bd show <id>
-
-# Complete task
-bd close <id> --reason "Implemented and tested"
-```
-
-### Dependencies
-
-```bash
-# Add dependency (id depends on blocker-id)
-bd dep add <id> <blocker-id>
-
-# View dependency tree
-bd dep tree <id>
-
-# List all issues
-bd list
-```
-
-### AI Workflow Pattern
-
-```bash
-# 1. Check what's ready
-bd ready --json
-
-# 2. Claim task
-bd update <id> --status in_progress --json
-
-# 3. Work on it...
-
-# 4. Found new work during implementation?
-bd create "Found bug" -t bug -p 1
-
-# 5. Complete original task
-bd close <id> --reason "Done"
-
-# 6. Commit together
-git add .beads/issues.jsonl src/
-git commit -m "feat: implement auth, refs bd-<id>"
-```
-
-### Tips
-
-- Always commit `.beads/issues.jsonl` with code changes
-- Use `--json` flag for programmatic parsing
-- Link discovered issues with dependencies
-- Use `bd ready` not `bd list` to find unblocked work
 
 ## Terminal Tools
 
