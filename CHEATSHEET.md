@@ -679,6 +679,5 @@ git worktree prune
 
 - aod Full Documentation: `plugins/hal-9000/aod/README.md`
 - hal9000 Documentation: `plugins/hal-9000/hal9000/README.md`
-- beads (bd) Documentation: `plugins/hal-9000/mcp-servers/beads/README.md`
 - tmux-cli Documentation: Run `tmux-cli --help`
 - Session Commands: `plugins/hal-9000/commands/*.md`
