@@ -64,11 +64,9 @@ Foundation MCP Servers run at the host level rather than inside worker container
 
 ### 4. Security Hardening
 
-**Critical Fixes (v1.5.0)**:
 - **Code Injection Prevention** - Safe config file parsing (no arbitrary code execution)
 - **Path Traversal Prevention** - Profile name validation blocks `../` attacks
-
-**Testing**: 19 security tests + 11 configuration constraint tests
+- **Testing**: 30 security tests validating all protection mechanisms
 
 ---
 
