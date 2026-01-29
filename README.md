@@ -161,23 +161,12 @@ graph LR
 
 ### Authentication
 
-**Option 1 - Claude Subscription Login (recommended):**
-
-Use your Claude subscription for unlimited API access. You can login either way:
-
+**Option 1 - Subscription Login (recommended):**
 ```bash
-# Method A: Via hal-9000 (convenience)
-hal-9000 /login
-
-# Method B: Inside Claude console (direct)
-claude /login
+hal-9000 /login    # Login once, persists in shared volume
 ```
 
-Login credentials persist in the shared Docker volume—authenticate once, use everywhere.
-
 **Option 2 - API Key:**
-
-Alternatively, provide an API key:
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-api03-...
 ```
