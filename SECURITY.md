@@ -28,33 +28,18 @@ HAL-9000 implements a defense-in-depth security model through multiple layers:
 ### Security Boundaries
 
 ```mermaid
-graph TB
-    subgraph LLM["Claude Code (Untrusted LLM Actions)"]
-        Actions[LLM Actions]
-    end
+graph LR
+    LLM["Claude Code<br/>(Untrusted)"]
 
-    subgraph Hooks["PreToolUse Hooks (Permission Layer)"]
-        BashHook[Bash Hook<br/>blocks dangerous commands]
-        FileLimit[File Length Limit<br/>prevents massive edits]
-        Decisions[Permission Decisions:<br/>allow / ask / block]
-    end
+    Hooks["🔒 Permission Hooks<br/>- Bash blocking<br/>- File size limits<br/>- Git safety"]
 
-    subgraph Tools["Tool Execution Layer"]
-        Bash[Bash<br/>restricted by hooks]
-        EditWrite[Edit/Write<br/>size-limited]
-        Read[Read<br/>unrestricted within workspace]
-    end
+    Tools["🔧 Tools<br/>- Bash restricted<br/>- Edit/Write limited<br/>- Read safe"]
 
-    subgraph Protected["Protected Resources"]
-        EnvFiles[.env files<br/>read/write blocked]
-        GitStaging[Git staging<br/>requires explicit file names]
-        SysFiles[System files<br/>rm blocked, suggests TRASH]
-        LargeFiles[Large files<br/>&gt;10K lines require approval]
-    end
+    Protected["🛡️ Protected Resources<br/>- .env blocked<br/>- Git staging controlled<br/>- Large files require approval"]
 
-    LLM --> Hooks
-    Hooks --> Tools
-    Tools --> Protected
+    LLM -->|all requests| Hooks
+    Hooks -->|approved| Tools
+    Tools -->|access| Protected
 ```
 
 ---

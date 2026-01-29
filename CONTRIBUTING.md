@@ -5,30 +5,44 @@ Thank you for your interest in contributing to the hal-9000 Claude Code plugin m
 ## Repository Structure
 
 ```mermaid
-graph LR
-    subgraph hal9000["hal-9000/"]
-        subgraph claude_plugin[".claude-plugin/"]
-            marketplace["marketplace.json<br/>Marketplace definition"]
-        end
+graph TD
+    Root["hal-9000/"]
 
-        subgraph plugins["plugins/"]
-            subgraph hal9000_plugin["hal-9000/"]
-                subgraph plugin_meta[".claude-plugin/"]
-                    pluginjson["plugin.json"]
-                end
-                aod["aod/<br/>Army of Darkness"]
-                commands["commands/<br/>Slash commands"]
-                hal9000dir["hal9000/<br/>Container launcher"]
-                hooks["hooks/<br/>Safety hooks"]
-                lib["lib/<br/>Shared libraries"]
-                mcp["mcp-servers/<br/>MCP configs"]
-                tests["tests/<br/>Unit tests"]
-            end
-        end
+    Config["Configuration"]
+    Marketplace["marketplace.json"]
+    Claude["CLAUDE.md"]
 
-        templates["templates/<br/>CLAUDE.md templates"]
-        claudemd["CLAUDE.md<br/>Development guide"]
-    end
+    Plugin["plugins/hal-9000/"]
+    Meta[".claude-plugin/plugin.json"]
+
+    Components["Components"]
+    Aod["aod/"]
+    Commands["commands/"]
+    Hal9000["hal9000/"]
+    Hooks["hooks/"]
+    Lib["lib/"]
+    Mcp["mcp-servers/"]
+    Tests["tests/"]
+
+    Templates["templates/"]
+
+    Root --> Config
+    Root --> Plugin
+    Root --> Templates
+    Root --> Claude
+
+    Config --> Marketplace
+
+    Plugin --> Meta
+    Plugin --> Components
+
+    Components --> Aod
+    Components --> Commands
+    Components --> Hal9000
+    Components --> Hooks
+    Components --> Lib
+    Components --> Mcp
+    Components --> Tests
 ```
 
 ## How to Contribute

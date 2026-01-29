@@ -146,23 +146,25 @@ hal-9000 pool scale 3        # Maintain 3 warm workers
 ```mermaid
 graph TB
     subgraph Host["Host Machine"]
-        subgraph Parent["Parent Container"]
-            ChromaDB["ChromaDB Server<br/>localhost:8000"]
-        end
+        Parent["Parent Container<br/>Orchestrator + ChromaDB:8000"]
 
-        Parent --> W1["Worker 1<br/>Claude"]
-        Parent --> W2["Worker 2<br/>Claude"]
-        Parent --> W3["Worker 3<br/>Claude"]
+        W1["Worker 1<br/>Claude + MCP"]
+        W2["Worker 2<br/>Claude + MCP"]
+        W3["Worker 3<br/>Claude + MCP"]
 
-        subgraph Volumes["Shared Volumes"]
-            CH["CLAUDE_HOME<br/>(plugins, creds)"]
-            CS["Session State<br/>(.claude.json)"]
-            MB["Memory Bank"]
-        end
+        Parent -->|manage| W1
+        Parent -->|manage| W2
+        Parent -->|manage| W3
 
-        W1 --> Volumes
-        W2 --> Volumes
-        W3 --> Volumes
+        Vols["Shared Volumes"]
+
+        W1 -->|read/write| Vols
+        W2 -->|read/write| Vols
+        W3 -->|read/write| Vols
+
+        Vols -.->|CLAUDE_HOME| CH["Plugins<br/>Credentials"]
+        Vols -.->|Session| CS["Auth<br/>Settings"]
+        Vols -.->|Memory| MB["Context"]
     end
 ```
 
