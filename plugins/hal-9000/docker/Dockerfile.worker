@@ -98,12 +98,18 @@ RUN mkdir -p /workspace /home/claude/.claude /data/memory-bank /scripts && \
     chown -R claude:claude /workspace /home/claude /data/memory-bank /scripts
 
 # Copy all tools to user's local bin (installed as root, now available to claude user)
-# Includes: Claude CLI, uv, uvx, chroma-mcp, and any other uv-installed tools
-# Preserve permissions with -p and ensure executability
+# SECURITY: Fail build if critical binaries cannot be copied (no silent failures)
 RUN mkdir -p /home/claude/.local/bin && \
-    cp -rp /root/.local/bin/* /home/claude/.local/bin/ 2>/dev/null || true && \
-    chmod +x /home/claude/.local/bin/* 2>/dev/null || true && \
-    chown -R claude:claude /home/claude/.local
+    # Copy all binaries from root's local bin
+    cp -rp /root/.local/bin/* /home/claude/.local/bin/ && \
+    # Ensure executability
+    chmod +x /home/claude/.local/bin/* && \
+    # Set ownership
+    chown -R claude:claude /home/claude/.local && \
+    # Verify critical binaries exist and are executable
+    test -x /home/claude/.local/bin/claude && \
+    test -x /home/claude/.local/bin/uv && \
+    echo "✓ Critical binaries copied and verified"
 
 # Copy entrypoint script
 COPY docker/worker-entrypoint.sh /scripts/worker-entrypoint.sh
@@ -123,17 +129,17 @@ USER claude
 
 WORKDIR /workspace
 
-# Verify installations (best-effort - some tools may need runtime permissions)
+# Verify installations - fail build if critical tools are missing
 RUN echo "Verifying installations..." && \
-    (claude --version 2>/dev/null || echo "claude: will verify at runtime") && \
+    claude --version && \
     node --version && \
     npm --version && \
-    (uv --version 2>/dev/null || echo "uv: will verify at runtime") && \
-    echo "✓ Node.js and npm installed" && \
+    uv --version && \
+    echo "✓ Core tools verified" && \
     which mcp-server-memory-bank && echo "✓ memory-bank MCP server found" && \
     which mcp-server-sequential-thinking && echo "✓ sequential-thinking MCP server found" && \
-    (which chroma-mcp 2>/dev/null && echo "✓ chroma-mcp found" || echo "chroma-mcp: will verify at runtime") && \
-    echo "Build verification complete"
+    which chroma-mcp && echo "✓ chroma-mcp found" && \
+    echo "Build verification complete - all tools functional"
 
 # Health check
 HEALTHCHECK --interval=60s --timeout=10s --start-period=5s --retries=3 \

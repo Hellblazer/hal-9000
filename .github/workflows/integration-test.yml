@@ -156,24 +156,47 @@ jobs:
             echo "✗ Container not running as claude user"
             exit 1
           }
-          echo "✓ Container runs as non-root user"
+          echo "✓ Container runs as non-root user (claude)"
 
-          # Check MCP servers are installed (using which to avoid permission issues)
-          docker run --rm --entrypoint which hal9000-worker-test:latest mcp-server-memory-bank || {
-            echo "✗ memory-bank MCP server not found"
+          # Actually execute Claude CLI (not just which)
+          docker run --rm --entrypoint claude hal9000-worker-test:latest --version || {
+            echo "✗ Claude CLI not functional"
             exit 1
           }
-          echo "✓ memory-bank MCP server installed"
+          echo "✓ Claude CLI functional"
 
-          docker run --rm --entrypoint which hal9000-worker-test:latest mcp-server-sequential-thinking || {
-            echo "✗ sequential-thinking MCP server not found"
+          # Execute uv to verify it works
+          docker run --rm --entrypoint uv hal9000-worker-test:latest --version || {
+            echo "✗ uv not functional"
             exit 1
           }
-          echo "✓ sequential-thinking MCP server installed"
+          echo "✓ uv functional"
 
-          # Verify key binaries exist in claude user's path
-          docker run --rm --entrypoint ls hal9000-worker-test:latest -la /home/claude/.local/bin/ || true
-          echo "✓ Worker image built successfully"
+          # Execute MCP servers with --help to verify they work
+          docker run --rm --entrypoint mcp-server-memory-bank hal9000-worker-test:latest --help > /dev/null 2>&1 || {
+            echo "✗ memory-bank MCP server not functional"
+            exit 1
+          }
+          echo "✓ memory-bank MCP server functional"
+
+          docker run --rm --entrypoint mcp-server-sequential-thinking hal9000-worker-test:latest --help > /dev/null 2>&1 || {
+            echo "✗ sequential-thinking MCP server not functional"
+            exit 1
+          }
+          echo "✓ sequential-thinking MCP server functional"
+
+          # Verify chroma-mcp works
+          docker run --rm --entrypoint chroma-mcp hal9000-worker-test:latest --help > /dev/null 2>&1 || {
+            echo "✗ chroma-mcp not functional"
+            exit 1
+          }
+          echo "✓ chroma-mcp functional"
+
+          # Show binary permissions for debugging
+          echo "Binary permissions:"
+          docker run --rm --entrypoint ls hal9000-worker-test:latest -la /home/claude/.local/bin/
+
+          echo "✓ All worker image verifications passed"
 
   test-summary:
     name: Test Summary

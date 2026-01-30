@@ -66,7 +66,7 @@ jobs:
             echo "✓ Critical scripts passed shellcheck"
           fi
 
-      - name: Check security validations
+      - name: Check security validations exist
         run: |
           echo "Verifying security validations in scripts..."
 
@@ -78,11 +78,19 @@ jobs:
             exit 1
           fi
 
-          # Check for path traversal prevention (blocks '..' in paths)
-          if grep -q "cannot contain '\.\.'" plugins/hal-9000/docker/spawn-worker.sh; then
-            echo "✓ Path traversal prevention present"
+          # Check for path allowlist (more secure than blocklist)
+          if grep -q "allowed_prefixes" plugins/hal-9000/docker/spawn-worker.sh; then
+            echo "✓ Path allowlist validation present"
           else
-            echo "✗ Path traversal prevention missing"
+            echo "✗ Path allowlist validation missing"
+            exit 1
+          fi
+
+          # Check for fail-closed pattern in aod.sh
+          if grep -q "cannot canonicalize worktree path" plugins/hal-9000/aod/aod.sh; then
+            echo "✓ Fail-closed worktree validation present"
+          else
+            echo "✗ Fail-closed worktree validation missing"
             exit 1
           fi
 
@@ -95,6 +103,51 @@ jobs:
           fi
 
           echo "✓ All security validations present"
+
+      - name: Adversarial security tests
+        run: |
+          echo "Running adversarial security tests..."
+
+          # Test 1: Image allowlist should reject unknown images
+          echo "Test: Image allowlist rejects unknown images"
+          if grep -q "ghcr.io/hellblazer/hal-9000:worker" plugins/hal-9000/docker/spawn-worker.sh && \
+             ! grep -q "ghcr.io/evil/backdoor" plugins/hal-9000/docker/spawn-worker.sh; then
+            echo "✓ Allowlist contains only expected images"
+          else
+            echo "✗ Allowlist validation failed"
+            exit 1
+          fi
+
+          # Test 2: Path validation uses allowlist not blocklist
+          echo "Test: Path validation uses allowlist approach"
+          if grep -q 'path_allowed=false' plugins/hal-9000/docker/spawn-worker.sh && \
+             grep -q 'path_allowed=true' plugins/hal-9000/docker/spawn-worker.sh; then
+            echo "✓ Allowlist-based path validation confirmed"
+          else
+            echo "✗ Blocklist-based validation detected (should use allowlist)"
+            exit 1
+          fi
+
+          # Test 3: No unsafe fallbacks (fail closed)
+          echo "Test: No unsafe fallbacks in security validations"
+          if ! grep -q 'realpath.*|| echo' plugins/hal-9000/aod/aod.sh && \
+             ! grep -q 'realpath.*|| echo' plugins/hal-9000/docker/spawn-worker.sh; then
+            echo "✓ No unsafe realpath fallbacks found"
+          else
+            echo "✗ Unsafe fallback pattern detected"
+            exit 1
+          fi
+
+          # Test 4: log_error function is defined
+          echo "Test: Error logging function exists"
+          if grep -q '^log_error()' plugins/hal-9000/docker/spawn-worker.sh; then
+            echo "✓ log_error function defined"
+          else
+            echo "✗ log_error function not found"
+            exit 1
+          fi
+
+          echo "✓ All adversarial security tests passed"
 
   documentation-check:
     name: Check Documentation

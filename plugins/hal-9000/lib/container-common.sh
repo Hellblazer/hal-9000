@@ -200,13 +200,14 @@ MCPEOF
         echo "$merged" > "$settings_file"
     # Fallback to Python if jq not available
     elif command -v python3 >/dev/null 2>&1; then
-        # SECURITY: Pass data via stdin/files, not string interpolation
-        python3 << 'PYEOF' "$settings_file" "$mcp_config"
+        # SECURITY: Pass MCP config via stdin to avoid exposure in process listings
+        # Only the settings file path is passed as argument (not sensitive)
+        echo "$mcp_config" | python3 -c "
 import json
 import sys
 
 settings_file = sys.argv[1]
-mcp_config = json.loads(sys.argv[2])
+mcp_config = json.load(sys.stdin)  # Read config from stdin (not visible in ps)
 
 try:
     with open(settings_file, 'r') as f:
@@ -220,7 +221,7 @@ settings['mcpServers'].update(mcp_config.get('mcpServers', {}))
 
 with open(settings_file, 'w') as f:
     json.dump(settings, f, indent=2)
-PYEOF
+" "$settings_file"
         if [[ $? -ne 0 ]]; then
             warn "Could not inject MCP config (Python error)"
             return 1

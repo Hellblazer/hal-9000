@@ -461,11 +461,19 @@ main() {
         # Generate worktree directory
         local worktree_dir="$HOME/.aod/worktrees/${repo_name}-${branch//\//-}"
 
-        # SECURITY: Validate worktree path to prevent path traversal
+        # SECURITY: Validate worktree path to prevent path traversal (fail closed)
+        # Require realpath for canonicalization - do not fallback to uncanonicalized path
+        if ! command -v realpath >/dev/null 2>&1; then
+            die "realpath required for secure path validation"
+        fi
+
         local worktree_canonical
-        worktree_canonical="$(realpath -m "$worktree_dir" 2>/dev/null || echo "$worktree_dir")"
+        worktree_canonical="$(realpath -m "$worktree_dir" 2>/dev/null)" || {
+            die "Security violation: cannot canonicalize worktree path: $worktree_dir"
+        }
+
         if [[ ! "$worktree_canonical" =~ ^"$HOME"/.aod/worktrees/ ]]; then
-            die "Security violation: worktree path '$worktree_dir' escapes allowed directory"
+            die "Security violation: worktree path '$worktree_canonical' escapes allowed directory"
         fi
 
         printf "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"

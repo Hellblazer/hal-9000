@@ -21,6 +21,7 @@
 set -euo pipefail
 
 # Colors
+readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
 readonly CYAN='\033[0;36m'
@@ -29,6 +30,7 @@ readonly NC='\033[0m'
 log_info() { printf "${CYAN}[spawn]${NC} %s\n" "$1"; }
 log_success() { printf "${GREEN}[spawn]${NC} %s\n" "$1"; }
 log_warn() { printf "${YELLOW}[spawn]${NC} %s\n" "$1"; }
+log_error() { printf "${RED}[spawn]${NC} ERROR: %s\n" "$1" >&2; }
 
 # ============================================================================
 # CONFIGURATION
@@ -153,12 +155,18 @@ parse_args() {
 # ============================================================================
 
 # SECURITY: Allowlist of trusted worker images
+# Using versioned tags for supply chain security (tags won't be reused)
 ALLOWED_IMAGES=(
     "ghcr.io/hellblazer/hal-9000:worker"
+    "ghcr.io/hellblazer/hal-9000:worker-v3.0.0"
     "ghcr.io/hellblazer/hal-9000:base"
+    "ghcr.io/hellblazer/hal-9000:base-v3.0.0"
     "ghcr.io/hellblazer/hal-9000:python"
+    "ghcr.io/hellblazer/hal-9000:python-v3.0.0"
     "ghcr.io/hellblazer/hal-9000:node"
+    "ghcr.io/hellblazer/hal-9000:node-v3.0.0"
     "ghcr.io/hellblazer/hal-9000:java"
+    "ghcr.io/hellblazer/hal-9000:java-v3.0.0"
 )
 
 validate_worker_image() {
@@ -225,24 +233,42 @@ spawn_worker() {
     # In DinD mode, the path is a host path but we're running inside a container
     # Docker daemon is on the host, so paths must be host paths
     if [[ -n "$PROJECT_DIR" ]]; then
-        # SECURITY: Validate PROJECT_DIR to prevent path traversal attacks
-        # Reject paths containing .. or starting with sensitive directories
-        if [[ "$PROJECT_DIR" =~ \.\. ]]; then
-            log_error "Security violation: PROJECT_DIR cannot contain '..': $PROJECT_DIR"
+        # SECURITY: Validate PROJECT_DIR using allowlist approach (fail closed)
+        # Canonicalize path to resolve symlinks and ..
+        if ! command -v realpath >/dev/null 2>&1; then
+            log_error "realpath required for path validation"
             exit 1
         fi
 
-        # Block mounting sensitive system directories
-        local blocked_paths=("/etc" "/var" "/usr" "/bin" "/sbin" "/lib" "/root" "/boot" "/sys" "/proc" "/dev")
-        for blocked in "${blocked_paths[@]}"; do
-            if [[ "$PROJECT_DIR" == "$blocked" || "$PROJECT_DIR" == "$blocked/"* ]]; then
-                log_error "Security violation: cannot mount system directory: $PROJECT_DIR"
-                exit 1
+        local canonical_path
+        canonical_path="$(realpath -m "$PROJECT_DIR" 2>/dev/null)" || {
+            log_error "Security violation: cannot canonicalize path: $PROJECT_DIR"
+            exit 1
+        }
+
+        # SECURITY: Allowlist of permitted path prefixes (more secure than blocklist)
+        local allowed_prefixes=("/home" "/Users" "/workspace" "/tmp" "/var/tmp")
+        local path_allowed=false
+        for prefix in "${allowed_prefixes[@]}"; do
+            if [[ "$canonical_path" == "$prefix" || "$canonical_path" == "$prefix/"* ]]; then
+                path_allowed=true
+                break
             fi
         done
 
-        # In DinD mode, we can't check if directory exists from inside container
-        # because it's a host path. Just mount it and let docker fail if invalid.
+        if [[ "$path_allowed" != "true" ]]; then
+            log_error "Security violation: path '$canonical_path' not in allowed directories"
+            log_error "Allowed prefixes: ${allowed_prefixes[*]}"
+            exit 1
+        fi
+
+        # Additional check: reject paths that still contain .. after canonicalization
+        # (shouldn't happen with realpath, but defense in depth)
+        if [[ "$canonical_path" =~ \.\. ]]; then
+            log_error "Security violation: path contains '..' after canonicalization"
+            exit 1
+        fi
+
         docker_args+=(-v "${PROJECT_DIR}:/workspace")
         log_info "Mounting project: $PROJECT_DIR -> /workspace"
     fi

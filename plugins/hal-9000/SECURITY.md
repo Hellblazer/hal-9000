@@ -22,6 +22,44 @@ USER claude
 - `/home/claude/memory-bank` - Memory Bank data
 - `/workspace` - Project files
 
+### Volume Permission Handling
+
+Worker containers run as UID 1000 (claude user). If your host user has a different UID:
+
+**Option 1: Build Custom Image with Matching UID**
+```dockerfile
+# Dockerfile.worker-custom
+FROM ghcr.io/hellblazer/hal-9000:worker
+
+ARG HOST_UID=501
+USER root
+RUN usermod -u ${HOST_UID} claude && \
+    chown -R claude:claude /home/claude
+USER claude
+```
+
+```bash
+# Build with your host UID
+docker build --build-arg HOST_UID=$(id -u) -f Dockerfile.worker-custom -t hal9000-custom:worker .
+```
+
+**Option 2: Docker User Namespace Remapping** (Linux only)
+```bash
+# Configure Docker daemon to remap container UID to host UID
+# /etc/docker/daemon.json:
+{
+  "userns-remap": "default"
+}
+
+# Restart Docker
+sudo systemctl restart docker
+```
+
+**Check your UID:** Run `id -u` on the host to see your user ID.
+- Linux typically uses UID 1000 (matches container)
+- macOS typically uses UID 501-503 (requires custom image)
+- Enterprise environments may use UID ranges 10000+ (requires custom image)
+
 ### Image Allowlisting
 
 Worker images are validated against an allowlist to prevent supply chain attacks:
@@ -29,25 +67,28 @@ Worker images are validated against an allowlist to prevent supply chain attacks
 ```bash
 ALLOWED_IMAGES=(
     "ghcr.io/hellblazer/hal-9000:worker"
+    "ghcr.io/hellblazer/hal-9000:worker-v3.0.0"
     "ghcr.io/hellblazer/hal-9000:base"
-    "ghcr.io/hellblazer/hal-9000:python"
-    "ghcr.io/hellblazer/hal-9000:node"
-    "ghcr.io/hellblazer/hal-9000:java"
+    # ... versioned tags for immutability
 )
 ```
 
 **Rationale:** Prevents arbitrary image execution that could contain malicious code.
 
+**Note:** The allowlist includes versioned tags (e.g., `:worker-v3.0.0`) which won't be reused, providing protection against tag mutation attacks.
+
 ### Input Validation
 
-All user-controllable inputs are validated:
+All user-controllable inputs are validated using allowlist approach (fail closed):
 
-| Input | Validation | Location |
-|-------|------------|----------|
-| Branch names | `^[a-zA-Z0-9/_.-]+$` | aod.sh |
-| Profile names | `^[a-zA-Z0-9-]+$` + allowlist | hal9000.sh |
-| Project paths | No `..`, blocked system dirs | spawn-worker.sh |
-| Worktree paths | Must be under `~/.aod/worktrees/` | aod.sh |
+| Input | Validation | Approach | Location |
+|-------|------------|----------|----------|
+| Branch names | `^[a-zA-Z0-9/_.-]+$` | Allowlist regex | aod.sh |
+| Profile names | `^[a-zA-Z0-9-]+$` + explicit list | Allowlist | hal9000.sh |
+| Project paths | `/home`, `/Users`, `/workspace`, `/tmp` prefixes | Allowlist | spawn-worker.sh |
+| Worktree paths | Must be under `~/.aod/worktrees/` | Allowlist | aod.sh |
+
+**Security principle:** All validations fail closed - if canonicalization fails or path doesn't match allowlist, the operation is rejected.
 
 ## Known Risks and Mitigations
 
@@ -70,30 +111,38 @@ All user-controllable inputs are validated:
 
 ### Network Namespace (Risk: MEDIUM)
 
-**Current:** Containers use `--network host` for simplicity.
+**Network configuration depends on launcher:**
 
-**Risk:** Host network mode:
-- Exposes all host network interfaces to container
-- No network isolation between container and host services
-- Container can bind to host ports
+| Launcher | Network Mode | Description |
+|----------|--------------|-------------|
+| `aod.sh` | `--network host` | Direct host network access |
+| `spawn-worker.sh` | `--network container:$PARENT` | Shares parent's network namespace |
+
+**aod.sh (host network):**
+- Container shares all host network interfaces
+- Can access all host services on localhost
+- No network isolation from host
+
+**spawn-worker.sh (container network):**
+- Worker shares parent container's network namespace
+- Access to parent's services (e.g., ChromaDB on localhost:8000)
+- Isolated from host network if parent uses bridge/custom network
 
 **Mitigations:**
 1. Containers run as non-root (cannot bind to privileged ports)
-2. Workers share parent's network namespace (not host's)
+2. spawn-worker.sh workers inherit parent's network isolation
 
-**Recommendation:** For production deployments, consider bridge networking:
+**Recommendation for production:** Configure parent with bridge networking:
 
 ```bash
-# Create isolated network
+# Create isolated network for parent
 docker network create hal9000-net
 
-# Run with bridge network
-docker run --network hal9000-net ...
-```
+# Launch parent with bridge network
+docker run --network hal9000-net -p 8000:8000 ghcr.io/hellblazer/hal-9000:parent
 
-**Trade-offs:**
-- Bridge: Better isolation, requires explicit port mapping
-- Host: Simpler localhost access to services like ChromaDB
+# Workers automatically use parent's network namespace (isolated)
+```
 
 ### Credential Management (Risk: MEDIUM)
 
@@ -105,15 +154,18 @@ docker run --network hal9000-net ...
 
 **Mitigations:**
 1. Security warnings logged when env vars used
-2. Credential files supported as alternative (`~/.claude/.credentials.json`)
+2. Claude CLI supports authentication via `claude /login` command
 
-**Recommendation:** Use credential files instead of environment variables:
+**Recommendation:** Use Claude CLI's built-in authentication instead of environment variables:
 
 ```bash
-# Store credentials in file (not visible in docker inspect)
-echo '{"anthropic_api_key": "sk-..."}' > ~/.claude/.credentials.json
-chmod 600 ~/.claude/.credentials.json
+# Inside container, authenticate interactively
+claude /login
+
+# Credentials stored in ~/.claude/ (mounted volume persists across sessions)
 ```
+
+**Note:** The credential file approach (`~/.claude/.credentials.json`) is a Claude CLI feature. Check Claude CLI documentation for current authentication methods.
 
 ### Resource Exhaustion (Risk: LOW)
 
@@ -140,6 +192,14 @@ The hook system (`hooks.json`) provides guardrails for Bash commands but has lim
 
 **Impact:** Malicious or accidental operations via Read/Write/Edit tools cannot be intercepted.
 
+### Hook Execution Context
+
+Hooks run inside the Claude CLI process. In the hal-9000 architecture:
+- **Parent container:** Hooks run if Claude CLI is used in parent
+- **Worker containers:** Hooks run if hooks.json is included in worker image or mounted
+
+To ensure hooks are active in workers, verify the worker image includes `/home/claude/.claude/hooks.json` or mount it via volume.
+
 ### Recommendations
 
 1. **Awareness:** Hooks provide defense-in-depth, not complete protection
@@ -152,12 +212,13 @@ The hook system (`hooks.json`) provides guardrails for Bash commands but has lim
 Before deploying hal-9000:
 
 - [ ] Review and customize image allowlist for your environment
-- [ ] Use credential files instead of environment variables
-- [ ] Consider bridge networking for production
+- [ ] Use Claude CLI authentication (`/login`) instead of environment variables
+- [ ] Consider bridge networking for production deployments
 - [ ] Set appropriate resource limits
 - [ ] Run parent container only in trusted environments
 - [ ] Keep Docker and hal-9000 images updated
 - [ ] Monitor container logs for security warnings
+- [ ] Verify your host UID matches container (1000) or build custom image
 
 ## Reporting Security Issues
 
