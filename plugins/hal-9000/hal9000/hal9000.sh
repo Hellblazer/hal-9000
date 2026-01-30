@@ -224,13 +224,17 @@ launch_session() {
         docker rm -f "$existing_container" >/dev/null 2>&1 || true
     fi
 
-    # Select image
-    local image="ghcr.io/hellblazer/hal-9000:latest"
+    # Select image - use versioned tags for supply chain security
+    local image="ghcr.io/hellblazer/hal-9000:base-v3.0.0"
     if [[ -n "$profile" ]]; then
-        if docker image inspect "ghcr.io/hellblazer/hal-9000:${profile}" >/dev/null 2>&1; then
+        # Check for profile-specific image (versioned or local)
+        if docker image inspect "ghcr.io/hellblazer/hal-9000:${profile}-v3.0.0" >/dev/null 2>&1; then
+            image="ghcr.io/hellblazer/hal-9000:${profile}-v3.0.0"
+        elif docker image inspect "ghcr.io/hellblazer/hal-9000:${profile}" >/dev/null 2>&1; then
+            warn "Using locally cached profile image (consider updating to versioned tag)"
             image="ghcr.io/hellblazer/hal-9000:${profile}"
         else
-            warn "Profile image not found, using base image"
+            warn "Profile image '${profile}' not found, using base image"
         fi
     fi
 

@@ -39,7 +39,7 @@ log_error() { printf "${RED}[spawn]${NC} ERROR: %s\n" "$1" >&2; }
 WORKER_NAME=""
 DETACH=false
 REMOVE_ON_EXIT=true
-WORKER_IMAGE="${WORKER_IMAGE:-ghcr.io/hellblazer/hal-9000:worker}"
+WORKER_IMAGE="${WORKER_IMAGE:-ghcr.io/hellblazer/hal-9000:worker-v3.0.0}"
 PROJECT_DIR=""
 PARENT_CONTAINER="${HAL9000_PARENT:-hal9000-parent}"
 
@@ -156,16 +156,15 @@ parse_args() {
 
 # SECURITY: Allowlist of trusted worker images
 # Using versioned tags for supply chain security (tags won't be reused)
+# SECURITY: Only allow versioned image tags to prevent supply chain attacks
+# Mutable tags (e.g., :worker, :base) are not allowed - pin to specific versions
+# This ensures you deploy exactly what you tested, not the latest mutable tag
+# To use a new version, update your image specification with the new version tag
 ALLOWED_IMAGES=(
-    "ghcr.io/hellblazer/hal-9000:worker"
     "ghcr.io/hellblazer/hal-9000:worker-v3.0.0"
-    "ghcr.io/hellblazer/hal-9000:base"
     "ghcr.io/hellblazer/hal-9000:base-v3.0.0"
-    "ghcr.io/hellblazer/hal-9000:python"
     "ghcr.io/hellblazer/hal-9000:python-v3.0.0"
-    "ghcr.io/hellblazer/hal-9000:node"
     "ghcr.io/hellblazer/hal-9000:node-v3.0.0"
-    "ghcr.io/hellblazer/hal-9000:java"
     "ghcr.io/hellblazer/hal-9000:java-v3.0.0"
 )
 

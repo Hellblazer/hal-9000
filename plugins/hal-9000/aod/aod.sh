@@ -318,12 +318,15 @@ launch_session() {
     # Build Docker command with Claude CLI + MCP server access
     # MCP servers run inside container (pre-installed in image)
     local container_name="aod-${session_name}-slot${slot}"
-    local image="ghcr.io/hellblazer/hal-9000:latest"
 
-    # Select image based on profile (if profile-specific images exist)
+    # Select image - use versioned tags for supply chain security
+    local image="ghcr.io/hellblazer/hal-9000:base-v3.0.0"
     if [[ -n "$profile" ]]; then
-        # Try profile-specific image first, fall back to base
-        if docker image inspect "ghcr.io/hellblazer/hal-9000:${profile}" >/dev/null 2>&1; then
+        # Check for profile-specific image (versioned or local)
+        if docker image inspect "ghcr.io/hellblazer/hal-9000:${profile}-v3.0.0" >/dev/null 2>&1; then
+            image="ghcr.io/hellblazer/hal-9000:${profile}-v3.0.0"
+        elif docker image inspect "ghcr.io/hellblazer/hal-9000:${profile}" >/dev/null 2>&1; then
+            warn "Using locally cached profile image (consider updating to versioned tag)"
             image="ghcr.io/hellblazer/hal-9000:${profile}"
         fi
     fi
