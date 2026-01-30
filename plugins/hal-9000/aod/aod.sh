@@ -447,11 +447,24 @@ main() {
         profile=$(echo "$profile" | xargs)
         description=$(echo "$description" | xargs)
 
+        # SECURITY: Validate branch name to prevent command injection
+        # Only allow alphanumeric characters, slashes, underscores, hyphens, and dots
+        if [[ ! "$branch" =~ ^[a-zA-Z0-9/_.-]+$ ]]; then
+            die "Invalid branch name: '$branch'. Only alphanumeric, slash, underscore, hyphen, and dot allowed."
+        fi
+
         # Generate session name
         local session_name="aod-${branch//\//-}"
 
         # Generate worktree directory
         local worktree_dir="$HOME/.aod/worktrees/${repo_name}-${branch//\//-}"
+
+        # SECURITY: Validate worktree path to prevent path traversal
+        local worktree_canonical
+        worktree_canonical="$(realpath -m "$worktree_dir" 2>/dev/null || echo "$worktree_dir")"
+        if [[ ! "$worktree_canonical" =~ ^"$HOME"/.aod/worktrees/ ]]; then
+            die "Security violation: worktree path '$worktree_dir' escapes allowed directory"
+        fi
 
         printf "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
         printf "Task: ${GREEN}%s${NC}\n" "${description:-$branch}"

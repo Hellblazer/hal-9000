@@ -152,6 +152,27 @@ parse_args() {
 # VALIDATION
 # ============================================================================
 
+# SECURITY: Allowlist of trusted worker images
+ALLOWED_IMAGES=(
+    "ghcr.io/hellblazer/hal-9000:worker"
+    "ghcr.io/hellblazer/hal-9000:base"
+    "ghcr.io/hellblazer/hal-9000:python"
+    "ghcr.io/hellblazer/hal-9000:node"
+    "ghcr.io/hellblazer/hal-9000:java"
+)
+
+validate_worker_image() {
+    local image="$1"
+    for allowed in "${ALLOWED_IMAGES[@]}"; do
+        if [[ "$image" == "$allowed" ]]; then
+            return 0
+        fi
+    done
+    log_error "Security violation: image '$image' not in allowlist"
+    log_error "Allowed images: ${ALLOWED_IMAGES[*]}"
+    exit 1
+}
+
 validate_parent() {
     # Check if parent container is running
     if ! docker ps --format '{{.Names}}' | grep -q "^${PARENT_CONTAINER}$"; then
@@ -204,6 +225,22 @@ spawn_worker() {
     # In DinD mode, the path is a host path but we're running inside a container
     # Docker daemon is on the host, so paths must be host paths
     if [[ -n "$PROJECT_DIR" ]]; then
+        # SECURITY: Validate PROJECT_DIR to prevent path traversal attacks
+        # Reject paths containing .. or starting with sensitive directories
+        if [[ "$PROJECT_DIR" =~ \.\. ]]; then
+            log_error "Security violation: PROJECT_DIR cannot contain '..': $PROJECT_DIR"
+            exit 1
+        fi
+
+        # Block mounting sensitive system directories
+        local blocked_paths=("/etc" "/var" "/usr" "/bin" "/sbin" "/lib" "/root" "/boot" "/sys" "/proc" "/dev")
+        for blocked in "${blocked_paths[@]}"; do
+            if [[ "$PROJECT_DIR" == "$blocked" || "$PROJECT_DIR" == "$blocked/"* ]]; then
+                log_error "Security violation: cannot mount system directory: $PROJECT_DIR"
+                exit 1
+            fi
+        done
+
         # In DinD mode, we can't check if directory exists from inside container
         # because it's a host path. Just mount it and let docker fail if invalid.
         docker_args+=(-v "${PROJECT_DIR}:/workspace")
@@ -275,6 +312,9 @@ spawn_worker() {
 
     # Working directory
     docker_args+=(-w /workspace)
+
+    # SECURITY: Validate worker image is in allowlist
+    validate_worker_image "$WORKER_IMAGE"
 
     # Image
     docker_args+=("$WORKER_IMAGE")

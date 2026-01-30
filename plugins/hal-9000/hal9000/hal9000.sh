@@ -329,6 +329,30 @@ parse_config() {
     printf '%s\n' "${tasks[@]}"
 }
 
+# SECURITY: Validate profile name
+validate_profile() {
+    local profile="$1"
+    if [[ -z "$profile" ]]; then
+        return 0
+    fi
+    # Only allow alphanumeric and hyphen
+    if [[ ! "$profile" =~ ^[a-zA-Z0-9-]+$ ]]; then
+        die "Invalid profile name: '$profile'. Only alphanumeric and hyphen allowed."
+    fi
+    # Must be a known profile
+    local allowed_profiles=("python" "node" "java" "base" "worker" "latest")
+    local valid=false
+    for p in "${allowed_profiles[@]}"; do
+        if [[ "$profile" == "$p" ]]; then
+            valid=true
+            break
+        fi
+    done
+    if [[ "$valid" != "true" ]]; then
+        die "Unknown profile: '$profile'. Allowed: ${allowed_profiles[*]}"
+    fi
+}
+
 # Run single container
 cmd_run() {
     local profile=""
@@ -342,6 +366,7 @@ cmd_run() {
         case "$1" in
             --profile)
                 profile="$2"
+                validate_profile "$profile"
                 shift 2
                 ;;
             --slot)
@@ -409,6 +434,7 @@ cmd_squad() {
                 ;;
             --profile)
                 profile="$2"
+                validate_profile "$profile"
                 shift 2
                 ;;
             -*)
