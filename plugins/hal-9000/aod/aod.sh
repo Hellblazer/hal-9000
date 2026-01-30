@@ -15,6 +15,16 @@ readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly AOD_DIR="$HOME/.aod"
 readonly LOCKFILE="$AOD_DIR/aod.lock"
 
+# SECURITY: Only allow versioned image tags to prevent supply chain attacks
+# Mutable tags (e.g., :worker, :base) are not allowed - pin to specific versions
+ALLOWED_IMAGES=(
+    "ghcr.io/hellblazer/hal-9000:worker-v3.0.0"
+    "ghcr.io/hellblazer/hal-9000:base-v3.0.0"
+    "ghcr.io/hellblazer/hal-9000:python-v3.0.0"
+    "ghcr.io/hellblazer/hal-9000:node-v3.0.0"
+    "ghcr.io/hellblazer/hal-9000:java-v3.0.0"
+)
+
 # Source shared library for common functions
 # shellcheck source=../lib/container-common.sh
 source "${SCRIPT_DIR}/../lib/container-common.sh"
@@ -42,6 +52,19 @@ init_aod_dir() {
         touch "$AOD_DIR/sessions.log"
     fi
     chmod 600 "$AOD_DIR/sessions.log"
+}
+
+# Validate that image is in the allowed list
+validate_image() {
+    local image="$1"
+    for allowed in "${ALLOWED_IMAGES[@]}"; do
+        if [[ "$image" == "$allowed" ]]; then
+            return 0
+        fi
+    done
+
+    # Image not in allowlist
+    die "SECURITY: Untrusted image '$image'. Allowed images: ${ALLOWED_IMAGES[*]}"
 }
 
 # Cleanup on exit (uses release_lock from container-common.sh)
@@ -330,6 +353,9 @@ launch_session() {
             image="ghcr.io/hellblazer/hal-9000:${profile}"
         fi
     fi
+
+    # SECURITY: Validate image is in the allowlist before using it
+    validate_image "$image"
 
     # Create container-specific .claude directory for writable state
     local container_claude_dir="$HOME/.aod/claude/$session_name"
