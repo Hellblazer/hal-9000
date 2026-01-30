@@ -97,13 +97,10 @@ RUN groupadd -g ${CLAUDE_GID} claude && \
 RUN mkdir -p /workspace /home/claude/.claude /data/memory-bank /scripts && \
     chown -R claude:claude /workspace /home/claude /data/memory-bank /scripts
 
-# Copy tools to user's local bin (installed as root, now available to claude user)
-# - Claude CLI
-# - uv (Python package installer)
+# Copy all tools to user's local bin (installed as root, now available to claude user)
+# Includes: Claude CLI, uv, uvx, chroma-mcp, and any other uv-installed tools
 RUN mkdir -p /home/claude/.local/bin && \
-    cp /root/.local/bin/claude /home/claude/.local/bin/ 2>/dev/null || true && \
-    cp /root/.local/bin/uv /home/claude/.local/bin/ 2>/dev/null || true && \
-    cp /root/.local/bin/uvx /home/claude/.local/bin/ 2>/dev/null || true && \
+    cp -r /root/.local/bin/* /home/claude/.local/bin/ 2>/dev/null || true && \
     chown -R claude:claude /home/claude/.local
 
 # Copy entrypoint script
