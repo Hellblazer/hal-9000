@@ -138,8 +138,15 @@ get_next_container_slot() {
 
 # Inject MCP server configuration into settings.json
 # Usage: inject_mcp_config "/path/to/settings.json"
+# SECURITY: Uses jq for safe JSON manipulation (no code injection risk)
 inject_mcp_config() {
     local settings_file="$1"
+
+    # SECURITY: Validate settings_file path
+    if [[ -z "$settings_file" ]]; then
+        warn "inject_mcp_config: settings_file path required"
+        return 1
+    fi
 
     # Create settings.json if it doesn't exist
     if [[ ! -f "$settings_file" ]]; then
@@ -147,22 +154,23 @@ inject_mcp_config() {
     fi
 
     # Determine ChromaDB client type based on environment variables
-    local chromadb_args='["--client-type", "ephemeral"]'
+    local chromadb_client_type="ephemeral"
     if [[ -n "${CHROMADB_TENANT:-}" ]] && [[ -n "${CHROMADB_API_KEY:-}" ]]; then
-        chromadb_args='["--client-type", "cloud"]'
+        chromadb_client_type="cloud"
         info "ChromaDB configured for cloud mode"
     fi
 
     # MCP server configuration
+    # SECURITY: Paths must match container user (claude, UID 1000)
     local mcp_config
-    mcp_config=$(cat <<MCPEOF
+    mcp_config=$(cat <<'MCPEOF'
 {
   "mcpServers": {
     "memory-bank": {
       "command": "mcp-server-memory-bank",
       "args": [],
       "env": {
-        "MEMORY_BANK_ROOT": "/root/memory-bank"
+        "MEMORY_BANK_ROOT": "/home/claude/memory-bank"
       }
     },
     "sequential-thinking": {
@@ -171,21 +179,34 @@ inject_mcp_config() {
     },
     "chromadb": {
       "command": "chroma-mcp",
-      "args": $chromadb_args,
+      "args": ["--client-type", "CHROMADB_CLIENT_TYPE_PLACEHOLDER"],
       "env": {}
     }
   }
 }
 MCPEOF
 )
+    # Substitute the client type (safe - value is controlled)
+    mcp_config="${mcp_config//CHROMADB_CLIENT_TYPE_PLACEHOLDER/$chromadb_client_type}"
 
-    # Merge MCP config using Python
-    if command -v python3 >/dev/null 2>&1; then
-        python3 -c "
+    # Merge MCP config using jq (preferred - safe JSON manipulation)
+    if command -v jq >/dev/null 2>&1; then
+        local merged
+        merged=$(jq -s '.[0] * .[1] | .mcpServers = (.[0].mcpServers // {}) * (.[1].mcpServers // {})' \
+            "$settings_file" <(echo "$mcp_config") 2>/dev/null) || {
+            warn "Could not merge MCP config with jq"
+            return 1
+        }
+        echo "$merged" > "$settings_file"
+    # Fallback to Python if jq not available
+    elif command -v python3 >/dev/null 2>&1; then
+        # SECURITY: Pass data via stdin/files, not string interpolation
+        python3 << 'PYEOF' "$settings_file" "$mcp_config"
 import json
+import sys
 
-settings_file = '$settings_file'
-mcp_config = $mcp_config
+settings_file = sys.argv[1]
+mcp_config = json.loads(sys.argv[2])
 
 try:
     with open(settings_file, 'r') as f:
@@ -199,9 +220,14 @@ settings['mcpServers'].update(mcp_config.get('mcpServers', {}))
 
 with open(settings_file, 'w') as f:
     json.dump(settings, f, indent=2)
-" 2>/dev/null || warn "Could not inject MCP config (Python error)"
+PYEOF
+        if [[ $? -ne 0 ]]; then
+            warn "Could not inject MCP config (Python error)"
+            return 1
+        fi
     else
-        warn "Python not available for MCP config injection"
+        warn "Neither jq nor Python available for MCP config injection"
+        return 1
     fi
 }
 
@@ -212,6 +238,7 @@ with open(settings_file, 'w') as f:
 # Build docker args array for container launch
 # Sets docker_args array variable
 # Usage: init_docker_args "container-name" "/workspace/dir" "/claude/dir"
+# SECURITY: Container runs as non-root user 'claude' (UID 1000)
 init_docker_args() {
     local container_name="$1"
     local work_dir="$2"
@@ -226,8 +253,8 @@ init_docker_args() {
         --name "$container_name"
         --network host
         -v "$work_dir:/workspace"
-        -v "$claude_dir:/root/.claude"
-        -v "$HOME/memory-bank:/root/memory-bank"
+        -v "$claude_dir:/home/claude/.claude"
+        -v "$HOME/memory-bank:/home/claude/memory-bank"
         -w /workspace
         -e ANTHROPIC_API_KEY
     )

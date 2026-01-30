@@ -339,14 +339,16 @@ launch_session() {
     mkdir -p "$HOME/memory-bank"
 
     # Build docker command using array for proper quoting
+    # SECURITY: Container runs as non-root user 'claude' (UID 1000)
+    # Mount paths must match container user home directory
     local -a docker_args=(
         docker run -it --rm
         --name "$container_name"
         --network host
         -v "$worktree_dir:/workspace"
-        -v "$container_claude_dir:/root/.claude"
-        -v "hal9000-claude-home:/root/.claude/marketplace"
-        -v "$HOME/memory-bank:/root/memory-bank"
+        -v "$container_claude_dir:/home/claude/.claude"
+        -v "hal9000-claude-home:/home/claude/.claude/marketplace"
+        -v "$HOME/memory-bank:/home/claude/memory-bank"
         -w /workspace
         -e "AOD_SESSION=$session_name"
         -e "AOD_BRANCH=$branch"

@@ -75,25 +75,48 @@ RUN npm install -g @modelcontextprotocol/server-sequential-thinking@2025.12.18
 RUN uv tool install chroma-mcp==0.2.6
 
 # ============================================================================
+# Non-Root User (Security Hardening)
+# ============================================================================
+
+# Create non-root user for running Claude
+# UID/GID 1000 matches common host user for volume permissions
+ARG CLAUDE_UID=1000
+ARG CLAUDE_GID=1000
+
+RUN groupadd -g ${CLAUDE_GID} claude && \
+    useradd -u ${CLAUDE_UID} -g claude -m -d /home/claude -s /bin/bash claude
+
+# ============================================================================
 # Directory Structure
 # ============================================================================
 
 # Create directories for:
 # - /workspace: Project files (mounted per-session)
-# - /root/.claude: CLAUDE_HOME (shared volume for marketplace)
+# - /home/claude/.claude: CLAUDE_HOME (shared volume for marketplace)
 # - /data/memory-bank: Memory Bank data (shared volume)
-RUN mkdir -p /workspace /root/.claude /data/memory-bank /scripts
+RUN mkdir -p /workspace /home/claude/.claude /data/memory-bank /scripts && \
+    chown -R claude:claude /workspace /home/claude /data/memory-bank /scripts
+
+# Copy Claude CLI to user's local bin (installed as root, now available to claude user)
+RUN mkdir -p /home/claude/.local/bin && \
+    cp /root/.local/bin/claude /home/claude/.local/bin/ 2>/dev/null || true && \
+    chown -R claude:claude /home/claude/.local
 
 # Copy entrypoint script
 COPY docker/worker-entrypoint.sh /scripts/worker-entrypoint.sh
 RUN chmod +x /scripts/worker-entrypoint.sh
 
 # Environment variables
-ENV CLAUDE_HOME=/root/.claude
+ENV CLAUDE_HOME=/home/claude/.claude
 ENV WORKSPACE=/workspace
 ENV MEMORY_BANK_ROOT=/data/memory-bank
 ENV CHROMADB_HOST=localhost
 ENV CHROMADB_PORT=8000
+ENV HOME=/home/claude
+ENV PATH="/home/claude/.local/bin:${PATH}"
+
+# Switch to non-root user
+USER claude
 
 WORKDIR /workspace
 

@@ -258,17 +258,21 @@ spawn_worker() {
     # Use a single shared volume for all workers
     local claude_volume="hal9000-claude-home"
 
+    # SECURITY: Workers run as non-root user 'claude' (UID 1000)
+    # Mount to /home/claude/.claude instead of /root/.claude
+    local claude_home_path="/home/claude/.claude"
+
     if [[ "$in_container" == "true" ]]; then
         # Inside container - use named volumes (host paths won't work)
         docker volume create "$claude_volume" >/dev/null 2>&1 || true
-        docker_args+=(-v "${claude_volume}:/root/.claude")
+        docker_args+=(-v "${claude_volume}:${claude_home_path}")
         log_info "DinD mode: using shared volume $claude_volume"
     else
         # Running on host - use host directory (shared across all workers)
         local hal9000_home="${HAL9000_HOME:-$HOME/.hal9000}"
         local claude_home="${hal9000_home}/claude"
         mkdir -p "$claude_home" 2>/dev/null || true
-        docker_args+=(-v "${claude_home}:/root/.claude")
+        docker_args+=(-v "${claude_home}:${claude_home_path}")
         log_info "Host mode: using shared directory $claude_home"
     fi
 
@@ -287,9 +291,14 @@ spawn_worker() {
         log_info "ChromaDB data: shared volume"
     fi
 
-    # Pass through API key if set
+    # SECURITY NOTE: Prefer credential files over environment variables
+    # Environment variables are visible in 'docker inspect' output
+    # Credentials in ~/.claude/.credentials.json are more secure
+
+    # Pass through API key if set (prefer credential files instead)
     if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
         docker_args+=(-e ANTHROPIC_API_KEY)
+        log_warn "SECURITY: Using ANTHROPIC_API_KEY env var - prefer credential files"
     fi
 
     # Pass through ChromaDB cloud credentials if set
@@ -298,6 +307,7 @@ spawn_worker() {
     fi
     if [[ -n "${CHROMADB_API_KEY:-}" ]]; then
         docker_args+=(-e CHROMADB_API_KEY)
+        log_warn "SECURITY: Using CHROMADB_API_KEY env var - visible in docker inspect"
     fi
 
     # Resource limits (unless disabled)
