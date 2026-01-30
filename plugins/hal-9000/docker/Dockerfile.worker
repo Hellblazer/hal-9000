@@ -51,34 +51,11 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Claude CLI (native binary)
-RUN curl -fsSL https://claude.ai/install.sh | bash
-
-# Add Claude CLI to PATH
-ENV PATH="/root/.local/bin:${PATH}"
-
-# Install uv (fast Python package installer)
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# ============================================================================
-# Foundation MCP Servers
-# ============================================================================
-
-# Memory Bank - persistent memory across sessions (npm)
-# Data stored in shared volume: /data/memory-bank
-RUN npm install -g @allpepper/memory-bank-mcp@0.2.2
-
-# Sequential Thinking - step-by-step reasoning (npm)
-RUN npm install -g @modelcontextprotocol/server-sequential-thinking@2025.12.18
-
-# ChromaDB MCP client - connects to parent's ChromaDB server (Python)
-RUN uv tool install chroma-mcp==0.2.6
-
 # ============================================================================
 # Non-Root User (Security Hardening)
 # ============================================================================
 
-# Create non-root user for running Claude
+# Create non-root user for running Claude BEFORE installing user-specific tools
 # UID/GID 1000 matches common host user for volume permissions
 ARG CLAUDE_UID=1000
 ARG CLAUDE_GID=1000
@@ -97,19 +74,46 @@ RUN groupadd -g ${CLAUDE_GID} claude && \
 RUN mkdir -p /workspace /home/claude/.claude /data/memory-bank /scripts && \
     chown -R claude:claude /workspace /home/claude /data/memory-bank /scripts
 
-# Copy all tools to user's local bin (installed as root, now available to claude user)
-# SECURITY: Fail build if critical binaries cannot be copied (no silent failures)
-RUN mkdir -p /home/claude/.local/bin && \
-    # Copy all binaries from root's local bin
-    cp -rp /root/.local/bin/* /home/claude/.local/bin/ && \
-    # Ensure executability
-    chmod +x /home/claude/.local/bin/* && \
-    # Set ownership
-    chown -R claude:claude /home/claude/.local && \
-    # Verify critical binaries exist and are executable
-    test -x /home/claude/.local/bin/claude && \
+# ============================================================================
+# Foundation MCP Servers (npm - installed globally as root)
+# ============================================================================
+
+# Memory Bank - persistent memory across sessions (npm)
+# Data stored in shared volume: /data/memory-bank
+RUN npm install -g @allpepper/memory-bank-mcp@0.2.2
+
+# Sequential Thinking - step-by-step reasoning (npm)
+RUN npm install -g @modelcontextprotocol/server-sequential-thinking@2025.12.18
+
+# ============================================================================
+# User-Specific Tools (installed as claude user)
+# ============================================================================
+
+# Switch to claude user for installing user-specific tools
+# This ensures proper permissions without needing to copy binaries
+USER claude
+WORKDIR /home/claude
+
+# Install uv (fast Python package installer) as claude user
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Set PATH for uv before installing chroma-mcp
+ENV PATH="/home/claude/.local/bin:${PATH}"
+
+# ChromaDB MCP client - connects to parent's ChromaDB server (Python)
+# Must be installed after uv and as claude user
+RUN /home/claude/.local/bin/uv tool install chroma-mcp==0.2.6
+
+# Install Claude CLI (native binary) as claude user
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
+# Verify user-specific installations
+RUN test -x /home/claude/.local/bin/claude && \
     test -x /home/claude/.local/bin/uv && \
-    echo "✓ Critical binaries copied and verified"
+    echo "✓ User tools installed and verified"
+
+# Switch back to root for remaining setup
+USER root
 
 # Copy entrypoint script
 COPY docker/worker-entrypoint.sh /scripts/worker-entrypoint.sh
