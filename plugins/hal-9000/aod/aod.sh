@@ -344,7 +344,6 @@ launch_session() {
     local -a docker_args=(
         docker run -it --rm
         --name "$container_name"
-        --network host
         -v "$worktree_dir:/workspace"
         -v "$container_claude_dir:/home/claude/.claude"
         -v "hal9000-claude-home:/home/claude/.claude/marketplace"

@@ -269,8 +269,8 @@ spawn_worker() {
             exit 1
         fi
 
-        docker_args+=(-v "${PROJECT_DIR}:/workspace")
-        log_info "Mounting project: $PROJECT_DIR -> /workspace"
+        docker_args+=(-v "${canonical_path}:/workspace")
+        log_info "Mounting project: $canonical_path -> /workspace"
     fi
 
     # Mount shared CLAUDE_HOME volume for marketplace persistence

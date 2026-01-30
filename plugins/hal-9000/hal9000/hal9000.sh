@@ -261,10 +261,9 @@ launch_session() {
     local -a docker_args=(
         docker run -it --rm
         --name "$container_name"
-        --network host
         -v "$work_dir:/workspace"
-        -v "$container_claude_dir:/root/.claude"
-        -v "$HOME/memory-bank:/root/memory-bank"
+        -v "$container_claude_dir:/home/claude/.claude"
+        -v "$HOME/memory-bank:/home/claude/memory-bank"
         -w /workspace
         -e "HAL9000_SESSION=$session_name"
         -e "HAL9000_SLOT=$slot"
