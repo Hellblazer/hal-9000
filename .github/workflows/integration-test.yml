@@ -150,28 +150,29 @@ jobs:
         run: |
           echo "Testing worker image..."
 
+          # Override entrypoint for test commands
           # Check non-root user is configured
-          docker run --rm hal9000-worker-test:latest id | grep -q "claude" || {
+          docker run --rm --entrypoint id hal9000-worker-test:latest | grep -q "claude" || {
             echo "✗ Container not running as claude user"
             exit 1
           }
           echo "✓ Container runs as non-root user"
 
           # Check MCP servers are installed (using which to avoid permission issues)
-          docker run --rm hal9000-worker-test:latest which mcp-server-memory-bank || {
+          docker run --rm --entrypoint which hal9000-worker-test:latest mcp-server-memory-bank || {
             echo "✗ memory-bank MCP server not found"
             exit 1
           }
           echo "✓ memory-bank MCP server installed"
 
-          docker run --rm hal9000-worker-test:latest which mcp-server-sequential-thinking || {
+          docker run --rm --entrypoint which hal9000-worker-test:latest mcp-server-sequential-thinking || {
             echo "✗ sequential-thinking MCP server not found"
             exit 1
           }
           echo "✓ sequential-thinking MCP server installed"
 
           # Verify key binaries exist in claude user's path
-          docker run --rm hal9000-worker-test:latest ls -la /home/claude/.local/bin/ || true
+          docker run --rm --entrypoint ls hal9000-worker-test:latest -la /home/claude/.local/bin/ || true
           echo "✓ Worker image built successfully"
 
   test-summary:
