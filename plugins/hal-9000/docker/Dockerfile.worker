@@ -10,7 +10,7 @@
 #
 # Build: docker build -f Dockerfile.worker -t ghcr.io/hellblazer/hal-9000:worker .
 
-FROM debian:bookworm-slim
+FROM node:20-bookworm-slim
 
 LABEL maintainer="hal-9000"
 LABEL description="HAL-9000 worker - Claude CLI with foundation MCP servers"
@@ -24,7 +24,7 @@ LABEL build_date="2026-01-26"
 # - git: Development workflows
 # - tmux: Session management
 # - python3 + venv: Python MCP servers
-# - nodejs: npm MCP servers
+# Note: Node.js 20 LTS is already included in node:20-bookworm-slim base image
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
@@ -45,11 +45,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 ENV TERM=xterm-256color
-
-# Install Node.js 20 LTS (required for npm-based MCP servers)
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
 
 # ============================================================================
 # Non-Root User (Security Hardening)
