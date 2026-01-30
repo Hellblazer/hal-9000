@@ -23,7 +23,7 @@ tmux display-message -p '#S'      # Current session name
 - Worktrees: `~/.aod/worktrees/`
 - Sessions share git repo, isolated working trees
 - Commits visible to other sessions after commit
-- Each session in ClaudeBox container
+- Each session in hal-9000 container
 
 ## beads (bd)
 

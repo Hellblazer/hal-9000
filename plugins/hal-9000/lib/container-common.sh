@@ -114,7 +114,7 @@ release_lock() {
 # ============================================================================
 
 # Get next available slot number for containers
-# Usage: get_next_slot "hal9000" or get_next_slot "claudebox"
+# Usage: get_next_slot "hal9000" or get_next_slot "aod"
 get_next_container_slot() {
     local prefix="${1:-hal9000}"
     local max_slot=0
