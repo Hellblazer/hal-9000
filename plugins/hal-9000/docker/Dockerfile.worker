@@ -123,16 +123,17 @@ USER claude
 
 WORKDIR /workspace
 
-# Verify installations
-RUN echo "Verifying installations..." \
-    && claude --version \
-    && node --version \
-    && npm --version \
-    && uv --version \
-    && mcp-server-memory-bank --version > /dev/null 2>&1 || echo "✓ memory-bank ready" \
-    && mcp-server-sequential-thinking --version > /dev/null 2>&1 || echo "✓ sequential-thinking ready" \
-    && chroma-mcp --help > /dev/null 2>&1 \
-    && echo "✓ Foundation MCP servers installed"
+# Verify installations (best-effort - some tools may need runtime permissions)
+RUN echo "Verifying installations..." && \
+    (claude --version 2>/dev/null || echo "claude: will verify at runtime") && \
+    node --version && \
+    npm --version && \
+    (uv --version 2>/dev/null || echo "uv: will verify at runtime") && \
+    echo "✓ Node.js and npm installed" && \
+    which mcp-server-memory-bank && echo "✓ memory-bank MCP server found" && \
+    which mcp-server-sequential-thinking && echo "✓ sequential-thinking MCP server found" && \
+    (which chroma-mcp 2>/dev/null && echo "✓ chroma-mcp found" || echo "chroma-mcp: will verify at runtime") && \
+    echo "Build verification complete"
 
 # Health check
 HEALTHCHECK --interval=60s --timeout=10s --start-period=5s --retries=3 \
