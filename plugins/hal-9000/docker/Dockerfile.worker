@@ -99,8 +99,10 @@ RUN mkdir -p /workspace /home/claude/.claude /data/memory-bank /scripts && \
 
 # Copy all tools to user's local bin (installed as root, now available to claude user)
 # Includes: Claude CLI, uv, uvx, chroma-mcp, and any other uv-installed tools
+# Preserve permissions with -p and ensure executability
 RUN mkdir -p /home/claude/.local/bin && \
-    cp -r /root/.local/bin/* /home/claude/.local/bin/ 2>/dev/null || true && \
+    cp -rp /root/.local/bin/* /home/claude/.local/bin/ 2>/dev/null || true && \
+    chmod +x /home/claude/.local/bin/* 2>/dev/null || true && \
     chown -R claude:claude /home/claude/.local
 
 # Copy entrypoint script
