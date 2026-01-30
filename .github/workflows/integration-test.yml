@@ -89,21 +89,42 @@ jobs:
 
           echo "All hooks bundled"
 
-      - name: Check agents bundled
+      - name: Check Docker files
         run: |
-          echo "Verifying custom agents are bundled..."
-          AGENTS_DIR="plugins/hal-9000/agents"
+          echo "Verifying Docker infrastructure..."
+          DOCKER_DIR="plugins/hal-9000/docker"
 
-          agent_count=$(ls -1 "$AGENTS_DIR"/*.md 2>/dev/null | wc -l)
-          if [ "$agent_count" -ge 10 ]; then
-            echo "✓ $agent_count agents bundled"
+          required_files=(
+            "Dockerfile.parent"
+            "Dockerfile.worker"
+            "Dockerfile.base"
+            "build-profiles.sh"
+            "spawn-worker.sh"
+          )
+
+          for file in "${required_files[@]}"; do
+            if [ -f "$DOCKER_DIR/$file" ]; then
+              echo "✓ $file"
+            else
+              echo "✗ Missing: $file"
+              exit 1
+            fi
+          done
+
+          echo "All Docker files present"
+
+      - name: Check security documentation
+        run: |
+          echo "Verifying security documentation..."
+          if [ -f "plugins/hal-9000/SECURITY.md" ]; then
+            echo "✓ SECURITY.md present"
           else
-            echo "✗ Expected 10+ agents, found $agent_count"
+            echo "✗ SECURITY.md missing"
             exit 1
           fi
 
-  full-integration-test:
-    name: Full Integration Test (Ubuntu)
+  docker-build-test:
+    name: Docker Build Test
     runs-on: ubuntu-latest
     needs: quick-smoke-test
 
@@ -114,36 +135,52 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build full test image
+      - name: Build worker image
         uses: docker/build-push-action@v5
         with:
           context: ./plugins/hal-9000
-          file: ./plugins/hal-9000/docker/Dockerfile.test-full
-          build-contexts: |
-            templates=./templates
+          file: ./plugins/hal-9000/docker/Dockerfile.worker
           push: false
           load: true
-          tags: hal9000-test-full:latest
+          tags: hal9000-worker-test:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Run full integration tests
+      - name: Verify worker image
         run: |
-          docker run --rm \
-            --name hal9000-full-test \
-            hal9000-test-full:latest \
-            /hal-9000/test/run-full-tests.sh
+          echo "Testing worker image..."
 
-      - name: Collect logs on failure
-        if: failure()
-        run: |
-          # Container already removed with --rm, but capture any remaining info
-          echo "Test failed - check output above for details"
+          # Check Claude CLI is installed
+          docker run --rm hal9000-worker-test:latest claude --version || {
+            echo "✗ Claude CLI not found in worker image"
+            exit 1
+          }
+          echo "✓ Claude CLI installed"
+
+          # Check MCP servers are installed
+          docker run --rm hal9000-worker-test:latest which mcp-server-memory-bank || {
+            echo "✗ memory-bank MCP server not found"
+            exit 1
+          }
+          echo "✓ memory-bank MCP server installed"
+
+          docker run --rm hal9000-worker-test:latest which mcp-server-sequential-thinking || {
+            echo "✗ sequential-thinking MCP server not found"
+            exit 1
+          }
+          echo "✓ sequential-thinking MCP server installed"
+
+          # Check non-root user
+          docker run --rm hal9000-worker-test:latest id | grep -q "claude" || {
+            echo "✗ Container not running as claude user"
+            exit 1
+          }
+          echo "✓ Container runs as non-root user"
 
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [quick-smoke-test, full-integration-test]
+    needs: [quick-smoke-test, docker-build-test]
     if: always()
 
     steps:
@@ -158,16 +195,16 @@ jobs:
             echo "✗ Quick Smoke Test: FAILED"
           fi
 
-          if [ "${{ needs.full-integration-test.result }}" = "success" ]; then
-            echo "✓ Full Integration Test: PASSED"
+          if [ "${{ needs.docker-build-test.result }}" = "success" ]; then
+            echo "✓ Docker Build Test: PASSED"
           else
-            echo "✗ Full Integration Test: FAILED"
+            echo "✗ Docker Build Test: FAILED"
           fi
 
           echo ""
 
           if [ "${{ needs.quick-smoke-test.result }}" != "success" ] || \
-             [ "${{ needs.full-integration-test.result }}" != "success" ]; then
+             [ "${{ needs.docker-build-test.result }}" != "success" ]; then
             echo "Some tests failed!"
             exit 1
           fi

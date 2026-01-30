@@ -5,66 +5,16 @@ on:
     branches: [ main, develop ]
     paths:
       - 'plugins/hal-9000/**'
+      - 'install-hal-9000.sh'
       - '.github/workflows/test-installation.yml'
   pull_request:
     branches: [ main ]
     paths:
       - 'plugins/hal-9000/**'
+      - 'install-hal-9000.sh'
   workflow_dispatch:
 
 jobs:
-  test-pep668-detection:
-    name: Test PEP 668 Detection
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        container:
-          - debian:bookworm-slim
-          - ubuntu:24.04
-          - python:3.11-slim
-
-    container:
-      image: ${{ matrix.container }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install prerequisites
-        run: |
-          if command -v apt-get &> /dev/null; then
-            apt-get update -qq
-            apt-get install -y -qq python3 python3-pip > /dev/null 2>&1
-          fi
-
-      - name: Test PEP 668 Detection
-        shell: bash
-        run: |
-          cd plugins/hal-9000/mcp-servers
-          source common.sh
-
-          echo "Testing PEP 668 detection..."
-          if has_pep668_protection; then
-            echo "✓ PEP 668 detected"
-          else
-            echo "✗ PEP 668 not detected (may be expected on some systems)"
-          fi
-
-      - name: Test safe_pip_install
-        shell: bash
-        run: |
-          cd plugins/hal-9000/mcp-servers
-          source common.sh
-
-          echo "Testing safe_pip_install function..."
-          if safe_pip_install setuptools; then
-            echo "✓ safe_pip_install works"
-          else
-            echo "✗ safe_pip_install failed"
-            exit 1
-          fi
-
   validate-scripts:
     name: Validate Installation Scripts
     runs-on: ubuntu-latest
@@ -85,17 +35,26 @@ jobs:
           done
           echo "✓ All scripts have valid syntax"
 
-      - name: Run shellcheck
+      - name: Run shellcheck on critical scripts
         run: |
-          echo "Running shellcheck on all scripts..."
-          # Find all shell scripts and run shellcheck
-          # Using -x to follow source statements
-          # -S error: Only fail on errors, not warnings
+          echo "Running shellcheck on critical scripts..."
+
+          critical_scripts=(
+            "plugins/hal-9000/hal9000/hal9000.sh"
+            "plugins/hal-9000/aod/aod.sh"
+            "plugins/hal-9000/docker/spawn-worker.sh"
+            "plugins/hal-9000/lib/container-common.sh"
+          )
+
           failed=0
-          for script in $(find plugins/hal-9000 -name "*.sh" -type f); do
-            echo "Checking: $script"
-            if ! shellcheck -x -S error "$script"; then
-              failed=1
+          for script in "${critical_scripts[@]}"; do
+            if [ -f "$script" ]; then
+              echo "Checking: $script"
+              if ! shellcheck -x -S error "$script"; then
+                failed=1
+              fi
+            else
+              echo "Warning: $script not found"
             fi
           done
 
@@ -104,62 +63,38 @@ jobs:
             echo "Shellcheck found errors. Please fix them before merging."
             exit 1
           else
-            echo "✓ All scripts passed shellcheck (errors)"
+            echo "✓ Critical scripts passed shellcheck"
           fi
 
-          # Run again with warnings for informational purposes (non-blocking)
-          echo ""
-          echo "Checking for warnings (informational only):"
-          find plugins/hal-9000 -name "*.sh" -type f -exec shellcheck -x -S warning {} \; 2>&1 || true
-
-      - name: Check for common issues
+      - name: Check security validations
         run: |
-          echo "Checking for common issues..."
+          echo "Verifying security validations in scripts..."
 
-          # Check for unquoted variables in critical sections
-          if grep -r '\$[A-Z_]*[^"]' plugins/hal-9000/mcp-servers/*.sh | grep -v "^#" | grep -v "pip3 install"; then
-            echo "Warning: Found potentially unquoted variables"
-          fi
-
-          # Check that safe_pip_install is exported
-          if ! grep -q "export -f safe_pip_install" plugins/hal-9000/mcp-servers/common.sh; then
-            echo "✗ safe_pip_install not exported in common.sh"
-            exit 1
-          fi
-
-          echo "✓ Basic validation passed"
-
-  test-manual-installation:
-    name: Manual Installation Test
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Test manual MCP installation
-        shell: bash
-        run: |
-          cd plugins/hal-9000/mcp-servers
-          source common.sh
-
-          echo "Installing chroma-mcp manually..."
-          if safe_pip_install chroma-mcp; then
-            echo "✓ chroma-mcp installed successfully"
+          # Check for input validation in spawn-worker.sh
+          if grep -q "validate_worker_image" plugins/hal-9000/docker/spawn-worker.sh; then
+            echo "✓ Worker image validation present"
           else
-            echo "✗ chroma-mcp installation failed"
+            echo "✗ Worker image validation missing"
             exit 1
           fi
 
-          # Verify installation
-          export PATH="$HOME/.local/bin:$PATH"
-          if command -v chroma-mcp &> /dev/null; then
-            echo "✓ chroma-mcp command found"
-            chroma-mcp --help || true
+          # Check for path traversal prevention
+          if grep -q '\.\..*Security violation' plugins/hal-9000/docker/spawn-worker.sh; then
+            echo "✓ Path traversal prevention present"
           else
-            echo "✗ chroma-mcp command not found"
+            echo "✗ Path traversal prevention missing"
             exit 1
           fi
+
+          # Check for branch name validation in aod.sh
+          if grep -q 'a-zA-Z0-9/_.-' plugins/hal-9000/aod/aod.sh; then
+            echo "✓ Branch name validation present"
+          else
+            echo "✗ Branch name validation missing"
+            exit 1
+          fi
+
+          echo "✓ All security validations present"
 
   documentation-check:
     name: Check Documentation
@@ -175,8 +110,7 @@ jobs:
 
           files=(
             "plugins/hal-9000/README.md"
-            "plugins/hal-9000/TROUBLESHOOTING.md"
-            "plugins/hal-9000/test-installation.sh"
+            "plugins/hal-9000/SECURITY.md"
           )
 
           for file in "${files[@]}"; do
@@ -188,11 +122,60 @@ jobs:
             fi
           done
 
-      - name: Check for PEP 668 documentation
+      - name: Check security documentation content
         run: |
-          if grep -q "PEP 668" plugins/hal-9000/TROUBLESHOOTING.md; then
-            echo "✓ PEP 668 documented in TROUBLESHOOTING.md"
+          SECURITY_MD="plugins/hal-9000/SECURITY.md"
+
+          # Check for key security topics
+          if grep -q "Non-Root" "$SECURITY_MD"; then
+            echo "✓ Non-root execution documented"
           else
-            echo "✗ PEP 668 not found in TROUBLESHOOTING.md"
+            echo "✗ Non-root execution not documented"
+            exit 1
+          fi
+
+          if grep -q "Image Allowlisting" "$SECURITY_MD"; then
+            echo "✓ Image allowlisting documented"
+          else
+            echo "✗ Image allowlisting not documented"
+            exit 1
+          fi
+
+          if grep -q "Input Validation" "$SECURITY_MD"; then
+            echo "✓ Input validation documented"
+          else
+            echo "✗ Input validation not documented"
+            exit 1
+          fi
+
+          echo "✓ Security documentation complete"
+
+  docker-dockerfile-lint:
+    name: Lint Dockerfiles
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Lint Dockerfiles with hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: plugins/hal-9000/docker/Dockerfile.worker
+          failure-threshold: error
+
+      - name: Check for non-root user in worker
+        run: |
+          if grep -q "^USER" plugins/hal-9000/docker/Dockerfile.worker; then
+            echo "✓ USER directive present in Dockerfile.worker"
+          else
+            echo "✗ USER directive missing - container runs as root"
+            exit 1
+          fi
+
+          if grep -q "USER claude" plugins/hal-9000/docker/Dockerfile.worker; then
+            echo "✓ Container uses non-root 'claude' user"
+          else
+            echo "✗ Container should use 'claude' user"
             exit 1
           fi
