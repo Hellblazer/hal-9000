@@ -78,8 +78,8 @@ jobs:
             exit 1
           fi
 
-          # Check for path traversal prevention
-          if grep -q '\.\..*Security violation' plugins/hal-9000/docker/spawn-worker.sh; then
+          # Check for path traversal prevention (blocks '..' in paths)
+          if grep -q "cannot contain '\.\.'" plugins/hal-9000/docker/spawn-worker.sh; then
             echo "✓ Path traversal prevention present"
           else
             echo "✗ Path traversal prevention missing"

@@ -97,7 +97,7 @@ jobs:
           required_files=(
             "Dockerfile.parent"
             "Dockerfile.worker"
-            "Dockerfile.base"
+            "Dockerfile.hal9000"
             "build-profiles.sh"
             "spawn-worker.sh"
           )
