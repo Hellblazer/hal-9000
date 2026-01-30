@@ -36,6 +36,12 @@ init_aod_dir() {
         mkdir -p "$AOD_DIR"
         info "Initialized aod directory: $AOD_DIR"
     fi
+
+    # Ensure sessions.log has restrictive permissions
+    if [[ ! -f "$AOD_DIR/sessions.log" ]]; then
+        touch "$AOD_DIR/sessions.log"
+    fi
+    chmod 600 "$AOD_DIR/sessions.log"
 }
 
 # Cleanup on exit (uses release_lock from container-common.sh)
@@ -276,6 +282,7 @@ bd list                           # All issues
 4. Complete: \`bd close <id> --reason "Done"\`
 5. Commit \`.beads/issues.jsonl\` with your changes
 EOF
+    chmod 600 "$worktree_dir/CLAUDE.md"
 
     info "Created CLAUDE.md in worktree"
 }

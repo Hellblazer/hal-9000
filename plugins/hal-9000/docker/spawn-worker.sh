@@ -247,7 +247,7 @@ spawn_worker() {
         }
 
         # SECURITY: Allowlist of permitted path prefixes (more secure than blocklist)
-        local allowed_prefixes=("/home" "/Users" "/workspace" "/tmp" "/var/tmp")
+        local allowed_prefixes=("/home" "/Users" "/workspace")
         local path_allowed=false
         for prefix in "${allowed_prefixes[@]}"; do
             if [[ "$canonical_path" == "$prefix" || "$canonical_path" == "$prefix/"* ]]; then
@@ -398,6 +398,7 @@ record_session_metadata() {
     }
 }
 EOF
+    chmod 600 "$session_file"
 }
 
 # ============================================================================

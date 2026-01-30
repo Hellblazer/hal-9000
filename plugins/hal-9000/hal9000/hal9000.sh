@@ -192,6 +192,7 @@ bd init                           # First time setup
 bd onboard                        # Full integration guide
 ```
 EOF
+    chmod 600 "$work_dir/.hal9000-session.md"
 }
 
 # Launch a container in a tmux session
@@ -296,6 +297,7 @@ launch_session() {
   "created": "$(date +%FT%T%z)"
 }
 EOF
+    chmod 600 "$HAL9000_DIR/sessions/${session_name}.json"
 
     success "Session launched: $session_name"
     info "  Directory: $work_dir"
