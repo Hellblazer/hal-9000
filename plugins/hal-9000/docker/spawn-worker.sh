@@ -19,6 +19,14 @@
 # - Mounts shared TMUX sockets volume (for inter-process communication)
 # - Mounts project directory at /workspace
 # - Users install MCP servers via: claude plugin marketplace add / claude plugin install
+#
+# Volume Cleanup (LOW-8):
+# To clean up orphaned volumes after crashes or incomplete shutdowns:
+#   docker volume ls | grep hal9000 | awk '{print $2}' | xargs docker volume rm
+# To clean up volumes for a specific user (use user hash from volume name):
+#   docker volume ls | grep 'hal9000.*<user_hash>' | awk '{print $2}' | xargs docker volume rm
+# To list all hal9000 volumes with their sizes:
+#   docker system df -v | grep hal9000
 
 set -euo pipefail
 
@@ -34,12 +42,163 @@ log_success() { printf "${GREEN}[spawn]${NC} %s\n" "$1"; }
 log_warn() { printf "${YELLOW}[spawn]${NC} %s\n" "$1"; }
 log_error() { printf "${RED}[spawn]${NC} ERROR: %s\n" "$1" >&2; }
 
+# HIGH-4: Hash a secret for safe logging (shows first 16 chars of SHA256)
+# Usage: log_info "API key fingerprint: $(hash_for_log "$SECRET")"
+# This prevents exposing actual secret values while still allowing correlation
+hash_for_log() {
+    local secret="$1"
+    if [[ -z "$secret" ]]; then
+        echo "empty"
+        return
+    fi
+    # Use printf to avoid newline issues, sha256sum for hashing
+    # cut -c1-16 provides 64 bits of entropy - sufficient for log correlation
+    printf '%s' "$secret" | sha256sum 2>/dev/null | cut -c1-16 || \
+    printf '%s' "$secret" | shasum -a 256 2>/dev/null | cut -c1-16 || \
+    echo "hash_error"
+}
+
 # Source audit logging library
 if [[ -f "/scripts/lib/audit-log.sh" ]]; then
     source /scripts/lib/audit-log.sh
 elif [[ -f "$(dirname "${BASH_SOURCE[0]}")/lib/audit-log.sh" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/lib/audit-log.sh"
 fi
+
+# ============================================================================
+# MEDIUM-1: Certificate Validation
+# ============================================================================
+# Validates certificate before mounting to ensure:
+# 1. File exists and is readable
+# 2. Certificate is in valid PEM format
+# 3. Certificate has not expired
+# 4. Optionally validates fingerprint for pinning
+
+validate_certificate() {
+    local cert_file="$1"
+    local expected_fingerprint="${2:-}"  # Optional: SHA256 fingerprint for pinning
+
+    # Check file exists
+    if [[ ! -f "$cert_file" ]]; then
+        log_error "Certificate file not found: $cert_file"
+        return 1
+    fi
+
+    # Check file is readable
+    if [[ ! -r "$cert_file" ]]; then
+        log_error "Certificate file not readable: $cert_file"
+        return 1
+    fi
+
+    # Check openssl is available
+    if ! command -v openssl >/dev/null 2>&1; then
+        log_warn "openssl not available - skipping certificate validation"
+        return 0
+    fi
+
+    # Verify it's a valid PEM certificate
+    if ! openssl x509 -in "$cert_file" -noout 2>/dev/null; then
+        log_error "Invalid certificate format (not valid PEM): $cert_file"
+        return 1
+    fi
+
+    # Check certificate hasn't expired
+    if ! openssl x509 -in "$cert_file" -checkend 0 >/dev/null 2>&1; then
+        log_warn "Certificate has expired: $cert_file"
+        # Don't fail on expiration - just warn (allows continued operation with expired cert)
+        # Remove this line and return 1 if strict expiration enforcement is needed
+    fi
+
+    # Check certificate is not expiring soon (7 days warning)
+    if ! openssl x509 -in "$cert_file" -checkend 604800 >/dev/null 2>&1; then
+        local expiry_date
+        expiry_date=$(openssl x509 -in "$cert_file" -noout -enddate 2>/dev/null | cut -d= -f2)
+        log_warn "Certificate expiring soon (within 7 days): $cert_file"
+        log_warn "Expiry date: $expiry_date"
+    fi
+
+    # Certificate pinning: validate fingerprint if provided
+    if [[ -n "$expected_fingerprint" ]]; then
+        local actual_fingerprint
+        actual_fingerprint=$(openssl x509 -noout -fingerprint -sha256 -in "$cert_file" 2>/dev/null | cut -d= -f2)
+        if [[ -z "$actual_fingerprint" ]]; then
+            log_error "Failed to compute certificate fingerprint: $cert_file"
+            return 1
+        fi
+        # Normalize fingerprints for comparison (remove colons, lowercase)
+        local normalized_expected normalized_actual
+        normalized_expected=$(echo "$expected_fingerprint" | tr -d ':' | tr '[:upper:]' '[:lower:]')
+        normalized_actual=$(echo "$actual_fingerprint" | tr -d ':' | tr '[:upper:]' '[:lower:]')
+        if [[ "$normalized_actual" != "$normalized_expected" ]]; then
+            log_error "Certificate fingerprint mismatch (possible MITM attack)!"
+            log_error "Expected: $expected_fingerprint"
+            log_error "Actual:   $actual_fingerprint"
+            return 1
+        fi
+        log_success "Certificate fingerprint validated: $cert_file"
+    fi
+
+    log_info "Certificate validated: $cert_file"
+    return 0
+}
+
+# ============================================================================
+# MEDIUM-5: Container Detection (cgroups v2 compatible)
+# ============================================================================
+# Detects if running inside a container (Docker, Podman, Kubernetes, etc.)
+# Handles cgroups v1, cgroups v2 (unified hierarchy), and various container runtimes
+#
+# Returns: 0 if running in container, 1 if running on host
+
+is_running_in_container() {
+    # Method 1: Docker's marker file (most reliable for Docker)
+    [[ -f "/.dockerenv" ]] && return 0
+
+    # Method 2: Podman container marker file
+    [[ -f "/run/.containerenv" ]] && return 0
+
+    # Method 3: Kubernetes environment detection
+    [[ -n "${KUBERNETES_SERVICE_HOST:-}" ]] && return 0
+
+    # Method 4: Generic container environment variable
+    [[ -n "${container:-}" ]] && return 0
+
+    # Method 5: cgroups v1 - check /proc/1/cgroup for container markers
+    if [[ -f /proc/1/cgroup ]]; then
+        grep -qE 'docker|containerd|lxc|kubepods|libpod' /proc/1/cgroup 2>/dev/null && return 0
+    fi
+
+    # Method 6: cgroups v2 (unified hierarchy) - check mountinfo for container markers
+    # In cgroups v2, /proc/1/cgroup just shows "0::/" so we need to check mountinfo
+    if [[ -f /proc/1/mountinfo ]]; then
+        # Check for overlay filesystem with container-specific paths
+        if grep -q 'overlay' /proc/1/mountinfo 2>/dev/null; then
+            grep -qE '/docker/|/containerd/|/libpod-|/buildkit/' /proc/1/mountinfo 2>/dev/null && return 0
+        fi
+        # Check for container-specific mounts
+        grep -qE '/var/lib/docker/|/var/lib/containerd/' /proc/1/mountinfo 2>/dev/null && return 0
+    fi
+
+    # Method 7: Check if init process is not systemd/init (container PID 1 is usually the app)
+    # This is less reliable but can catch edge cases
+    if [[ -f /proc/1/comm ]]; then
+        local init_comm
+        init_comm=$(cat /proc/1/comm 2>/dev/null)
+        # If PID 1 is not a typical init system, likely in a container
+        case "$init_comm" in
+            systemd|init|launchd|upstart) ;;  # Host init systems
+            *)
+                # Additional check: see if we have very few processes (typical of containers)
+                local proc_count
+                proc_count=$(find /proc -maxdepth 1 -type d -name '[0-9]*' 2>/dev/null | wc -l)
+                [[ $proc_count -lt 50 ]] && return 0
+                ;;
+        esac
+    fi
+
+    # Not detected as container
+    return 1
+}
 
 # Issue #9: Error handling resilience
 # Retry logic for transient failures with exponential backoff
@@ -114,6 +273,10 @@ WORKER_MEMORY="${WORKER_MEMORY:-4g}"
 WORKER_CPUS="${WORKER_CPUS:-2}"
 WORKER_PIDS_LIMIT="${WORKER_PIDS_LIMIT:-100}"
 
+# Retry configuration (STYLE-3: make magic numbers configurable)
+DOCKER_RUN_MAX_RETRIES="${DOCKER_RUN_MAX_RETRIES:-3}"
+DOCKER_RUN_INITIAL_WAIT="${DOCKER_RUN_INITIAL_WAIT:-2}"
+
 # SECURITY: Seccomp profile for syscall filtering
 # Profile must be on HOST filesystem (Docker reads it before container starts)
 # Blocks dangerous syscalls like mount, ptrace, setns, bpf, kexec_load
@@ -179,6 +342,219 @@ ensure_user_volume() {
         docker volume create "$volume_name" >/dev/null 2>&1 || true
         log_info "Created user-scoped volume: $volume_name"
     fi
+}
+
+# ============================================================================
+# VOLUME MIGRATION (Legacy -> User-Scoped)
+# ============================================================================
+
+# MIGRATION: Detect legacy volumes from previous hal-9000 versions
+# Old naming conventions that need migration:
+# - hal9000-claude-home (no hash suffix)
+# - hal9000-memory-bank (no hash suffix)
+# - hal9000-tmux-sockets (no hash suffix)
+# - hal9000-coordinator-state (no hash suffix)
+
+# Legacy volume base names (without user hash)
+readonly LEGACY_VOLUME_BASES=(
+    "claude-home"
+    "memory-bank"
+    "tmux-sockets"
+    "coordinator-state"
+)
+
+# Check if migration marker exists (indicates migration already done)
+migration_marker_exists() {
+    local user_hash
+    user_hash=$(get_user_hash)
+    local marker_file="${HAL9000_HOME:-$HOME/.hal9000}/migration/${user_hash}.migrated"
+    [[ -f "$marker_file" ]]
+}
+
+# Create migration marker to prevent repeated migration attempts
+create_migration_marker() {
+    local user_hash
+    user_hash=$(get_user_hash)
+    local marker_dir="${HAL9000_HOME:-$HOME/.hal9000}/migration"
+    local marker_file="${marker_dir}/${user_hash}.migrated"
+
+    # MEDIUM-3: Create directory with restrictive permissions atomically using umask
+    (umask 077 && mkdir -p "$marker_dir") 2>/dev/null || true
+
+    # MEDIUM-3: Create migration marker file with restrictive permissions atomically using umask
+    (umask 077 && cat > "$marker_file" <<EOF
+{
+    "user_hash": "$user_hash",
+    "user_id": "${USER:-$(id -un 2>/dev/null || echo uid-$(id -u))}",
+    "migrated_at": "$(date -Iseconds)",
+    "migrated_volumes": $1
+}
+EOF
+    )
+    log_info "Migration marker created: $marker_file"
+}
+
+# Detect legacy volumes that exist without user hash suffix
+# Returns: space-separated list of legacy volume names
+detect_legacy_volumes() {
+    local legacy_volumes=()
+
+    for base_name in "${LEGACY_VOLUME_BASES[@]}"; do
+        local legacy_vol="hal9000-${base_name}"
+
+        # Check if old volume exists (without hash suffix)
+        if docker volume inspect "$legacy_vol" &>/dev/null; then
+            legacy_volumes+=("$legacy_vol")
+        fi
+    done
+
+    # Also check for any other hal9000 volumes that don't have our user hash
+    local user_hash
+    user_hash=$(get_user_hash)
+
+    while IFS= read -r vol; do
+        # Skip if already in list
+        local already_listed=false
+        for existing in "${legacy_volumes[@]}"; do
+            if [[ "$vol" == "$existing" ]]; then
+                already_listed=true
+                break
+            fi
+        done
+
+        # Skip volumes that already have our user hash
+        if [[ "$already_listed" == "false" && "$vol" == hal9000-* && "$vol" != *"-${user_hash}" ]]; then
+            # Check if this looks like a legacy volume (matches one of our base patterns)
+            for base_name in "${LEGACY_VOLUME_BASES[@]}"; do
+                if [[ "$vol" == "hal9000-${base_name}" ]]; then
+                    legacy_volumes+=("$vol")
+                    break
+                fi
+            done
+        fi
+    done < <(docker volume ls -q 2>/dev/null | grep "^hal9000-" || true)
+
+    echo "${legacy_volumes[*]}"
+}
+
+# Migrate data from legacy volume to new user-scoped volume
+# Args: $1 = legacy volume name, $2 = new volume name
+migrate_single_volume() {
+    local old_vol="$1"
+    local new_vol="$2"
+
+    # Skip if old volume doesn't exist
+    if ! docker volume inspect "$old_vol" &>/dev/null; then
+        log_info "Legacy volume not found, skipping: $old_vol"
+        return 0
+    fi
+
+    # Create new volume if it doesn't exist
+    if ! docker volume inspect "$new_vol" &>/dev/null; then
+        docker volume create "$new_vol" >/dev/null 2>&1 || {
+            log_error "Failed to create volume: $new_vol"
+            return 1
+        }
+        log_info "Created new volume: $new_vol"
+    else
+        log_info "Target volume already exists: $new_vol"
+        # Check if target has data - if so, don't overwrite
+        local has_data
+        has_data=$(docker run --rm -v "${new_vol}:/check:ro" alpine sh -c "ls -A /check 2>/dev/null | head -1" 2>/dev/null || echo "")
+        if [[ -n "$has_data" ]]; then
+            log_warn "Target volume $new_vol already has data, skipping migration to avoid data loss"
+            return 0
+        fi
+    fi
+
+    log_info "Migrating: $old_vol -> $new_vol"
+
+    # Use alpine container to copy data between volumes
+    # Mount old as read-only, new as read-write
+    if docker run --rm \
+        -v "${old_vol}:/old:ro" \
+        -v "${new_vol}:/new" \
+        alpine sh -c "cp -a /old/. /new/ 2>/dev/null || true" 2>/dev/null; then
+        log_success "Migration complete: $old_vol -> $new_vol"
+        return 0
+    else
+        log_error "Migration failed: $old_vol -> $new_vol"
+        return 1
+    fi
+}
+
+# Run migration for all legacy volumes
+# This is called once per user on first run after upgrade
+migrate_legacy_volumes() {
+    # Skip if already migrated
+    if migration_marker_exists; then
+        return 0
+    fi
+
+    log_info "Checking for legacy volumes to migrate..."
+
+    local legacy_volumes
+    legacy_volumes=$(detect_legacy_volumes)
+
+    if [[ -z "$legacy_volumes" ]]; then
+        log_info "No legacy volumes found"
+        create_migration_marker "[]"
+        return 0
+    fi
+
+    log_info "Found legacy volumes: $legacy_volumes"
+    log_info ""
+    log_info "=== Volume Migration ==="
+    log_info "hal-9000 now uses per-user volume isolation for security."
+    log_info "Your existing data will be migrated to user-scoped volumes."
+    log_info "Original volumes will be preserved as backups."
+    log_info "========================"
+    log_info ""
+
+    local user_hash
+    user_hash=$(get_user_hash)
+    local migrated_volumes="["
+    local first=true
+    local migration_count=0
+
+    # Migrate each legacy volume
+    for base_name in "${LEGACY_VOLUME_BASES[@]}"; do
+        local old_vol="hal9000-${base_name}"
+        local new_vol="hal9000-${base_name}-${user_hash}"
+
+        # Check if this legacy volume exists
+        if echo "$legacy_volumes" | grep -q "$old_vol"; then
+            if migrate_single_volume "$old_vol" "$new_vol"; then
+                ((migration_count++))
+                if [[ "$first" == "true" ]]; then
+                    first=false
+                else
+                    migrated_volumes+=","
+                fi
+                migrated_volumes+="\"$old_vol\""
+            fi
+        fi
+    done
+
+    migrated_volumes+="]"
+
+    if [[ $migration_count -gt 0 ]]; then
+        log_success ""
+        log_success "=== Migration Summary ==="
+        log_success "Migrated $migration_count volume(s) to user-scoped naming."
+        log_success "Original volumes preserved as backups:"
+        for vol in $legacy_volumes; do
+            log_success "  - $vol (backup)"
+        done
+        log_success ""
+        log_success "To remove old volumes after verifying migration:"
+        log_success "  docker volume rm $legacy_volumes"
+        log_success "========================="
+        log_success ""
+    fi
+
+    # Mark migration as complete
+    create_migration_marker "$migrated_volumes"
 }
 
 # ============================================================================
@@ -293,7 +669,19 @@ parse_args() {
 # SECURITY: Only allow versioned image tags to prevent supply chain attacks
 # Mutable tags (e.g., :worker, :base) are not allowed - pin to specific versions
 # This ensures you deploy exactly what you tested, not the latest mutable tag
-# To use a new version, update your image specification with the new version tag
+#
+# MEDIUM-7: How to update this allowlist when new versions are released:
+# 1. Verify the new image tag exists: docker pull ghcr.io/hellblazer/hal-9000:<new-tag>
+# 2. Verify image integrity: docker inspect --format '{{.RepoDigests}}' <image>
+# 3. Update this array with the new versioned tag
+# 4. Remove old versions only after confirming new version works
+# 5. Consider keeping 1-2 previous versions for rollback capability
+# 6. Run security tests with new image before production deployment
+#
+# Example version bump: v3.0.0 -> v3.1.0
+#   - Add "ghcr.io/hellblazer/hal-9000:worker-v3.1.0" to the array
+#   - Test with: spawn-worker.sh -i ghcr.io/hellblazer/hal-9000:worker-v3.1.0
+#   - Remove v3.0.0 entries after validation (optional, can keep for rollback)
 ALLOWED_IMAGES=(
     "ghcr.io/hellblazer/hal-9000:worker-v3.0.0"
     "ghcr.io/hellblazer/hal-9000:base-v3.0.0"
@@ -326,6 +714,16 @@ validate_parent() {
 generate_worker_name() {
     if [[ -z "$WORKER_NAME" ]]; then
         WORKER_NAME="hal9000-worker-$(date +%s)"
+    fi
+
+    # HIGH-1: Sanitize WORKER_NAME to prevent log injection via console output
+    # Remove ANSI escape sequences and control characters from user-provided names
+    # Uses sanitize_log_value() if available (from audit-log.sh), otherwise inline sanitization
+    if declare -f sanitize_log_value >/dev/null 2>&1; then
+        WORKER_NAME=$(sanitize_log_value "$WORKER_NAME")
+    else
+        # Fallback: remove ANSI escapes and control characters inline
+        WORKER_NAME=$(printf '%s' "$WORKER_NAME" | sed 's/\x1b\[[0-9;]*[A-Za-z]//g' | tr -d '\000-\037\177')
     fi
 }
 
@@ -395,8 +793,22 @@ spawn_worker() {
             exit 1
         }
 
-        # SECURITY: Allowlist of permitted path prefixes (more secure than blocklist)
-        local allowed_prefixes=("/home" "/Users" "/workspace")
+        # MEDIUM-4: SECURITY: Allowlist of permitted path prefixes (more secure than blocklist)
+        # Use $HOME instead of /home to restrict to current user's home directory only
+        # This prevents mounting other users' home directories
+        local allowed_prefixes=()
+        if [[ -n "${HOME:-}" ]]; then
+            allowed_prefixes+=("$HOME")
+        fi
+        # macOS uses /Users, but only allow current user's directory
+        if [[ -d "/Users" && -n "${USER:-}" ]]; then
+            allowed_prefixes+=("/Users/${USER}")
+        fi
+        # Always allow /workspace (container workspace)
+        allowed_prefixes+=("/workspace")
+        # Allow /tmp for temporary projects (read-only is recommended)
+        allowed_prefixes+=("/tmp")
+
         local path_allowed=false
         for prefix in "${allowed_prefixes[@]}"; do
             if [[ "$canonical_path" == "$prefix" || "$canonical_path" == "$prefix/"* ]]; then
@@ -434,15 +846,19 @@ spawn_worker() {
     # Example: hal9000-claude-home-a1b2c3d4 for user "alice"
     # =========================================================================
 
+    # MIGRATION: Check for and migrate legacy volumes before using new naming
+    # This ensures existing users don't lose their marketplace installations and credentials
+    migrate_legacy_volumes
+
     local user_hash
     user_hash=$(get_user_hash)
     log_info "User isolation: hash=${user_hash} (user=${USER:-$(id -un 2>/dev/null || echo uid-$(id -u))})"
 
-    # Detect Docker-in-Docker mode (running inside a container)
-    local in_container=false
-    if [[ -f "/.dockerenv" ]] || grep -q docker /proc/1/cgroup 2>/dev/null; then
-        in_container=true
-    fi
+    # MEDIUM-5: Detect Docker-in-Docker mode (running inside a container)
+    # Enhanced detection for cgroups v2, Podman, and Kubernetes
+    # Uses is_running_in_container() helper for cleaner code
+    local in_container
+    in_container=$(is_running_in_container && echo "true" || echo "false")
 
     # SECURITY: User-scoped CLAUDE_HOME volume
     # Each user gets their own CLAUDE_HOME, preventing:
@@ -465,15 +881,13 @@ spawn_worker() {
         # Running on host - use user-scoped directory
         local hal9000_home="${HAL9000_HOME:-$HOME/.hal9000}"
         local claude_home="${hal9000_home}/users/${user_hash}/claude"
-        mkdir -p "$claude_home" 2>/dev/null || true
-        # SECURITY: Restrict to owner only
-        chmod 700 "$claude_home" 2>/dev/null || true
+        # MEDIUM-3: Create directory with restrictive permissions atomically using umask
+        (umask 077 && mkdir -p "$claude_home") 2>/dev/null || true
 
         # Also create user-scoped TMUX sockets directory
         local tmux_sockets_dir="${hal9000_home}/users/${user_hash}/tmux-sockets"
-        mkdir -p "$tmux_sockets_dir" 2>/dev/null || true
-        # SECURITY: Restrict to owner only (no group/world access)
-        chmod 700 "$tmux_sockets_dir" 2>/dev/null || true
+        # MEDIUM-3: Create directory with restrictive permissions atomically using umask
+        (umask 077 && mkdir -p "$tmux_sockets_dir") 2>/dev/null || true
 
         docker_args+=(-v "${claude_home}:${claude_home_path}")
         log_info "Host mode: user directory $claude_home"
@@ -542,11 +956,26 @@ spawn_worker() {
     # SECURITY: Mount ChromaDB TLS certificate (read-only bind mount)
     # Certificate is generated by parent and used by workers to verify server identity
     # This enables encrypted HTTPS connections to ChromaDB
+    # MEDIUM-1: Validate certificate before mounting
     local chromadb_cert_file="/run/secrets/chromadb.crt"
     if [[ -f "$chromadb_cert_file" ]]; then
-        docker_args+=(-v "${chromadb_cert_file}:/run/secrets/chromadb.crt:ro")
-        docker_args+=(-e "CHROMADB_TLS_ENABLED=true")
-        log_info "ChromaDB TLS: certificate mounted (HTTPS enabled)"
+        # Validate certificate format and expiration before mounting
+        # Optional fingerprint pinning via CHROMADB_CERT_FINGERPRINT env var
+        if validate_certificate "$chromadb_cert_file" "${CHROMADB_CERT_FINGERPRINT:-}"; then
+            docker_args+=(-v "${chromadb_cert_file}:/run/secrets/chromadb.crt:ro")
+            docker_args+=(-e "CHROMADB_TLS_ENABLED=true")
+            # Pass fingerprint to worker for its own validation (defense in depth)
+            if [[ -n "${CHROMADB_CERT_FINGERPRINT:-}" ]]; then
+                docker_args+=(-e "CHROMADB_CERT_FINGERPRINT=${CHROMADB_CERT_FINGERPRINT}")
+                log_info "ChromaDB TLS: certificate mounted with fingerprint pinning (HTTPS enabled)"
+            else
+                log_info "ChromaDB TLS: certificate mounted (HTTPS enabled)"
+            fi
+        else
+            log_error "ChromaDB TLS: certificate validation failed - refusing to mount"
+            log_error "Fix the certificate or disable TLS by removing $chromadb_cert_file"
+            exit 1
+        fi
     else
         log_info "ChromaDB TLS: certificate not found (using HTTP)"
         docker_args+=(-e "CHROMADB_TLS_ENABLED=false")
@@ -560,14 +989,17 @@ spawn_worker() {
         docker_args+=(-v "${secrets_dir}/anthropic_key:/run/secrets/anthropic_key:ro")
         log_info "SECURITY: Mounting API key as secret file (not env var)"
     elif [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-        # Fallback: If user passes env var but no secret file exists, create one
-        log_warn "SECURITY: ANTHROPIC_API_KEY env var detected - storing as secret file"
-        mkdir -p "$secrets_dir"
-        chmod 700 "$secrets_dir"
-        (umask 077 && echo "$ANTHROPIC_API_KEY" > "$secrets_dir/anthropic_key")
-        chmod 400 "$secrets_dir/anthropic_key"
-        docker_args+=(-v "${secrets_dir}/anthropic_key:/run/secrets/anthropic_key:ro")
-        log_success "API key stored securely and mounted as secret file"
+        # SECURITY: Fail if API key is passed via environment variable
+        # Environment variables are visible via 'docker inspect' and /proc/1/environ
+        log_error "SECURITY VIOLATION: ANTHROPIC_API_KEY environment variable detected"
+        log_error "API keys in environment variables are visible via 'docker inspect' and /proc/1/environ"
+        log_error ""
+        log_error "To fix, use file-based secrets instead:"
+        log_error "  1. Store your key: echo 'your-key' > ${secrets_dir}/anthropic_key"
+        log_error "  2. Set permissions: chmod 400 ${secrets_dir}/anthropic_key"
+        log_error "  3. Remove env var: unset ANTHROPIC_API_KEY"
+        log_error "  4. Update your shell profile to not set this variable"
+        exit 1
     fi
 
     # Pass worker ID for identification (audit logging, debugging)
@@ -609,13 +1041,27 @@ spawn_worker() {
     # SECURITY: Apply seccomp profile to block dangerous syscalls
     # Profile must exist on HOST filesystem (Docker reads it before container starts)
     # Blocks: mount, ptrace, setns, bpf, kexec_load, and other container escape vectors
-    if [[ -f "$SECCOMP_PROFILE" ]]; then
-        docker_args+=(--security-opt "seccomp=${SECCOMP_PROFILE}")
-        log_info "Seccomp profile: $SECCOMP_PROFILE (enforcing)"
+    #
+    # MEDIUM-10: Fail if seccomp is configured but profile is unavailable
+    # If SECCOMP_PROFILE is explicitly set (non-empty), the profile MUST exist
+    # This prevents silently falling back to weaker security when hardened profile expected
+    if [[ -n "${SECCOMP_PROFILE:-}" ]]; then
+        if [[ -f "$SECCOMP_PROFILE" ]]; then
+            docker_args+=(--security-opt "seccomp=${SECCOMP_PROFILE}")
+            log_info "Seccomp profile: $SECCOMP_PROFILE (enforcing)"
+        else
+            log_error "Seccomp profile not found: $SECCOMP_PROFILE"
+            log_error "SECURITY: Refusing to spawn worker without required seccomp profile"
+            log_error ""
+            log_error "To fix this issue:"
+            log_error "  1. Initialize profiles: hal-9000 daemon start"
+            log_error "  2. Or create profile: mkdir -p $(dirname "$SECCOMP_PROFILE")"
+            log_error "  3. Or disable seccomp (NOT recommended): unset SECCOMP_PROFILE"
+            exit 1
+        fi
     else
-        log_warn "Seccomp profile not found: $SECCOMP_PROFILE"
-        log_warn "SECURITY: Workers will use Docker's default seccomp profile"
-        log_warn "Run 'hal-9000 daemon start' to initialize seccomp profiles"
+        log_warn "SECCOMP_PROFILE not set - using Docker's default seccomp profile"
+        log_warn "For enhanced security, run 'hal-9000 daemon start' to initialize profiles"
     fi
 
     # Working directory
@@ -644,49 +1090,54 @@ spawn_worker() {
 
     # Execute docker run with retry logic (Issue #9)
     # Transient Docker errors (image pull, network issues) are retried
+    # STYLE-1: Use run_container() helper to reduce code duplication
+    run_container "${docker_args[@]}"
+}
+
+# run_container: Execute docker run with retry, audit logging, and error handling (STYLE-1)
+# Extracts common logic from spawn_worker to reduce duplication
+# Uses DOCKER_RUN_MAX_RETRIES and DOCKER_RUN_INITIAL_WAIT for configurable retry (STYLE-3)
+# Usage: run_container <docker_args...>
+run_container() {
+    local -a container_args=("$@")
+
+    # Execute docker run with configurable retry (STYLE-3)
     if [[ "$DETACH" == "true" ]]; then
         local container_id
-        if container_id=$(retry_with_backoff 3 2 "docker run for worker $WORKER_NAME" "${docker_args[@]}"); then
+        if container_id=$(retry_with_backoff "$DOCKER_RUN_MAX_RETRIES" "$DOCKER_RUN_INITIAL_WAIT" "docker run for worker $WORKER_NAME" "${container_args[@]}"); then
             log_success "Worker started: $container_id"
-
-            # Audit log worker spawn
-            if command -v audit_worker_spawn >/dev/null 2>&1; then
-                audit_worker_spawn "$WORKER_NAME" "$WORKER_IMAGE" "${canonical_path:-$PROJECT_DIR}"
-            fi
-
-            # Security audit: log worker spawn with security context
-            if command -v log_security_event >/dev/null 2>&1; then
-                local seccomp_status="default"
-                [[ -f "$SECCOMP_PROFILE" ]] && seccomp_status="custom"
-                log_security_event "WORKER_SPAWN" "name=${WORKER_NAME} image=${WORKER_IMAGE} project=\"${canonical_path:-$PROJECT_DIR}\" seccomp=${seccomp_status}" "INFO"
-            fi
-
+            log_worker_spawn_audit
             echo "$container_id"
         else
-            log_error "Failed to start worker after retries"
+            log_error "Failed to start worker after $DOCKER_RUN_MAX_RETRIES retries"
             cleanup_on_error "$WORKER_NAME"
             return 1
         fi
     else
-        if retry_with_backoff 3 2 "docker run for worker $WORKER_NAME" "${docker_args[@]}"; then
+        if retry_with_backoff "$DOCKER_RUN_MAX_RETRIES" "$DOCKER_RUN_INITIAL_WAIT" "docker run for worker $WORKER_NAME" "${container_args[@]}"; then
             log_success "Worker started successfully"
-
-            # Audit log worker spawn
-            if command -v audit_worker_spawn >/dev/null 2>&1; then
-                audit_worker_spawn "$WORKER_NAME" "$WORKER_IMAGE" "${canonical_path:-$PROJECT_DIR}"
-            fi
-
-            # Security audit: log worker spawn with security context
-            if command -v log_security_event >/dev/null 2>&1; then
-                local seccomp_status="default"
-                [[ -f "$SECCOMP_PROFILE" ]] && seccomp_status="custom"
-                log_security_event "WORKER_SPAWN" "name=${WORKER_NAME} image=${WORKER_IMAGE} project=\"${canonical_path:-$PROJECT_DIR}\" seccomp=${seccomp_status}" "INFO"
-            fi
+            log_worker_spawn_audit
         else
-            log_error "Failed to start worker after retries"
+            log_error "Failed to start worker after $DOCKER_RUN_MAX_RETRIES retries"
             cleanup_on_error "$WORKER_NAME"
             return 1
         fi
+    fi
+}
+
+# log_worker_spawn_audit: Log worker spawn to audit logs (STYLE-1)
+# Extracted from spawn_worker to reduce duplication
+log_worker_spawn_audit() {
+    # Audit log worker spawn
+    if command -v audit_worker_spawn >/dev/null 2>&1; then
+        audit_worker_spawn "$WORKER_NAME" "$WORKER_IMAGE" "${canonical_path:-$PROJECT_DIR}"
+    fi
+
+    # Security audit: log worker spawn with security context
+    if command -v log_security_event >/dev/null 2>&1; then
+        local seccomp_status="default"
+        [[ -f "$SECCOMP_PROFILE" ]] && seccomp_status="custom"
+        log_security_event "WORKER_SPAWN" "name=${WORKER_NAME} image=${WORKER_IMAGE} project=\"${canonical_path:-$PROJECT_DIR}\" seccomp=${seccomp_status}" "INFO"
     fi
 }
 
@@ -724,7 +1175,7 @@ record_session_metadata() {
 }
 EOF
     )
-    chmod 600 "$session_file"  # Extra safety layer
+    # MEDIUM-3: Removed redundant chmod - umask 077 already ensures 600 permissions atomically
 }
 
 # ============================================================================

@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """
-File Access Hook - Blocks access to sensitive files via Read, Write, Edit tools.
+File Access Hook - Blocks access to sensitive files via Read, Write, Edit, Grep, NotebookEdit tools.
 
 SECURITY: Uses os.path.realpath() to resolve symlinks, preventing bypass attacks.
 Checks BOTH the original requested path AND the resolved path.
+
+Supported tools:
+- Read, Write, Edit: extracts file_path parameter
+- Grep: extracts path parameter (can be file or directory)
+- NotebookEdit: extracts notebook_path parameter
 
 Blocked files:
 - .env, .env.* (environment files with secrets)
@@ -22,9 +27,11 @@ Fail-closed: On ANY error (timeout, exception), access is DENIED.
 """
 import json
 import os
+import platform
 import re
 import signal
 import sys
+import threading
 from pathlib import Path
 
 # Import security audit logging (graceful degradation if unavailable)
@@ -63,6 +70,9 @@ SENSITIVE_FILENAMES = {
     '.pypirc',
     'known_hosts',
     'config.json',  # Often contains secrets in .docker/
+    '.pgpass',      # PostgreSQL credentials
+    '.my.cnf',      # MySQL credentials
+    '.pgservice.conf',  # PostgreSQL service definitions with credentials
 }
 
 # Filename patterns (regex, case-insensitive)
@@ -174,6 +184,95 @@ def is_sensitive_file(file_path: str) -> tuple[bool, str | None]:
     return False, None
 
 
+def extract_path_from_tool(tool_name: str, tool_input: dict) -> str | None:
+    """
+    Extract the file/directory path from tool input based on tool type.
+
+    Args:
+        tool_name: Name of the tool being invoked
+        tool_input: The tool's input parameters
+
+    Returns:
+        The path to check, or None if no path found
+    """
+    if tool_name in ("Read", "Write", "Edit"):
+        return tool_input.get("file_path", "")
+    elif tool_name == "Grep":
+        # SECURITY: Check both path and glob parameters
+        # Grep can bypass path restrictions using glob patterns like "**/.env"
+        path = tool_input.get("path", "")
+        glob_pattern = tool_input.get("glob", "")
+
+        # If glob contains sensitive patterns, return it for rejection
+        if glob_pattern:
+            glob_lower = glob_pattern.lower()
+            # Check for sensitive file patterns in glob
+            sensitive_glob_patterns = [
+                '.env', 'secret', 'credential', 'password', 'key',
+                '.ssh', '.aws', '.gnupg', '.kube', '.docker',
+                '.pgpass', '.my.cnf', '.netrc', '.npmrc', '.pypirc',
+                'id_rsa', 'id_ed25519', 'id_ecdsa', 'authorized_keys',
+                '.git-credentials', '.boto', 'credentials.json',
+            ]
+            for pattern in sensitive_glob_patterns:
+                if pattern in glob_lower:
+                    # Return the glob pattern - it will be flagged as sensitive
+                    return glob_pattern
+
+        # Return path (or current directory if searching with just glob)
+        return path if path else "."
+    elif tool_name == "NotebookEdit":
+        return tool_input.get("notebook_path", "")
+    return None
+
+
+def check_directory_for_sensitive_files(dir_path: str) -> tuple[bool, str | None]:
+    """
+    Check if a directory path would expose sensitive files.
+
+    For Grep, the path can be a file or directory. We check:
+    1. If it matches sensitive file patterns (regardless of existence)
+    2. If the directory itself is a known sensitive directory
+
+    Args:
+        dir_path: Directory or file path to check
+
+    Returns:
+        (is_sensitive, reason) tuple
+    """
+    if not dir_path:
+        return False, None
+
+    try:
+        resolved_path = os.path.realpath(dir_path)
+    except (OSError, ValueError) as e:
+        return True, f"Cannot resolve path '{dir_path}' (fail-closed): {e}"
+
+    # ALWAYS check file patterns first - regardless of whether path exists
+    # This catches cases like "grep in .env" even if file doesn't exist yet
+    is_sensitive, reason = is_sensitive_file(dir_path)
+    if is_sensitive:
+        return is_sensitive, reason
+
+    # For directories, also check if the directory itself is sensitive
+    # (e.g., searching in .aws/, .ssh/, .gnupg/)
+    path_lower = resolved_path.lower()
+    sensitive_dirs = [
+        r'\.aws/?$',
+        r'\.ssh/?$',
+        r'\.gnupg/?$',
+        r'\.kube/?$',
+        r'\.docker/?$',
+        r'\.password-store/?$',
+    ]
+
+    for pattern in sensitive_dirs:
+        if re.search(pattern, path_lower):
+            return True, f"Blocked: searching in sensitive directory '{resolved_path}'"
+
+    return False, None
+
+
 def check_file_access(data: dict) -> tuple[str, str | None]:
     """
     Check if a file tool operation should be allowed.
@@ -186,18 +285,21 @@ def check_file_access(data: dict) -> tuple[str, str | None]:
     """
     tool_name = data.get("tool_name", "")
 
-    # Only check Read, Write, Edit tools
-    if tool_name not in ("Read", "Write", "Edit"):
+    # Only check file-related tools
+    if tool_name not in ("Read", "Write", "Edit", "Grep", "NotebookEdit"):
         return "allow", None
 
     tool_input = data.get("tool_input", {})
-    file_path = tool_input.get("file_path", "")
+    file_path = extract_path_from_tool(tool_name, tool_input)
 
     if not file_path:
         return "allow", None
 
-    # Check if the file is sensitive
-    is_sensitive, reason = is_sensitive_file(file_path)
+    # For Grep, the path can be a directory - check both file and directory
+    if tool_name == "Grep":
+        is_sensitive, reason = check_directory_for_sensitive_files(file_path)
+    else:
+        is_sensitive, reason = is_sensitive_file(file_path)
 
     if is_sensitive:
         # Log security event: sensitive file access denied
@@ -227,19 +329,68 @@ def check_file_access(data: dict) -> tuple[str, str | None]:
 # MAIN EXECUTION
 # ============================================================================
 
+def run_with_threading_timeout(func, timeout_seconds: int):
+    """
+    Run a function with threading-based timeout (for Windows compatibility).
+
+    Args:
+        func: Function to run (must return (result, error) tuple)
+        timeout_seconds: Timeout in seconds
+
+    Returns:
+        (result, error, timed_out) tuple
+    """
+    result = [None, None, False]  # [return_value, exception, timed_out]
+
+    def target():
+        try:
+            result[0] = func()
+        except Exception as e:
+            result[1] = e
+
+    thread = threading.Thread(target=target)
+    thread.daemon = True
+    thread.start()
+    thread.join(timeout=timeout_seconds)
+
+    if thread.is_alive():
+        result[2] = True  # Timed out
+
+    return result[0], result[1], result[2]
+
+
 def main():
     """Main entry point with timeout and fail-closed error handling."""
 
-    # Set up timeout handler (Unix only)
-    # On Windows, signal.SIGALRM doesn't exist, so we skip timeout handling
-    has_alarm = hasattr(signal, 'SIGALRM')
+    # Determine timeout mechanism based on platform
+    # Unix: use SIGALRM (more reliable for I/O operations)
+    # Windows: use threading-based timeout
+    is_windows = platform.system() == 'Windows'
+    has_alarm = hasattr(signal, 'SIGALRM') and not is_windows
+
     if has_alarm:
+        # Unix: Set up signal-based timeout
         signal.signal(signal.SIGALRM, timeout_handler)
         signal.alarm(HOOK_TIMEOUT)
 
     try:
-        data = json.load(sys.stdin)
-        decision, reason = check_file_access(data)
+        if is_windows:
+            # Windows: Use threading-based timeout
+            def do_check():
+                data = json.load(sys.stdin)
+                return check_file_access(data)
+
+            result, error, timed_out = run_with_threading_timeout(do_check, HOOK_TIMEOUT)
+
+            if timed_out:
+                raise TimeoutError("Hook execution timed out")
+            if error:
+                raise error
+            decision, reason = result
+        else:
+            # Unix: Direct execution with signal timeout
+            data = json.load(sys.stdin)
+            decision, reason = check_file_access(data)
 
         if decision == "block":
             # Use hookSpecificOutput format for proper deny
@@ -316,7 +467,7 @@ def main():
         sys.exit(0)
 
     finally:
-        # Cancel the alarm
+        # Cancel the alarm (Unix only)
         if has_alarm:
             signal.alarm(0)
 

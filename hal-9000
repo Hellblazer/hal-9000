@@ -76,6 +76,20 @@ validate_profile_name() {
     return 0
 }
 
+# MEDIUM-2: Validate container image format
+# Ensures CONTAINER_IMAGE_BASE matches expected Docker image format
+validate_container_image_base() {
+    local image="$1"
+    # Pattern: registry/path:tag or path:tag
+    # Allows: lowercase alphanumeric, dots, dashes, underscores, slashes, colons
+    # Format: [registry/]name[:tag]
+    if [[ ! "$image" =~ ^[a-z0-9][a-z0-9._/-]*:[a-z0-9._-]+$ ]] && \
+       [[ ! "$image" =~ ^[a-z0-9][a-z0-9._/-]*$ ]]; then
+        error "Invalid CONTAINER_IMAGE_BASE format: $image"
+    fi
+    return 0
+}
+
 # Load configuration from ~/.hal9000/config (safe parsing, no arbitrary code execution)
 load_config() {
     if [[ ! -f "$HAL9000_CONFIG_FILE" ]]; then
@@ -95,6 +109,8 @@ load_config() {
         # Only allow specific known variables (whitelist approach)
         case "$key" in
             CONTAINER_IMAGE_BASE)
+                # MEDIUM-2: Validate container image format before accepting
+                validate_container_image_base "$value"
                 export CONTAINER_IMAGE_BASE="$value"
                 ;;
             *)
@@ -119,21 +135,40 @@ init_secrets_dir() {
     fi
 }
 
-# Store API key securely in secrets directory
-# Usage: store_api_key_secret
-# Reads from ANTHROPIC_API_KEY env var and stores to file
-store_api_key_secret() {
-    if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
-        return 0
+# SECURITY: Check for API key in environment and fail with instructions
+# API keys should NEVER be passed via environment variables as they are visible
+# in docker inspect output and /proc/1/environ inside containers.
+# Usage: check_api_key_security
+check_api_key_security() {
+    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+        error "SECURITY VIOLATION: ANTHROPIC_API_KEY environment variable detected.
+
+API keys in environment variables are a security risk:
+  - Visible via 'docker inspect' on container
+  - Visible via /proc/1/environ inside container
+  - May be logged in shell history
+
+For security, API keys MUST be stored in secret files, not environment variables.
+
+To fix:
+  1. Store your key securely:
+     echo 'your-api-key' > ${HAL9000_SECRETS_DIR}/anthropic_key
+     chmod 400 ${HAL9000_SECRETS_DIR}/anthropic_key
+
+  2. Remove the environment variable:
+     unset ANTHROPIC_API_KEY
+
+  3. Update your shell profile (~/.bashrc, ~/.zshrc) to NOT set this variable
+
+  4. Use subscription login instead (recommended):
+     hal-9000 /login" 1
     fi
+}
 
-    init_secrets_dir
-
-    local secret_file="${HAL9000_SECRETS_DIR}/anthropic_key"
-
-    # Write with restrictive permissions (umask ensures file is created securely)
-    (umask 077 && echo "$ANTHROPIC_API_KEY" > "$secret_file")
-    chmod 400 "$secret_file"
+# Legacy function - now just calls security check
+# Kept for backward compatibility with scripts that call this function
+store_api_key_secret() {
+    check_api_key_security
 }
 
 # Initialize seccomp profile on host filesystem
@@ -169,28 +204,19 @@ init_seccomp_profile() {
         chmod 644 "$seccomp_profile"
         success "Seccomp profile initialized: $seccomp_profile"
     elif [[ ! -f "$seccomp_profile" ]]; then
-        # Create a minimal enforcing profile if source not found
-        warn "Seccomp source profile not found, creating minimal profile"
-        cat > "$seccomp_profile" << 'SECCOMP_EOF'
-{
-  "defaultAction": "SCMP_ACT_ALLOW",
-  "archMap": [
-    {"architecture": "SCMP_ARCH_X86_64", "subArchitectures": ["SCMP_ARCH_X86", "SCMP_ARCH_X32"]},
-    {"architecture": "SCMP_ARCH_AARCH64", "subArchitectures": ["SCMP_ARCH_ARM"]}
-  ],
-  "syscalls": [
-    {"names": ["mount", "umount", "umount2", "pivot_root"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1},
-    {"names": ["ptrace", "process_vm_readv", "process_vm_writev"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1},
-    {"names": ["setns", "unshare"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1},
-    {"names": ["kexec_load", "kexec_file_load"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1},
-    {"names": ["init_module", "finit_module", "delete_module"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1},
-    {"names": ["bpf"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1},
-    {"names": ["reboot", "sethostname", "setdomainname"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1}
-  ]
-}
-SECCOMP_EOF
-        chmod 644 "$seccomp_profile"
-        success "Minimal seccomp profile created: $seccomp_profile"
+        # MEDIUM-10: Fail if seccomp profile is unavailable (fail-closed security)
+        # Do not create minimal profile - require proper security configuration
+        error "SECURITY: Seccomp profile not found and no source available.
+Seccomp profiles are required for container security.
+
+To fix:
+  1. Clone the hal-9000 repository to get the seccomp profile
+  2. Or manually create: $seccomp_profile
+
+Searched locations:
+$(for p in "${search_paths[@]}"; do echo "  - $p"; done)
+
+This is a security requirement - containers will not start without a seccomp profile." 1
     else
         info "Seccomp profile already exists: $seccomp_profile"
     fi
@@ -205,11 +231,8 @@ get_api_key_secret_path() {
     fi
 }
 
-# Check if API key is available (either as env var or secret file)
+# Check if API key is available (secret file only - env vars are blocked for security)
 has_api_key() {
-    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-        return 0
-    fi
     if [[ -f "${HAL9000_SECRETS_DIR}/anthropic_key" ]]; then
         return 0
     fi
@@ -489,16 +512,17 @@ run_claude_command() {
     # Run claude with session state restoration and persistence
     # This ensures commands like /login save credentials properly
     "${docker_args[@]}" "$image" bash -c '
-        # SECURITY: Read API key from secret file, not environment
-        if [ -f /run/secrets/anthropic_key ]; then
-          export ANTHROPIC_API_KEY=$(cat /run/secrets/anthropic_key)
-        fi
         # Restore session state from persistent volume
         if [ -f /root/.claude-session/.claude.json ]; then
           cp /root/.claude-session/.claude.json /root/.claude.json
         fi
-        # Run the command
-        claude "$@"
+        # SECURITY: Read API key only at command execution time
+        # Using VAR=value command syntax keeps the key in claude process only, not exported to shell
+        if [ -f /run/secrets/anthropic_key ]; then
+          ANTHROPIC_API_KEY=$(cat /run/secrets/anthropic_key) claude "$@"
+        else
+          claude "$@"
+        fi
         # Save session state back to persistent volume
         [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
     ' bash "$@"
@@ -564,11 +588,10 @@ SESSION COMMANDS:
   use 'hal-9000 attach' and the container will drop you into a bash shell.
 
 OPTIONS:
-  --setup                Interactive setup for API key (first-time setup)
+  --setup                Interactive setup (DEPRECATED - use secret file instead)
   --profile, -p PROFILE  Profile: base, python, node, java (default: auto-detect)
   --shell, -s            Start bash shell instead of Claude
   --name NAME            Custom session name (default: auto from directory)
-  --api-key KEY          Anthropic API key (or set ANTHROPIC_API_KEY env var)
   --detach, -d           Don't attach to tmux session after launch
   --via-parent           Launch worker via parent container (requires daemon running)
   --verify               Verify prerequisites and exit
@@ -583,10 +606,15 @@ AUTHENTICATION:
   Option 1 - Subscription Login (recommended):
     hal-9000 /login      # Login once, persists for all sessions
 
-  Option 2 - API Key:
-    export ANTHROPIC_API_KEY=sk-ant-api03-...
+  Option 2 - API Key (via secret file):
+    echo 'sk-ant-api03-...' > ~/.hal9000/secrets/anthropic_key
+    chmod 400 ~/.hal9000/secrets/anthropic_key
+
     Get key at: https://console.anthropic.com/settings/keys
-    Add to ~/.bashrc or ~/.zshrc to persist.
+
+  SECURITY NOTE: Environment variables (ANTHROPIC_API_KEY) are NOT supported.
+  Environment variables are visible via 'docker inspect' and /proc/1/environ.
+  Always use file-based secrets for API keys.
 
   Auth is stored in shared Docker volume - login once, use everywhere.
 
@@ -633,11 +661,13 @@ CUSTOM PROFILES:
   See README-CUSTOM_PROFILES.md for complete guide.
 
 ENVIRONMENT:
-  ANTHROPIC_API_KEY              API key for Claude authentication
   HAL9000_CONTAINER_IMAGE_BASE   Override Docker image registry/base
                                  (e.g., "my-registry/my-hal-9000")
   HAL9000_HOME                   Override session storage (default: ~/.hal9000)
   DOCKER_SOCKET                  Docker socket path (default: /var/run/docker.sock)
+
+  DEPRECATED (security risk - do not use):
+  ANTHROPIC_API_KEY              Use ~/.hal9000/secrets/anthropic_key file instead
 
 CONFIGURATION:
   Config file: ~/.hal9000/config
@@ -670,13 +700,14 @@ show_version() {
 
 setup_auth() {
     echo ""
-    info "hal-9000 Authentication Setup"
+    info "hal-9000 Secure Authentication Setup"
     echo ""
 
-    # Check if already configured
-    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-        success "ANTHROPIC_API_KEY is already set"
-        echo "  Current value: ${ANTHROPIC_API_KEY:0:15}..."
+    local secret_file="${HAL9000_SECRETS_DIR}/anthropic_key"
+
+    # Check if already configured via secret file
+    if [[ -f "$secret_file" ]]; then
+        success "API key secret file already exists: $secret_file"
         echo ""
         read -p "Replace with a new key? [y/N] " -n 1 -r
         echo ""
@@ -686,10 +717,19 @@ setup_auth() {
         fi
     fi
 
+    # Check for insecure env var and warn
+    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+        warn "ANTHROPIC_API_KEY environment variable detected!"
+        warn "Environment variables are a security risk (visible via docker inspect)."
+        warn "This setup will migrate your key to a secure file."
+        echo ""
+    fi
+
     echo "Enter your Anthropic API key (or 'q' to quit):"
     echo "  Get one at: https://console.anthropic.com/settings/keys"
     echo ""
-    read -p "API Key: " api_key_input
+    read -p "API Key: " -s api_key_input  # -s hides input for security
+    echo ""
 
     if [[ "$api_key_input" == "q" ]] || [[ -z "$api_key_input" ]]; then
         info "Setup cancelled"
@@ -706,63 +746,26 @@ setup_auth() {
         fi
     fi
 
-    # Detect shell config file
-    local shell_rc=""
-    if [[ -n "${ZSH_VERSION:-}" ]] || [[ "$SHELL" == *"zsh"* ]]; then
-        shell_rc="$HOME/.zshrc"
-    else
-        shell_rc="$HOME/.bashrc"
+    # Create secrets directory and store key securely
+    init_secrets_dir
+    (umask 077 && echo "$api_key_input" > "$secret_file")
+    chmod 400 "$secret_file"
+
+    success "API key stored securely in: $secret_file"
+    echo ""
+    info "File permissions: 400 (owner read-only)"
+    echo ""
+
+    # If env var was set, remind user to remove it
+    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+        warn "IMPORTANT: Remove ANTHROPIC_API_KEY from your shell profile!"
+        echo ""
+        echo "  1. Edit your shell config (~/.bashrc, ~/.zshrc, etc.)"
+        echo "  2. Remove any line containing: export ANTHROPIC_API_KEY"
+        echo "  3. Run: unset ANTHROPIC_API_KEY"
+        echo ""
     fi
 
-    echo ""
-    info "Where to save the API key?"
-    echo "  1) $shell_rc (recommended - persists across sessions)"
-    echo "  2) Current session only (export now, won't persist)"
-    echo "  3) Cancel"
-    echo ""
-    read -p "Choice [1]: " -n 1 -r choice
-    echo ""
-
-    case "${choice:-1}" in
-        1)
-            # Check if already in file
-            if grep -q "ANTHROPIC_API_KEY" "$shell_rc" 2>/dev/null; then
-                warn "ANTHROPIC_API_KEY already exists in $shell_rc"
-                read -p "Replace it? [y/N] " -n 1 -r
-                echo ""
-                if [[ $REPLY =~ ^[Yy]$ ]]; then
-                    # Remove old line and add new
-                    sed -i.bak '/export ANTHROPIC_API_KEY/d' "$shell_rc"
-                else
-                    info "Setup cancelled"
-                    exit 0
-                fi
-            fi
-
-            echo "" >> "$shell_rc"
-            echo "# Anthropic API key for Claude Code (added by hal-9000)" >> "$shell_rc"
-            echo "export ANTHROPIC_API_KEY=\"$api_key_input\"" >> "$shell_rc"
-
-            success "Added to $shell_rc"
-            echo ""
-            info "To use now, run:"
-            echo "  source $shell_rc"
-            echo ""
-            info "Or start a new terminal session."
-            ;;
-        2)
-            export ANTHROPIC_API_KEY="$api_key_input"
-            success "API key set for current session"
-            echo ""
-            info "Note: This won't persist. Run 'hal-9000 --setup' again to save permanently."
-            ;;
-        *)
-            info "Setup cancelled"
-            exit 0
-            ;;
-    esac
-
-    echo ""
     success "Setup complete! You can now run: hal-9000"
 }
 
@@ -797,11 +800,19 @@ show_diagnostics() {
     # Check authentication
     echo ""
     info "Authentication:"
-    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-        local key_preview="${ANTHROPIC_API_KEY:0:10}..."
-        success "  API Key: Set ($key_preview)"
+
+    local secret_file="${HAL9000_SECRETS_DIR}/anthropic_key"
+    if [[ -f "$secret_file" ]]; then
+        success "  API Key: Secure file exists ($secret_file)"
     else
-        info "  API Key: Not set"
+        info "  API Key: No secret file"
+    fi
+
+    # Warn about insecure env var
+    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+        warn "  SECURITY: ANTHROPIC_API_KEY env var detected (insecure!)"
+        warn "    → Move to: $secret_file"
+        warn "    → Run: unset ANTHROPIC_API_KEY"
     fi
 
     if check_subscription_auth; then
@@ -875,11 +886,16 @@ show_diagnostics() {
 
     # Auth guidance
     echo ""
-    if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+    local secret_file="${HAL9000_SECRETS_DIR}/anthropic_key"
+    if [[ ! -f "$secret_file" ]] && ! check_subscription_auth; then
         info "Authentication options:"
-        echo "  1. Set ANTHROPIC_API_KEY environment variable"
-        echo "  2. Run 'hal-9000 --shell' then 'claude /login' inside container"
-        echo "  3. Run 'claude setup-token' on host for long-lived token"
+        echo "  1. Subscription login (recommended): hal-9000 /login"
+        echo "  2. API key via secure file:"
+        echo "     echo 'sk-ant-...' > ~/.hal9000/secrets/anthropic_key"
+        echo "     chmod 400 ~/.hal9000/secrets/anthropic_key"
+        echo ""
+        warn "Note: Environment variables (ANTHROPIC_API_KEY) are NOT supported"
+        echo "      Environment variables are visible via 'docker inspect'"
     fi
 
     # Container config info
@@ -1348,30 +1364,28 @@ verify_prerequisites() {
         error "Docker daemon not running or not accessible" 3
     fi
 
-    # Check authentication - API key OR subscription login
-    if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
-        # No API key - check for subscription login
-        if check_subscription_auth; then
-            success "Authentication: Subscription login detected"
-        else
-            echo ""
-            warn "No authentication configured"
-            echo ""
-            info "Option 1: Subscription login (recommended)"
-            echo "  hal-9000 /login"
-            echo ""
-            info "Option 2: API key"
-            echo "  export ANTHROPIC_API_KEY=sk-ant-api03-..."
-            echo "  Get key at: https://console.anthropic.com/settings/keys"
-            echo ""
-            error "Run 'hal-9000 /login' to authenticate with your Claude subscription" 4
-        fi
+    # SECURITY: Check for and reject API key in environment variable
+    check_api_key_security
+
+    # Check authentication - secret file OR subscription login
+    local secret_file="${HAL9000_SECRETS_DIR}/anthropic_key"
+    if [[ -f "$secret_file" ]]; then
+        success "Authentication: API key (secure file: $secret_file)"
+    elif check_subscription_auth; then
+        success "Authentication: Subscription login detected"
     else
-        # Validate API key format
-        if [[ ! "${ANTHROPIC_API_KEY}" =~ ^sk-ant- ]]; then
-            error "Invalid API key format (expected sk-ant-...)\nGet key at: https://console.anthropic.com/settings/keys" 1
-        fi
-        success "Authentication: API key configured"
+        echo ""
+        warn "No authentication configured"
+        echo ""
+        info "Option 1: Subscription login (recommended)"
+        echo "  hal-9000 /login"
+        echo ""
+        info "Option 2: API key (via secure file)"
+        echo "  echo 'sk-ant-api03-...' > ~/.hal9000/secrets/anthropic_key"
+        echo "  chmod 400 ~/.hal9000/secrets/anthropic_key"
+        echo "  Get key at: https://console.anthropic.com/settings/keys"
+        echo ""
+        error "Run 'hal-9000 /login' to authenticate with your Claude subscription" 4
     fi
 
     success "Prerequisites verified"
@@ -1478,11 +1492,12 @@ attach_session() {
 
     if [[ "$shell_mode" == "true" ]]; then
         # Shell mode: just attach to bash
+        # SECURITY: For shell mode, we export ANTHROPIC_API_KEY_FILE path only
+        # User can read from file if needed, but key is not in environment
         info "Type 'exit' to disconnect"
         docker exec -it "$session_name" bash -c '
-            # SECURITY: Read API key from secret file, not environment
             if [ -f /run/secrets/anthropic_key ]; then
-              export ANTHROPIC_API_KEY=$(cat /run/secrets/anthropic_key)
+              export ANTHROPIC_API_KEY_FILE=/run/secrets/anthropic_key
             fi
             exec bash
         '
@@ -1490,16 +1505,17 @@ attach_session() {
         # Normal mode: restore session state and run Claude with proper TTY
         info "Launching Claude..."
         docker exec -it "$session_name" bash -c '
-            # SECURITY: Read API key from secret file, not environment
-            if [ -f /run/secrets/anthropic_key ]; then
-              export ANTHROPIC_API_KEY=$(cat /run/secrets/anthropic_key)
-            fi
             # Restore Claude session state from persistent volume
             if [ -f /root/.claude-session/.claude.json ]; then
               cp /root/.claude-session/.claude.json /root/.claude.json
             fi
-            # Run Claude
-            claude
+            # SECURITY: Read API key only at command execution time
+            # Using VAR=value command syntax keeps the key in claude process only
+            if [ -f /run/secrets/anthropic_key ]; then
+              ANTHROPIC_API_KEY=$(cat /run/secrets/anthropic_key) claude
+            else
+              claude
+            fi
             # Save Claude session state back to persistent volume after exit
             [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
         '
@@ -1673,11 +1689,12 @@ launch_container_session() {
 
         if [[ "$shell_mode" == "true" ]]; then
             # Shell mode: just attach to bash
+            # SECURITY: For shell mode, we export ANTHROPIC_API_KEY_FILE path only
+            # User can read from file if needed, but key is not in environment
             info "Type 'exit' to disconnect"
             docker exec -it "$session_name" bash -c '
-                # SECURITY: Read API key from secret file, not environment
                 if [ -f /run/secrets/anthropic_key ]; then
-                  export ANTHROPIC_API_KEY=$(cat /run/secrets/anthropic_key)
+                  export ANTHROPIC_API_KEY_FILE=/run/secrets/anthropic_key
                 fi
                 exec bash
             '
@@ -1685,18 +1702,19 @@ launch_container_session() {
             # Normal mode: restore session state and run Claude with proper TTY
             info "Launching Claude..."
             docker exec -it "$session_name" bash -c '
-                # SECURITY: Read API key from secret file, not environment
-                if [ -f /run/secrets/anthropic_key ]; then
-                  export ANTHROPIC_API_KEY=$(cat /run/secrets/anthropic_key)
-                fi
                 # FILE-BASED SESSION PERSISTENCE:
                 # State is persisted across session attachments via .claude.json file
                 # Restore Claude session state from persistent volume
                 if [ -f /root/.claude-session/.claude.json ]; then
                   cp /root/.claude-session/.claude.json /root/.claude.json
                 fi
-                # Run Claude (maintains session in memory while running)
-                claude
+                # SECURITY: Read API key only at command execution time
+                # Using VAR=value command syntax keeps the key in claude process only
+                if [ -f /run/secrets/anthropic_key ]; then
+                  ANTHROPIC_API_KEY=$(cat /run/secrets/anthropic_key) claude
+                else
+                  claude
+                fi
                 # Save Claude session state back to persistent volume after exit
                 # This enables resuming the exact session on next attach
                 [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
@@ -1803,8 +1821,16 @@ main() {
                 shift 2
                 ;;
             --api-key)
-                api_key="$2"
-                shift 2
+                error "SECURITY: --api-key is deprecated and no longer supported.
+
+API keys passed via command line or environment are a security risk:
+  - Visible in process listings (ps aux)
+  - Visible via 'docker inspect'
+  - May be logged in shell history
+
+Use file-based secrets instead:
+  echo 'your-api-key' > ~/.hal9000/secrets/anthropic_key
+  chmod 400 ~/.hal9000/secrets/anthropic_key" 1
                 ;;
             --detach|-d)
                 detach=true

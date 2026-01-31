@@ -287,10 +287,26 @@ launch_session() {
         -w /workspace
         -e "HAL9000_SESSION=$session_name"
         -e "HAL9000_SLOT=$slot"
-        -e ANTHROPIC_API_KEY
     )
 
+    # SECURITY: Mount API key as secret file instead of environment variable
+    # Environment variables are visible in 'docker inspect' output and /proc/1/environ
+    local secrets_dir="$HOME/.hal9000/secrets"
+    if [[ -f "$secrets_dir/anthropic_key" ]]; then
+        docker_args+=(-v "${secrets_dir}/anthropic_key:/run/secrets/anthropic_key:ro")
+        info "SECURITY: Mounting API key as secret file (not env var)"
+    elif [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+        error "SECURITY VIOLATION: ANTHROPIC_API_KEY environment variable detected.
+API keys in environment variables are visible via 'docker inspect' and /proc/1/environ.
+
+To fix, use file-based secrets instead:
+  1. Store your key: echo 'your-key' > $secrets_dir/anthropic_key
+  2. Set permissions: chmod 400 $secrets_dir/anthropic_key
+  3. Remove env var: unset ANTHROPIC_API_KEY"
+    fi
+
     # Add ChromaDB environment variables if set
+    # TODO: Move these to secret files as well in future iteration
     [[ -n "${CHROMADB_TENANT:-}" ]] && docker_args+=(-e CHROMADB_TENANT)
     [[ -n "${CHROMADB_DATABASE:-}" ]] && docker_args+=(-e CHROMADB_DATABASE)
     [[ -n "${CHROMADB_API_KEY:-}" ]] && docker_args+=(-e CHROMADB_API_KEY)

@@ -19,12 +19,54 @@ All security events are logged to:
     ${HAL9000_HOME}/logs/security.log (default: /root/.hal9000/logs/security.log)
 """
 
+import hashlib
 import os
+import re
 import sys
 import fcntl
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+
+# ============================================================================
+# LOG SANITIZATION (HIGH-1: Prevent log injection)
+# ============================================================================
+
+def sanitize_log_value(value: str) -> str:
+    """
+    Escape newlines, pipes, quotes, and control characters for log safety.
+
+    Prevents log injection attacks by neutralizing characters that could:
+    - Create fake log entries (newlines)
+    - Break log parsing (pipes, the field delimiter)
+    - Inject terminal escape sequences (control characters, ANSI codes)
+
+    Args:
+        value: The value to sanitize
+
+    Returns:
+        Sanitized string safe for logging
+    """
+    if not isinstance(value, str):
+        value = str(value)
+    # Remove ANSI escape sequences (color codes, cursor movement, etc.)
+    # Pattern matches: ESC[ followed by any number of digits/semicolons, then a letter
+    value = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', value)
+    # Escape backslash first to prevent double-escaping
+    value = value.replace('\\', '\\\\')
+    # Escape newlines and carriage returns
+    value = value.replace('\n', '\\n')
+    value = value.replace('\r', '\\r')
+    # Escape tabs
+    value = value.replace('\t', '\\t')
+    # Escape pipe (log field delimiter)
+    value = value.replace('|', '\\|')
+    # Escape quotes
+    value = value.replace('"', '\\"')
+    # Remove other control characters (0x00-0x1F except already handled, and 0x7F)
+    value = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', value)
+    return value
 
 
 # ============================================================================
@@ -37,11 +79,13 @@ DEFAULT_LOG_DIR = os.environ.get('HAL9000_HOME', '/root/.hal9000') + '/logs'
 # Security log file
 SECURITY_LOG_FILE = 'security.log'
 
-# Max log file size before rotation (10MB)
-MAX_LOG_SIZE = 10 * 1024 * 1024
+# Max log file size before rotation (STYLE-3: configurable via environment)
+# Default: 10MB (matches AUDIT_LOG_MAX_SIZE in audit-log.sh)
+MAX_LOG_SIZE = int(os.environ.get('AUDIT_LOG_MAX_SIZE', 10 * 1024 * 1024))
 
-# Number of rotated files to keep
-MAX_LOG_FILES = 5
+# Number of rotated files to keep (STYLE-3: configurable via environment)
+# Default: 5 (matches AUDIT_LOG_MAX_FILES in audit-log.sh)
+MAX_LOG_FILES = int(os.environ.get('AUDIT_LOG_MAX_FILES', 5))
 
 
 # ============================================================================
@@ -54,10 +98,58 @@ def get_security_log_path() -> Path:
     return Path(log_dir) / SECURITY_LOG_FILE
 
 
+def get_container_id() -> str:
+    """
+    MEDIUM-11: Get the actual container ID for audit logs.
+
+    Attempts to get the container ID from:
+    1. HOSTNAME environment variable (set by Docker)
+    2. /proc/self/cgroup (contains container ID on Docker)
+    3. Falls back to 'unknown' if detection fails
+    """
+    # Try HOSTNAME first (Docker sets this to container ID by default)
+    container_id = os.environ.get('HOSTNAME', '')
+    if container_id:
+        # Return first 12 chars (standard short container ID)
+        return container_id[:12]
+
+    # Try to extract from cgroup
+    try:
+        with open('/proc/self/cgroup', 'r') as f:
+            for line in f:
+                # Look for docker or containerd patterns
+                if 'docker' in line or 'containerd' in line:
+                    # Extract container ID from path like /docker/<id>
+                    parts = line.strip().split('/')
+                    for i, part in enumerate(parts):
+                        if part in ('docker', 'containerd') and i + 1 < len(parts):
+                            cid = parts[i + 1]
+                            if len(cid) >= 12:
+                                return cid[:12]
+                        # Also check for direct container ID (64 hex chars)
+                        if len(part) == 64 and all(c in '0123456789abcdef' for c in part):
+                            return part[:12]
+    except (FileNotFoundError, PermissionError, OSError):
+        pass
+
+    return 'unknown'
+
+
 def get_worker_id() -> str:
-    """Get the current worker ID from environment or hostname."""
-    return os.environ.get('WORKER_ID',
-           os.environ.get('HOSTNAME', 'unknown'))
+    """Get the current worker ID from environment or container ID."""
+    # First check for explicit WORKER_ID
+    worker_id = os.environ.get('WORKER_ID', '')
+    if worker_id:
+        return worker_id
+
+    # MEDIUM-11: Include container ID in worker identification
+    container_id = get_container_id()
+    hostname = os.environ.get('HOSTNAME', 'unknown')
+
+    # Return combined identifier for better traceability
+    if container_id != 'unknown' and container_id != hostname[:12]:
+        return f"{hostname}:{container_id}"
+    return hostname if hostname else container_id
 
 
 def get_timestamp() -> str:
@@ -117,7 +209,7 @@ def log_security_event(
 
     Args:
         event: Event type (e.g., 'HOOK_DENY', 'SECRET_ACCESS_ATTEMPT')
-        details: Event details as key=value pairs
+        details: Event details as key=value pairs (should be pre-sanitized)
         severity: Event severity (INFO, WARN, ERROR, CRITICAL)
 
     Returns:
@@ -135,10 +227,34 @@ def log_security_event(
         # Check if rotation is needed
         rotate_log_if_needed(log_path)
 
+        # Sanitize all components for defense in depth
+        # Event type should be uppercase alphanumeric with underscores
+        safe_event = sanitize_log_value(event)
+        # Severity should be a known value, but sanitize anyway
+        safe_severity = sanitize_log_value(severity)
+        # Worker ID could come from environment/hostname
+        safe_worker_id = sanitize_log_value(get_worker_id())
+        # Details should already be sanitized by caller, but add defense in depth
+        # Note: We don't double-sanitize details since callers already sanitize
+        # This just ensures the log entry structure is protected
+
         # Build log entry
         timestamp = get_timestamp()
-        worker_id = get_worker_id()
-        log_entry = f"{timestamp} | {severity} | {event} | worker={worker_id} {details}\n"
+        log_entry = f"{timestamp} | {safe_severity} | {safe_event} | worker={safe_worker_id} {details}\n"
+
+        # MEDIUM-3: Atomic file creation with secure permissions to prevent race conditions
+        # Use os.open with O_CREAT and explicit mode to avoid TOCTOU race
+        if not log_path.exists():
+            try:
+                # Create file with restrictive permissions atomically
+                fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o640)
+                os.close(fd)
+            except FileExistsError:
+                # File was created by another process - that's fine
+                pass
+            except OSError:
+                # Permission or other error - continue with normal open
+                pass
 
         # Atomic append with file locking
         with open(log_path, 'a', encoding='utf-8') as f:
@@ -149,7 +265,7 @@ def log_security_event(
             finally:
                 fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
-        # Set permissions (owner read/write, group read)
+        # Ensure permissions are correct (in case file existed with wrong perms)
         try:
             os.chmod(log_path, 0o640)
         except OSError:
@@ -187,16 +303,18 @@ def audit_hook_deny(
     Returns:
         True if logging succeeded
     """
-    details_parts = [f'tool={tool}']
+    # Sanitize tool name (should be safe but sanitize anyway)
+    safe_tool = sanitize_log_value(tool)
+    details_parts = [f'tool={safe_tool}']
 
     if file_path:
-        # Escape quotes in file path
-        safe_path = file_path.replace('"', '\\"')
+        # Sanitize file path to prevent log injection
+        safe_path = sanitize_log_value(file_path)
         details_parts.append(f'file="{safe_path}"')
 
     if reason:
-        # Escape quotes in reason
-        safe_reason = reason.replace('"', '\\"')
+        # Sanitize reason to prevent log injection
+        safe_reason = sanitize_log_value(reason)
         details_parts.append(f'reason="{safe_reason}"')
 
     return log_security_event('HOOK_DENY', ' '.join(details_parts), severity)
@@ -213,9 +331,10 @@ def audit_hook_timeout(tool: str, timeout_seconds: int) -> bool:
     Returns:
         True if logging succeeded
     """
+    safe_tool = sanitize_log_value(tool)
     return log_security_event(
         'HOOK_TIMEOUT',
-        f'tool={tool} timeout_seconds={timeout_seconds} action=denied',
+        f'tool={safe_tool} timeout_seconds={timeout_seconds} action=denied',
         'WARN'
     )
 
@@ -231,10 +350,11 @@ def audit_hook_error(tool: str, error: str) -> bool:
     Returns:
         True if logging succeeded
     """
-    safe_error = error.replace('"', '\\"')
+    safe_tool = sanitize_log_value(tool)
+    safe_error = sanitize_log_value(error)
     return log_security_event(
         'HOOK_ERROR',
-        f'tool={tool} error="{safe_error}" action=denied',
+        f'tool={safe_tool} error="{safe_error}" action=denied',
         'ERROR'
     )
 
@@ -250,10 +370,11 @@ def audit_secret_access_attempt(tool: str, file_path: str) -> bool:
     Returns:
         True if logging succeeded
     """
-    safe_path = file_path.replace('"', '\\"')
+    safe_tool = sanitize_log_value(tool)
+    safe_path = sanitize_log_value(file_path)
     return log_security_event(
         'SECRET_ACCESS_ATTEMPT',
-        f'tool={tool} file="{safe_path}"',
+        f'tool={safe_tool} file="{safe_path}"',
         'WARN'
     )
 
@@ -269,10 +390,11 @@ def audit_suspicious_activity(activity_type: str, details: str) -> bool:
     Returns:
         True if logging succeeded
     """
-    safe_details = details.replace('"', '\\"')
+    safe_type = sanitize_log_value(activity_type)
+    safe_details = sanitize_log_value(details)
     return log_security_event(
         'SUSPICIOUS_ACTIVITY',
-        f'type={activity_type} details="{safe_details}"',
+        f'type={safe_type} details="{safe_details}"',
         'ERROR'
     )
 
@@ -288,8 +410,8 @@ def audit_symlink_bypass_attempt(original_path: str, resolved_path: str) -> bool
     Returns:
         True if logging succeeded
     """
-    safe_original = original_path.replace('"', '\\"')
-    safe_resolved = resolved_path.replace('"', '\\"')
+    safe_original = sanitize_log_value(original_path)
+    safe_resolved = sanitize_log_value(resolved_path)
     return log_security_event(
         'SYMLINK_BYPASS_ATTEMPT',
         f'original="{safe_original}" resolved="{safe_resolved}"',
@@ -308,9 +430,10 @@ def audit_command_blocked(command: str, reason: str) -> bool:
     Returns:
         True if logging succeeded
     """
-    # Truncate long commands to prevent log injection
-    safe_command = command[:200].replace('"', '\\"')
-    safe_reason = reason.replace('"', '\\"')
+    # Truncate long commands first, then sanitize
+    truncated_command = command[:200]
+    safe_command = sanitize_log_value(truncated_command)
+    safe_reason = sanitize_log_value(reason)
     return log_security_event(
         'COMMAND_BLOCKED',
         f'command="{safe_command}" reason="{safe_reason}"',

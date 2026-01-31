@@ -33,15 +33,49 @@ readonly CYAN='\033[0;36m'
 readonly RED='\033[0;31m'
 readonly NC='\033[0m'
 
+# HIGH-1: Sanitize values for safe console logging
+# Removes ANSI escape sequences and control characters to prevent log injection
+# Usage: sanitized=$(sanitize_for_console "$value")
+sanitize_for_console() {
+    local value="$1"
+    # Remove ANSI escape sequences (color codes, cursor movement, etc.)
+    value=$(printf '%s' "$value" | sed 's/\x1b\[[0-9;]*[A-Za-z]//g')
+    # Remove control characters (0x00-0x1F and 0x7F)
+    value=$(printf '%s' "$value" | tr -d '\000-\037\177')
+    printf '%s' "$value"
+}
+
 WORKER_NAME="${WORKER_NAME:-worker-$$}"
+# HIGH-1: Sanitize WORKER_NAME to prevent log injection attacks
+# WORKER_NAME is used in log prefixes and could contain malicious ANSI sequences
+WORKER_NAME=$(sanitize_for_console "$WORKER_NAME")
+
 # WORKER_ID is used for identification/logging (passed from spawn-worker.sh)
 # Defaults to WORKER_NAME if not set
 WORKER_ID="${WORKER_ID:-${WORKER_NAME}}"
+# HIGH-1: Sanitize WORKER_ID as well (used in audit logging)
+WORKER_ID=$(sanitize_for_console "$WORKER_ID")
 
 log_info() { printf "${CYAN}[${WORKER_NAME}]${NC} %s\n" "$1"; }
 log_success() { printf "${GREEN}[${WORKER_NAME}]${NC} %s\n" "$1"; }
 log_warn() { printf "${YELLOW}[${WORKER_NAME}]${NC} %s\n" "$1"; }
 log_error() { printf "${RED}[${WORKER_NAME}]${NC} %s\n" "$1" >&2; }
+
+# HIGH-4: Hash a secret for safe logging (shows first 16 chars of SHA256)
+# Usage: log_info "API key fingerprint: $(hash_for_log "$SECRET")"
+# This prevents exposing actual secret values while still allowing correlation
+hash_for_log() {
+    local secret="$1"
+    if [[ -z "$secret" ]]; then
+        echo "empty"
+        return
+    fi
+    # Use printf to avoid newline issues, sha256sum for hashing
+    # cut -c1-16 provides 64 bits of entropy - sufficient for log correlation
+    printf '%s' "$secret" | sha256sum 2>/dev/null | cut -c1-16 || \
+    printf '%s' "$secret" | shasum -a 256 2>/dev/null | cut -c1-16 || \
+    echo "hash_error"
+}
 
 # ============================================================================
 # RESILIENCE FUNCTIONS
@@ -141,6 +175,113 @@ CLAUDE_HOME="${CLAUDE_HOME:-/home/claude/.claude}"
 WORKSPACE="${WORKSPACE:-/workspace}"
 MEMORY_BANK_ROOT="${MEMORY_BANK_ROOT:-/data/memory-bank}"
 
+# MEDIUM-9: Retry DNS resolution for hostname resolution
+# Resolves hostname with retry logic for transient DNS failures
+# Configurable via DNS_RETRY_COUNT (default: 5) and DNS_RETRY_DELAY (default: 2)
+resolve_hostname_with_retry() {
+    local hostname="$1"
+    local max_retries="${DNS_RETRY_COUNT:-5}"
+    local retry_delay="${DNS_RETRY_DELAY:-2}"
+    local attempt=1
+
+    log_info "Resolving hostname: $hostname (max retries: $max_retries, delay: ${retry_delay}s)"
+
+    while [[ $attempt -le $max_retries ]]; do
+        # Try to resolve the hostname using getent (most reliable on Linux)
+        if getent hosts "$hostname" >/dev/null 2>&1; then
+            log_info "Resolved $hostname (attempt $attempt)"
+            return 0
+        fi
+
+        # Fallback to nslookup if available
+        if command -v nslookup >/dev/null 2>&1 && nslookup "$hostname" >/dev/null 2>&1; then
+            log_info "Resolved $hostname via nslookup (attempt $attempt)"
+            return 0
+        fi
+
+        # Fallback to host command if available
+        if command -v host >/dev/null 2>&1 && host "$hostname" >/dev/null 2>&1; then
+            log_info "Resolved $hostname via host (attempt $attempt)"
+            return 0
+        fi
+
+        if [[ $attempt -lt $max_retries ]]; then
+            log_warn "DNS resolution failed for $hostname (attempt $attempt/$max_retries), retrying in ${retry_delay}s..."
+            sleep "$retry_delay"
+        fi
+        ((attempt++))
+    done
+
+    log_error "Failed to resolve $hostname after $max_retries attempts"
+    return 1
+}
+
+# MEDIUM-6: Read and validate token file contents
+# Ensures token files are not empty or whitespace-only
+# Usage: token=$(read_token_file "/path/to/token" "token_name") || handle_error
+read_token_file() {
+    local file="$1"
+    local name="${2:-token}"
+
+    if [[ ! -f "$file" ]]; then
+        log_error "Token file not found: $file"
+        return 1
+    fi
+
+    if [[ ! -r "$file" ]]; then
+        log_error "Token file not readable: $file"
+        return 1
+    fi
+
+    local token
+    token=$(cat "$file" 2>/dev/null) || {
+        log_error "Failed to read token file: $file"
+        return 1
+    }
+
+    # Check for empty or whitespace-only content
+    if [[ -z "${token// /}" ]]; then
+        log_error "Token file '$name' is empty or contains only whitespace: $file"
+        return 1
+    fi
+
+    # Validate token doesn't contain newlines (common file corruption)
+    if [[ "$token" == *$'\n'* ]]; then
+        log_warn "Token file '$name' contains newlines - using first line only"
+        token="${token%%$'\n'*}"
+    fi
+
+    printf '%s' "$token"
+    return 0
+}
+
+# MEDIUM-2: Validate config values read from files
+# Prevents injection attacks through maliciously crafted config files
+# Usage: validate_config_value "tenant_name" "$value" "^[a-zA-Z0-9_-]+$"
+validate_config_value() {
+    local name="$1"
+    local value="$2"
+    local pattern="${3:-^[a-zA-Z0-9_.-]+$}"  # Default: alphanumeric + common safe chars
+    local max_length="${4:-256}"              # Default max length
+
+    if [[ -z "$value" ]]; then
+        log_error "Config value '$name' is empty"
+        return 1
+    fi
+
+    if [[ ${#value} -gt $max_length ]]; then
+        log_error "Config value '$name' exceeds maximum length ($max_length chars)"
+        return 1
+    fi
+
+    if ! [[ "$value" =~ $pattern ]]; then
+        log_error "Config value '$name' contains invalid characters (pattern: $pattern)"
+        return 1
+    fi
+
+    return 0
+}
+
 # ChromaDB configuration with DNS-based service discovery
 # Prefer PARENT_HOSTNAME (container name) for Docker DNS resolution - more resilient than IP
 # Falls back to PARENT_IP for backward compatibility
@@ -150,7 +291,16 @@ if [[ -z "$CHROMADB_HOST" ]]; then
     if [[ -n "${PARENT_HOSTNAME:-}" ]]; then
         # Use parent container name - Docker DNS resolves to current IP
         # More resilient: survives parent container restart with new IP
-        CHROMADB_HOST="${PARENT_HOSTNAME}"
+        # Validate DNS resolution with retry logic
+        if resolve_hostname_with_retry "${PARENT_HOSTNAME}" 3; then
+            CHROMADB_HOST="${PARENT_HOSTNAME}"
+        elif [[ -n "${PARENT_IP:-}" ]]; then
+            log_warn "DNS resolution failed, falling back to PARENT_IP: ${PARENT_IP}"
+            CHROMADB_HOST="${PARENT_IP}"
+        else
+            log_warn "DNS resolution failed and no PARENT_IP fallback, using localhost"
+            CHROMADB_HOST="localhost"
+        fi
     elif [[ -n "${PARENT_IP:-}" ]]; then
         # Fallback to IP for backward compatibility (less resilient)
         CHROMADB_HOST="${PARENT_IP}"
@@ -167,6 +317,19 @@ CHROMADB_PORT="${CHROMADB_PORT:-8000}"
 CHROMA_TENANT="${CHROMA_TENANT:-}"
 CHROMA_DATABASE="${CHROMA_DATABASE:-default}"
 
+# MEDIUM-2: Validate ChromaDB configuration values to prevent injection
+if [[ -n "$CHROMA_TENANT" ]]; then
+    if ! validate_config_value "CHROMA_TENANT" "$CHROMA_TENANT" "^[a-zA-Z0-9_-]+$" 64; then
+        log_error "Invalid CHROMA_TENANT value - must be alphanumeric with underscores/dashes, max 64 chars"
+        exit 1
+    fi
+fi
+
+if ! validate_config_value "CHROMA_DATABASE" "$CHROMA_DATABASE" "^[a-zA-Z0-9_-]+$" 64; then
+    log_error "Invalid CHROMA_DATABASE value - must be alphanumeric with underscores/dashes, max 64 chars"
+    exit 1
+fi
+
 # ChromaDB authentication token file (mounted read-only from parent)
 CHROMADB_TOKEN_FILE="/run/secrets/chromadb_token"
 
@@ -175,13 +338,49 @@ CHROMADB_TOKEN_FILE="/run/secrets/chromadb_token"
 CHROMADB_CERT_FILE="/run/secrets/chromadb.crt"
 CHROMADB_TLS_ENABLED="${CHROMADB_TLS_ENABLED:-false}"
 
-# Determine ChromaDB protocol based on TLS setting
+# MEDIUM-1: Certificate pinning validation
+# Validates certificate fingerprint if CHROMADB_CERT_FINGERPRINT is set
+validate_certificate() {
+    local cert_file="$1"
+    local expected_fingerprint="${CHROMADB_CERT_FINGERPRINT:-}"
+
+    if [[ -n "$expected_fingerprint" ]]; then
+        if ! command -v openssl >/dev/null 2>&1; then
+            log_error "openssl required for certificate pinning validation"
+            return 1
+        fi
+        local actual
+        actual=$(openssl x509 -noout -fingerprint -sha256 -in "$cert_file" 2>/dev/null | cut -d= -f2)
+        if [[ "$actual" != "$expected_fingerprint" ]]; then
+            log_error "Certificate fingerprint mismatch!"
+            log_error "Expected: $expected_fingerprint"
+            log_error "Actual: $actual"
+            return 1
+        fi
+        log_success "Certificate fingerprint validated"
+    fi
+    return 0
+}
+
+# MEDIUM-8: Graceful TLS fallback with warning
+# If TLS is enabled but certificate not found, fall back to HTTP with warning
 CHROMADB_PROTOCOL="http"
-if [[ "$CHROMADB_TLS_ENABLED" == "true" && -f "$CHROMADB_CERT_FILE" ]]; then
-    CHROMADB_PROTOCOL="https"
-    # Configure SSL certificate for Python requests library (used by chroma-mcp)
-    export SSL_CERT_FILE="$CHROMADB_CERT_FILE"
-    export REQUESTS_CA_BUNDLE="$CHROMADB_CERT_FILE"
+if [[ "$CHROMADB_TLS_ENABLED" == "true" ]]; then
+    if [[ -f "$CHROMADB_CERT_FILE" ]]; then
+        # Validate certificate fingerprint if pinning is configured
+        if validate_certificate "$CHROMADB_CERT_FILE"; then
+            CHROMADB_PROTOCOL="https"
+            # Configure SSL certificate for Python requests library (used by chroma-mcp)
+            export SSL_CERT_FILE="$CHROMADB_CERT_FILE"
+            export REQUESTS_CA_BUNDLE="$CHROMADB_CERT_FILE"
+        else
+            log_warn "Certificate validation failed, falling back to HTTP"
+            CHROMADB_TLS_ENABLED="false"
+        fi
+    else
+        log_warn "TLS enabled but certificate not found at $CHROMADB_CERT_FILE, falling back to HTTP"
+        CHROMADB_TLS_ENABLED="false"
+    fi
 fi
 
 # ============================================================================
@@ -203,25 +402,51 @@ init_claude_home() {
         log_success "Volume ownership migrated - credentials and plugins now accessible"
     fi
 
-    # SECURITY: Read API key from secret file, not environment variable
-    # Secret files mounted at /run/secrets are not visible via 'docker inspect' or /proc/1/environ
-    # This is the secure way to pass credentials to containers
+    # SECURITY: Export secret file PATH, not content
+    # This prevents secrets from appearing in process environment (visible via docker inspect, /proc/1/environ)
+    # The secret will be read only at exec time by run_claude_with_secret()
     if [[ -f /run/secrets/anthropic_key ]]; then
-        export ANTHROPIC_API_KEY=$(cat /run/secrets/anthropic_key)
-        log_success "Using ANTHROPIC_API_KEY from secret file (secure)"
+        export ANTHROPIC_API_KEY_FILE="/run/secrets/anthropic_key"
+        log_success "ANTHROPIC_API_KEY_FILE configured (secret NOT in environment)"
     fi
 
-    # SECURITY: Read ChromaDB API key from secret file if available
+    # SECURITY: Fail if API key is passed via environment variable
+    # Environment variables are visible via 'docker inspect' and /proc/1/environ
+    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+        log_error "SECURITY VIOLATION: ANTHROPIC_API_KEY environment variable detected"
+        log_error "API keys in environment variables are visible via 'docker inspect' and /proc/1/environ"
+        log_error ""
+        log_error "To fix, use file-based secrets instead:"
+        log_error "  1. Store your key: echo 'your-key' > ~/.hal9000/secrets/anthropic_key"
+        log_error "  2. Set permissions: chmod 400 ~/.hal9000/secrets/anthropic_key"
+        log_error "  3. Remove env var: unset ANTHROPIC_API_KEY"
+        log_error "  4. Update your shell profile to not set this variable"
+        exit 1
+    fi
+
+    # SECURITY: Export ChromaDB secret file PATH if available
     if [[ -f /run/secrets/chromadb_api_key ]]; then
-        export CHROMADB_API_KEY=$(cat /run/secrets/chromadb_api_key)
-        log_success "Using CHROMADB_API_KEY from secret file (secure)"
+        export CHROMADB_API_KEY_FILE="/run/secrets/chromadb_api_key"
+        log_success "CHROMADB_API_KEY_FILE configured (secret NOT in environment)"
+    fi
+
+    # SECURITY: Fail if ChromaDB API key is passed via environment variable
+    if [[ -n "${CHROMADB_API_KEY:-}" ]]; then
+        log_error "SECURITY VIOLATION: CHROMADB_API_KEY environment variable detected"
+        log_error "API keys in environment variables are visible via 'docker inspect'"
+        log_error ""
+        log_error "To fix, use file-based secrets instead:"
+        log_error "  1. Store your key: echo 'your-key' > ~/.hal9000/secrets/chromadb_api_key"
+        log_error "  2. Set permissions: chmod 400 ~/.hal9000/secrets/chromadb_api_key"
+        log_error "  3. Remove env var: unset CHROMADB_API_KEY"
+        exit 1
     fi
 
     # Check for authentication
     if [[ -f "$CLAUDE_HOME/.credentials.json" ]]; then
         log_success "Authentication credentials found"
-    elif [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-        log_success "Using ANTHROPIC_API_KEY for authentication"
+    elif [[ -f "${ANTHROPIC_API_KEY_FILE:-}" ]]; then
+        log_success "Using API key from secret file for authentication"
     else
         log_warn "No authentication found - Claude may prompt for login"
     fi
@@ -502,10 +727,9 @@ print_worker_info() {
 ensure_session_persistence() {
     local session_dir="$CLAUDE_HOME"
 
-    # Ensure session directory exists and is writable
+    # MEDIUM-3: Create directory with restrictive permissions atomically using umask
     if [[ ! -d "$session_dir" ]]; then
-        mkdir -p "$session_dir"
-        chmod 0700 "$session_dir"
+        (umask 077 && mkdir -p "$session_dir")
     fi
 
     # Session state will be managed by Claude CLI within TMUX
@@ -514,11 +738,99 @@ ensure_session_persistence() {
 }
 
 # ============================================================================
+# SECURE CLAUDE EXECUTION
+# ============================================================================
+
+# validate_secret_file_path: Validate that a secret file path is safe
+# SECURITY: Prevents command injection via malicious path characters
+validate_secret_file_path() {
+    local path="$1"
+    local name="${2:-secret file}"
+
+    # Validate path contains only safe characters (alphanumeric, underscore, dash, dot, slash)
+    if [[ ! "$path" =~ ^[a-zA-Z0-9/_.-]+$ ]]; then
+        log_error "SECURITY: Invalid characters in $name path: $path"
+        log_error "Path must contain only: a-z, A-Z, 0-9, _, -, ., /"
+        return 1
+    fi
+
+    # Prevent path traversal attempts
+    if [[ "$path" == *".."* ]]; then
+        log_error "SECURITY: Path traversal attempt detected in $name: $path"
+        return 1
+    fi
+
+    return 0
+}
+
+# run_claude_with_secret: Execute Claude with API key read from file at exec time
+# SECURITY: The key is only present in the Claude process environment, not in parent shells
+# This prevents the key from being visible in docker inspect, /proc/1/environ, or shell history
+run_claude_with_secret() {
+    local args=("$@")
+
+    if [[ -n "${ANTHROPIC_API_KEY_FILE:-}" ]]; then
+        # Validate path is safe (prevents command injection)
+        if ! validate_secret_file_path "${ANTHROPIC_API_KEY_FILE}" "ANTHROPIC_API_KEY_FILE"; then
+            log_error "Cannot execute Claude with invalid secret file path"
+            exit 1
+        fi
+
+        # Validate file exists and is readable
+        if [[ ! -f "${ANTHROPIC_API_KEY_FILE}" ]]; then
+            log_error "API key file not found: ${ANTHROPIC_API_KEY_FILE}"
+            exit 1
+        fi
+
+        if [[ ! -r "${ANTHROPIC_API_KEY_FILE}" ]]; then
+            log_error "API key file not readable: ${ANTHROPIC_API_KEY_FILE}"
+            exit 1
+        fi
+
+        # Validate file is not empty
+        if [[ ! -s "${ANTHROPIC_API_KEY_FILE}" ]]; then
+            log_error "API key file is empty: ${ANTHROPIC_API_KEY_FILE}"
+            exit 1
+        fi
+
+        # Read secret at exec time - key only exists in Claude process
+        log_info "Reading API key from secret file for Claude execution"
+        ANTHROPIC_API_KEY=$(cat "${ANTHROPIC_API_KEY_FILE}") exec claude "${args[@]}"
+    else
+        # No secret file - let Claude prompt for login or use credentials
+        exec claude "${args[@]}"
+    fi
+}
+
+# ============================================================================
 # TMUX SESSION MANAGEMENT
 # ============================================================================
 
 TMUX_SOCKET_DIR="${TMUX_SOCKET_DIR:-/data/tmux-sockets}"
 TMUX_ENABLED="${TMUX_ENABLED:-true}"
+# Stale socket age threshold in days (LOW-9)
+TMUX_STALE_SOCKET_DAYS="${TMUX_STALE_SOCKET_DAYS:-7}"
+
+# cleanup_stale_tmux_sockets: Remove old TMUX sockets that may be orphaned (LOW-9)
+# This prevents socket accumulation from crashed workers or incomplete shutdowns
+cleanup_stale_tmux_sockets() {
+    log_info "Cleaning up stale TMUX sockets older than ${TMUX_STALE_SOCKET_DAYS} days..."
+
+    local count=0
+    # Find and remove stale socket files (*.sock) older than threshold
+    while IFS= read -r -d '' socket; do
+        log_info "Removing stale socket: $socket"
+        rm -f "$socket" 2>/dev/null || true
+        ((count++)) || true
+    done < <(find "$TMUX_SOCKET_DIR" -maxdepth 1 -name "*.sock" -type s -mtime +"$TMUX_STALE_SOCKET_DAYS" -print0 2>/dev/null)
+
+    # Also clean up stale tmux-* directories in /tmp (left by tmux)
+    find /tmp -maxdepth 1 -name "tmux-*" -type d -mtime +"$TMUX_STALE_SOCKET_DAYS" -exec rm -rf {} \; 2>/dev/null || true
+
+    if [[ $count -gt 0 ]]; then
+        log_success "Cleaned up $count stale TMUX socket(s)"
+    fi
+}
 
 init_tmux_sockets_dir() {
     if [[ "$TMUX_ENABLED" != "true" ]]; then
@@ -528,9 +840,12 @@ init_tmux_sockets_dir() {
 
     log_info "Initializing TMUX socket directory: $TMUX_SOCKET_DIR"
 
-    mkdir -p "$TMUX_SOCKET_DIR"
-    # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
-    chmod 0770 "$TMUX_SOCKET_DIR"
+    # MEDIUM-3: Create directory with restrictive permissions atomically using umask
+    # umask 007 gives 0770 permissions (777 - 007 = 770)
+    (umask 007 && mkdir -p "$TMUX_SOCKET_DIR")
+
+    # Clean up stale sockets from previous runs (LOW-9)
+    cleanup_stale_tmux_sockets
 
     log_success "TMUX socket directory ready"
 }
@@ -551,9 +866,30 @@ start_tmux_session() {
     tmux -S "$tmux_socket" kill-server 2>/dev/null || true
     sleep 0.5
 
+    # SECURITY: Build Claude command that reads secret at exec time only
+    # This ensures the API key is only in the Claude process environment, not in parent shells
+    # The key is never visible in the entrypoint process or stored in shell history
+    local claude_cmd="exec claude"
+    if [[ -n "${ANTHROPIC_API_KEY_FILE:-}" ]] && [[ -f "${ANTHROPIC_API_KEY_FILE}" ]]; then
+        # SECURITY: Validate path to prevent command injection
+        # Path is interpolated into shell command, so must be strictly validated
+        if ! validate_secret_file_path "${ANTHROPIC_API_KEY_FILE}" "ANTHROPIC_API_KEY_FILE"; then
+            log_error "Cannot start TMUX session with invalid secret file path"
+            return 1
+        fi
+
+        # Use printf %q to safely escape the path for shell interpolation
+        local escaped_path
+        escaped_path=$(printf '%q' "${ANTHROPIC_API_KEY_FILE}")
+
+        # Read secret at exec time - key only exists in Claude process
+        claude_cmd='export ANTHROPIC_API_KEY=$(cat '"${escaped_path}"'); exec claude'
+        log_info "Claude will read API key from secret file at startup"
+    fi
+
     # Create TMUX session with Claude in first window
     tmux -S "$tmux_socket" new-session -d -s "$session_name" -x 120 -y 30 \
-        "exec claude" 2>/dev/null || {
+        "$claude_cmd" 2>/dev/null || {
         log_error "Failed to create TMUX session"
         return 1
     }
@@ -659,12 +995,14 @@ main() {
                 exec tail -f /dev/null
             else
                 log_warn "TMUX failed - falling back to direct execution"
-                exec claude
+                # SECURITY: Use helper that reads secret at exec time only
+                run_claude_with_secret
             fi
             ;;
         claude-*)
             # For non-standard Claude modes, run directly
-            exec claude "${1#claude-}" "${@:2}"
+            # SECURITY: Use helper that reads secret at exec time only
+            run_claude_with_secret "${1#claude-}" "${@:2}"
             ;;
         bash|sh)
             exec "$@"

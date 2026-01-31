@@ -29,12 +29,98 @@ log_success() { printf "${GREEN}[parent]${NC} %s\n" "$1"; }
 log_warn() { printf "${YELLOW}[parent]${NC} %s\n" "$1"; }
 log_error() { printf "${RED}[parent]${NC} %s\n" "$1" >&2; }
 
+# HIGH-4: Hash a secret for safe logging (shows first 16 chars of SHA256)
+# Usage: log_info "API key fingerprint: $(hash_for_log "$SECRET")"
+# This prevents exposing actual secret values while still allowing correlation
+hash_for_log() {
+    local secret="$1"
+    if [[ -z "$secret" ]]; then
+        echo "empty"
+        return
+    fi
+    # Use printf to avoid newline issues, sha256sum for hashing
+    # cut -c1-16 provides 64 bits of entropy - sufficient for log correlation
+    printf '%s' "$secret" | sha256sum 2>/dev/null | cut -c1-16 || \
+    printf '%s' "$secret" | shasum -a 256 2>/dev/null | cut -c1-16 || \
+    echo "hash_error"
+}
+
 # Source audit logging library
 if [[ -f "/scripts/lib/audit-log.sh" ]]; then
     source /scripts/lib/audit-log.sh
 elif [[ -f "$(dirname "${BASH_SOURCE[0]}")/lib/audit-log.sh" ]]; then
     source "$(dirname "${BASH_SOURCE[0]}")/lib/audit-log.sh"
 fi
+
+# ============================================================================
+# INPUT VALIDATION FUNCTIONS
+# ============================================================================
+
+# MEDIUM-2: Validate config values read from files
+# Prevents injection attacks through maliciously crafted config files
+# Usage: validate_config_value "tenant_name" "$value" "^[a-zA-Z0-9_-]+$"
+validate_config_value() {
+    local name="$1"
+    local value="$2"
+    local pattern="${3:-^[a-zA-Z0-9_.-]+$}"  # Default: alphanumeric + common safe chars
+    local max_length="${4:-256}"              # Default max length
+
+    if [[ -z "$value" ]]; then
+        log_error "Config value '$name' is empty"
+        return 1
+    fi
+
+    if [[ ${#value} -gt $max_length ]]; then
+        log_error "Config value '$name' exceeds maximum length ($max_length chars)"
+        return 1
+    fi
+
+    if ! [[ "$value" =~ $pattern ]]; then
+        log_error "Config value '$name' contains invalid characters (pattern: $pattern)"
+        return 1
+    fi
+
+    return 0
+}
+
+# MEDIUM-6: Read and validate token file contents
+# Ensures token files are not empty or whitespace-only
+# Usage: token=$(read_token_file "/path/to/token" "token_name") || exit 1
+read_token_file() {
+    local file="$1"
+    local name="${2:-token}"
+
+    if [[ ! -f "$file" ]]; then
+        log_error "Token file not found: $file"
+        return 1
+    fi
+
+    if [[ ! -r "$file" ]]; then
+        log_error "Token file not readable: $file"
+        return 1
+    fi
+
+    local token
+    token=$(cat "$file" 2>/dev/null) || {
+        log_error "Failed to read token file: $file"
+        return 1
+    }
+
+    # Check for empty or whitespace-only content
+    if [[ -z "${token// /}" ]]; then
+        log_error "Token file '$name' is empty or contains only whitespace: $file"
+        return 1
+    fi
+
+    # Validate token doesn't contain newlines (common file corruption)
+    if [[ "$token" == *$'\n'* ]]; then
+        log_warn "Token file '$name' contains newlines - using first line only"
+        token="${token%%$'\n'*}"
+    fi
+
+    printf '%s' "$token"
+    return 0
+}
 
 # ============================================================================
 # RESILIENCE FUNCTIONS
@@ -133,23 +219,22 @@ circuit_breaker() {
 init_directories() {
     log_info "Initializing directories..."
 
-    mkdir -p "${HAL9000_HOME:-/root/.hal9000}/sessions"
-    mkdir -p "${HAL9000_HOME:-/root/.hal9000}/logs"
-    mkdir -p "${HAL9000_HOME:-/root/.hal9000}/config"
+    # MEDIUM-3: Create directories with restrictive permissions atomically using umask
+    (umask 077 && mkdir -p "${HAL9000_HOME:-/root/.hal9000}/sessions")
+    (umask 077 && mkdir -p "${HAL9000_HOME:-/root/.hal9000}/logs")
+    (umask 077 && mkdir -p "${HAL9000_HOME:-/root/.hal9000}/config")
 
     # Coordinator state directories
-    mkdir -p "${COORDINATOR_STATE_DIR:-/data/coordinator-state}"
-    # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
-    chmod 0770 "${COORDINATOR_STATE_DIR:-/data/coordinator-state}"
+    # MEDIUM-3: Create with restrictive permissions atomically (umask 007 = 0770)
+    (umask 007 && mkdir -p "${COORDINATOR_STATE_DIR:-/data/coordinator-state}")
     # Set group ownership to hal9000 if available
     if getent group hal9000 >/dev/null 2>&1; then
         chgrp hal9000 "${COORDINATOR_STATE_DIR:-/data/coordinator-state}" 2>/dev/null || true
     fi
 
     # TMUX sockets directory
-    mkdir -p "${TMUX_SOCKET_DIR:-/data/tmux-sockets}"
-    # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
-    chmod 0770 "${TMUX_SOCKET_DIR:-/data/tmux-sockets}"
+    # MEDIUM-3: Create with restrictive permissions atomically (umask 007 = 0770)
+    (umask 007 && mkdir -p "${TMUX_SOCKET_DIR:-/data/tmux-sockets}")
     # Set group ownership to hal9000 if available
     if getent group hal9000 >/dev/null 2>&1; then
         chgrp hal9000 "${TMUX_SOCKET_DIR:-/data/tmux-sockets}" 2>/dev/null || true
@@ -225,10 +310,8 @@ init_tmux_server() {
     local tmux_socket_dir="${TMUX_SOCKET_DIR:-/data/tmux-sockets}"
     local parent_socket="$tmux_socket_dir/parent.sock"
 
-    # Ensure socket directory exists
-    mkdir -p "$tmux_socket_dir"
-    # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
-    chmod 0770 "$tmux_socket_dir"
+    # MEDIUM-3: Create directory with restrictive permissions atomically (umask 007 = 0770)
+    (umask 007 && mkdir -p "$tmux_socket_dir")
     # Set group ownership to hal9000 if available
     if getent group hal9000 >/dev/null 2>&1; then
         chgrp hal9000 "$tmux_socket_dir" 2>/dev/null || true
@@ -298,6 +381,12 @@ CHROMADB_TOKEN_FILE="/run/secrets/chromadb_token"
 CHROMADB_CERT_FILE="/run/secrets/chromadb.crt"
 CHROMADB_KEY_FILE="/run/secrets/chromadb.key"
 CHROMADB_TLS_ENABLED="${CHROMADB_TLS_ENABLED:-true}"
+# Configurable certificate validity (LOW-4)
+CHROMADB_CERT_VALIDITY_DAYS="${CHROMADB_CERT_VALIDITY_DAYS:-365}"
+# Force certificate regeneration flag (LOW-5)
+CHROMADB_FORCE_NEW_CERT="${CHROMADB_FORCE_NEW_CERT:-false}"
+# MEDIUM-8: Require TLS or fail (vs graceful fallback to HTTP)
+CHROMADB_REQUIRE_TLS="${CHROMADB_REQUIRE_TLS:-false}"
 
 # generate_chromadb_token: Generate cryptographic token for ChromaDB authentication
 # Token is written directly to file, NOT stored in environment variable
@@ -305,20 +394,27 @@ CHROMADB_TLS_ENABLED="${CHROMADB_TLS_ENABLED:-true}"
 generate_chromadb_token() {
     log_info "Generating ChromaDB authentication token..."
 
-    # Create secrets directory if it doesn't exist
-    mkdir -p /run/secrets
-    chmod 0700 /run/secrets
+    # MEDIUM-3: Create secrets directory with restrictive permissions atomically
+    (umask 077 && mkdir -p /run/secrets)
 
-    # Generate 32-byte cryptographic random token
-    # tr removes characters that could cause issues in HTTP headers
+    # MEDIUM-3: Use umask to prevent race conditions in file creation
+    # Generate cryptographic random token with full entropy (LOW-2)
+    # Use 48 bytes of randomness to ensure full 32+ chars after base64 encoding and filtering
+    # tr removes characters that could cause issues in HTTP headers (/+= are not URL-safe)
+    # head -c 43 gives us ~256 bits of entropy (43 base64 chars = ~258 bits)
     # SECURITY: Write directly to file, not to shell variable
-    if ! openssl rand -base64 32 | tr -d '/+=' | head -c 32 > "$CHROMADB_TOKEN_FILE"; then
+    # Note: umask 077 creates file with 600 permissions; we want 400 (read-only) so we use 277
+    if ! (umask 277 && openssl rand -base64 48 | tr -d '/+=' | head -c 43 > "$CHROMADB_TOKEN_FILE"); then
         log_error "Failed to generate ChromaDB token"
         return 1
     fi
 
-    # SECURITY: Restrict token file permissions (owner read-only)
-    chmod 0400 "$CHROMADB_TOKEN_FILE"
+    # MEDIUM-6: Validate non-empty token file
+    if [[ ! -s "$CHROMADB_TOKEN_FILE" ]]; then
+        log_error "Token file is empty - generation failed"
+        rm -f "$CHROMADB_TOKEN_FILE"
+        return 1
+    fi
 
     log_success "ChromaDB token generated: $CHROMADB_TOKEN_FILE"
 }
@@ -332,9 +428,12 @@ generate_chromadb_tls_cert() {
         return 0
     fi
 
+    # Force regeneration if requested (LOW-5)
+    if [[ "$CHROMADB_FORCE_NEW_CERT" == "true" ]]; then
+        log_info "Force regenerating ChromaDB TLS certificate (CHROMADB_FORCE_NEW_CERT=true)"
     # Skip if certificate already exists and is valid
-    if [[ -f "$CHROMADB_CERT_FILE" && -f "$CHROMADB_KEY_FILE" ]]; then
-        # Check if certificate is still valid (not expired)
+    elif [[ -f "$CHROMADB_CERT_FILE" && -f "$CHROMADB_KEY_FILE" ]]; then
+        # Check if certificate is still valid (not expired within 24 hours)
         if openssl x509 -checkend 86400 -noout -in "$CHROMADB_CERT_FILE" 2>/dev/null; then
             log_info "ChromaDB TLS certificate exists and is valid"
             return 0
@@ -345,38 +444,73 @@ generate_chromadb_tls_cert() {
 
     log_info "Generating ChromaDB self-signed TLS certificate..."
 
-    # Create secrets directory if it doesn't exist
-    mkdir -p /run/secrets
-    chmod 0700 /run/secrets
+    # MEDIUM-3: Create secrets directory with restrictive permissions atomically
+    (umask 077 && mkdir -p /run/secrets)
 
     # Get container hostname for certificate CN
     local hostname="${HOSTNAME:-chromadb}"
     local parent_name="${HAL9000_PARENT:-hal9000-parent}"
 
-    # Generate self-signed certificate with multiple SANs for flexible connectivity
+    # MEDIUM-3: Generate certificate with restrictive umask to prevent race conditions
+    # umask 277 creates files with 400 permissions (key will be secure from creation)
     # - CN: chromadb (service name)
     # - SAN: localhost, chromadb, parent container name, hal9000-parent
     # This allows workers to connect via any of these names
-    if ! openssl req -x509 -newkey rsa:2048 \
+    # Validity is configurable via CHROMADB_CERT_VALIDITY_DAYS (LOW-4)
+    if ! (umask 277 && openssl req -x509 -newkey rsa:2048 \
         -keyout "$CHROMADB_KEY_FILE" \
         -out "$CHROMADB_CERT_FILE" \
-        -days 365 -nodes \
+        -days "$CHROMADB_CERT_VALIDITY_DAYS" -nodes \
         -subj "/CN=chromadb" \
         -addext "subjectAltName=DNS:localhost,DNS:chromadb,DNS:${parent_name},DNS:hal9000-parent,IP:127.0.0.1" \
-        2>/dev/null; then
+        2>/dev/null); then
         log_error "Failed to generate ChromaDB TLS certificate"
         return 1
     fi
 
-    # SECURITY: Restrict certificate and key file permissions
-    chmod 0400 "$CHROMADB_KEY_FILE"
-    chmod 0444 "$CHROMADB_CERT_FILE"  # Certificate can be readable (public)
+    # Certificate can be world-readable (public), key stays owner-read-only from umask
+    chmod 0444 "$CHROMADB_CERT_FILE"
 
     log_success "ChromaDB TLS certificate generated:"
     log_info "  Certificate: $CHROMADB_CERT_FILE"
     log_info "  Private Key: $CHROMADB_KEY_FILE"
-    log_info "  Valid for: 365 days"
+    log_info "  Valid for: ${CHROMADB_CERT_VALIDITY_DAYS} days"
     log_info "  SANs: localhost, chromadb, ${parent_name}, hal9000-parent"
+}
+
+# MEDIUM-8: Setup ChromaDB TLS with graceful fallback
+# If TLS setup fails, falls back to HTTP unless CHROMADB_REQUIRE_TLS=true
+setup_chromadb_tls() {
+    if [[ "$CHROMADB_TLS_ENABLED" != "true" ]]; then
+        log_info "ChromaDB TLS disabled (CHROMADB_TLS_ENABLED=false)"
+        export CHROMADB_TLS_ENABLED=false
+        return 0
+    fi
+
+    if generate_chromadb_tls_cert; then
+        export CHROMADB_TLS_ENABLED=true
+        return 0
+    fi
+
+    # Certificate generation failed - handle fallback
+    log_warn "=========================================="
+    log_warn "SECURITY WARNING: TLS certificate generation failed"
+    log_warn "ChromaDB will use unencrypted HTTP connections"
+    log_warn "=========================================="
+    log_warn "This may expose data in transit on the Docker network"
+    log_warn "Set CHROMADB_REQUIRE_TLS=true to fail instead of fallback"
+    log_warn ""
+
+    if [[ "${CHROMADB_REQUIRE_TLS}" == "true" ]]; then
+        log_error "TLS required (CHROMADB_REQUIRE_TLS=true) but certificate generation failed"
+        log_error "Cannot continue without TLS - exiting"
+        return 1
+    fi
+
+    # Graceful fallback to HTTP
+    export CHROMADB_TLS_ENABLED=false
+    log_warn "Falling back to HTTP (unencrypted) connections"
+    return 0
 }
 
 start_chromadb_server_async() {
@@ -397,9 +531,9 @@ start_chromadb_server_async() {
         return 1
     }
 
-    # Generate TLS certificate for encrypted connections
-    generate_chromadb_tls_cert || {
-        log_error "Failed to generate ChromaDB TLS certificate"
+    # MEDIUM-8: Setup TLS with graceful fallback (unless CHROMADB_REQUIRE_TLS=true)
+    setup_chromadb_tls || {
+        log_error "ChromaDB TLS setup failed and TLS is required"
         return 1
     }
 
