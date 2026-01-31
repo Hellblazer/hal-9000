@@ -181,8 +181,8 @@ create_session_claudemd() {
     local other_sessions
     other_sessions=$(tmux list-sessions 2>/dev/null | grep "^aod-" | cut -d':' -f1 | grep -v "^${session_name}$" || echo "")
 
-    # Create CLAUDE.md in worktree
-    cat > "$worktree_dir/CLAUDE.md" <<EOF
+    # Create CLAUDE.md in worktree with restrictive permissions
+    (umask 077 && cat > "$worktree_dir/CLAUDE.md" <<EOF
 # aod Session Context
 
 This is an **aod (Army of Darkness)** session for parallel multi-branch development.
@@ -305,6 +305,7 @@ bd list                           # All issues
 4. Complete: \`bd close <id> --reason "Done"\`
 5. Commit \`.beads/issues.jsonl\` with your changes
 EOF
+)
     chmod 600 "$worktree_dir/CLAUDE.md"
 
     info "Created CLAUDE.md in worktree"

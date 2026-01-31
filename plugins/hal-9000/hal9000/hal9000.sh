@@ -95,7 +95,8 @@ create_session_claudemd() {
     local other_sessions
     other_sessions=$(tmux list-sessions 2>/dev/null | grep "^hal9000-" | cut -d':' -f1 | grep -v "^${session_name}$" || echo "")
 
-    cat > "$work_dir/.hal9000-session.md" <<EOF
+    # Create session context file with restrictive permissions
+    (umask 077 && cat > "$work_dir/.hal9000-session.md" <<EOF
 # hal9000 Session Context
 
 This is a **hal9000** container session with the full hal-9000 stack.
@@ -192,6 +193,7 @@ bd init                           # First time setup
 bd onboard                        # Full integration guide
 ```
 EOF
+)
     chmod 600 "$work_dir/.hal9000-session.md"
 }
 
@@ -290,8 +292,8 @@ launch_session() {
     # Create tmux session and launch container
     tmux new-session -d -s "$session_name" -c "$work_dir" "eval $docker_cmd"
 
-    # Save session info
-    cat > "$HAL9000_DIR/sessions/${session_name}.json" <<EOF
+    # Save session info with restrictive permissions
+    (umask 077 && cat > "$HAL9000_DIR/sessions/${session_name}.json" <<EOF
 {
   "session": "$session_name",
   "directory": "$work_dir",
@@ -301,6 +303,7 @@ launch_session() {
   "created": "$(date +%FT%T%z)"
 }
 EOF
+)
     chmod 600 "$HAL9000_DIR/sessions/${session_name}.json"
 
     success "Session launched: $session_name"

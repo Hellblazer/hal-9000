@@ -378,14 +378,15 @@ spawn_worker() {
 }
 
 record_session_metadata() {
-    local session_file="${HAL9000_HOME:-/root/.hal9000}/sessions/${WORKER_NAME}.json"
+    local session_file="${HAL9000_HOME:-$HOME/.hal9000}/sessions/${WORKER_NAME}.json"
 
-    cat > "$session_file" <<EOF
+    # SECURITY: Create file with restrictive permissions to prevent other users from reading
+    (umask 077 && cat > "$session_file" <<EOF
 {
     "name": "$WORKER_NAME",
     "image": "$WORKER_IMAGE",
     "parent": "$PARENT_CONTAINER",
-    "project_dir": "$PROJECT_DIR",
+    "project_dir": "${canonical_path:-$PROJECT_DIR}",
     "created_at": "$(date -Iseconds)",
     "detached": $DETACH,
     "remove_on_exit": $REMOVE_ON_EXIT,
@@ -397,7 +398,8 @@ record_session_metadata() {
     }
 }
 EOF
-    chmod 600 "$session_file"
+    )
+    chmod 600 "$session_file"  # Extra safety layer
 }
 
 # ============================================================================

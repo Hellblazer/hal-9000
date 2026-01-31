@@ -8,7 +8,7 @@
 # 4. Launch Claude or passed command
 #
 # Environment Variables:
-#   CLAUDE_HOME       - Claude config directory (default: /root/.claude)
+#   CLAUDE_HOME       - Claude config directory (default: /home/claude/.claude)
 #   WORKSPACE         - Working directory (default: /workspace)
 #   MEMORY_BANK_ROOT  - Memory bank data (default: /data/memory-bank)
 #   CHROMADB_HOST     - ChromaDB server host (default: localhost)
@@ -36,7 +36,7 @@ log_error() { printf "${RED}[${WORKER_NAME}]${NC} %s\n" "$1" >&2; }
 # CONFIGURATION
 # ============================================================================
 
-CLAUDE_HOME="${CLAUDE_HOME:-/root/.claude}"
+CLAUDE_HOME="${CLAUDE_HOME:-/home/claude/.claude}"
 WORKSPACE="${WORKSPACE:-/workspace}"
 MEMORY_BANK_ROOT="${MEMORY_BANK_ROOT:-/data/memory-bank}"
 CHROMADB_HOST="${CHROMADB_HOST:-localhost}"
