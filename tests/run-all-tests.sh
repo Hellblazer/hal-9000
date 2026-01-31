@@ -90,6 +90,7 @@ TESTS=(
     "10:Error Handling & Edge Cases:test-category-10-error-handling.sh"
     "11:Installation & Distribution:test-category-11-installation-distribution.sh"
     "12:Configuration & State Files:test-category-12-configuration-state.sh"
+    "13:Performance & Resource Usage:test-category-13-performance-resource-usage.sh"
     "14:Regression Test Suite:test-category-14-regression-suite.sh"
 )
 

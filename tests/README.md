@@ -150,7 +150,8 @@ make test-category-08        # Daemon & Pool Management
 make test-category-09        # Claude Passthrough
 make test-category-10        # Error Handling
 make test-category-11        # Installation & Distribution
-make test-category-12        # Configuration & State Files
+make test-category-12        # Configuration make test-category-12        # Configuration & State Files State Files
+make test-category-13        # Performance & Resource Usage
 make test-category-14        # Regression Test Suite
 ```
 
@@ -324,3 +325,8 @@ When adding new tests:
 ## License
 
 Apache 2.0 - See LICENSE file for details
+
+### Category 13: Performance & Resource Usage (PERF-001 to PERF-011)
+- **Tests**: 0 automated, 11 performance benchmarks
+- **Coverage**: Startup time, memory/CPU usage, scaling limits
+- **Script**: `test-category-13-performance-resource-usage.sh`
