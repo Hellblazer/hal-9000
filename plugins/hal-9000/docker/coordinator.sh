@@ -27,6 +27,13 @@ log_success() { printf "${GREEN}[coord]${NC} %s\n" "$1"; }
 log_warn() { printf "${YELLOW}[coord]${NC} %s\n" "$1"; }
 log_error() { printf "${RED}[coord]${NC} %s\n" "$1" >&2; }
 
+# Source audit logging library
+if [[ -f "/scripts/lib/audit-log.sh" ]]; then
+    source /scripts/lib/audit-log.sh
+elif [[ -f "$(dirname "${BASH_SOURCE[0]}")/lib/audit-log.sh" ]]; then
+    source "$(dirname "${BASH_SOURCE[0]}")/lib/audit-log.sh"
+fi
+
 # ============================================================================
 # RESILIENCE FUNCTIONS
 # ============================================================================
@@ -174,13 +181,31 @@ cleanup_session_metadata() {
     if [[ -f "$metadata_file" ]]; then
         if rm -f "$metadata_file"; then
             log_info "Cleaned up session metadata: $worker_name"
+
+            # Audit log session cleanup
+            if command -v audit_session_cleanup >/dev/null 2>&1; then
+                audit_session_cleanup "$worker_name" "true"
+            fi
+
             return 0
         else
             log_warn "Failed to remove session metadata: $metadata_file"
+
+            # Audit log failed cleanup
+            if command -v audit_session_cleanup >/dev/null 2>&1; then
+                audit_session_cleanup "$worker_name" "false"
+            fi
+
             return 1
         fi
     else
         log_info "Session metadata not found: $worker_name (already cleaned)"
+
+        # Audit log (already cleaned)
+        if command -v audit_session_cleanup >/dev/null 2>&1; then
+            audit_session_cleanup "$worker_name" "already_cleaned"
+        fi
+
         return 0
     fi
 }
@@ -228,6 +253,11 @@ stop_worker() {
         3 15; then
         log_success "Worker stopped: $worker_name"
 
+        # Audit log worker stop
+        if command -v audit_worker_stop >/dev/null 2>&1; then
+            audit_worker_stop "$worker_name" "user_request" "0"
+        fi
+
         # Clean up session metadata with retry
         if retry_with_backoff "cleanup_session_metadata '$worker_name'" 2; then
             log_success "Session metadata cleaned up"
@@ -236,6 +266,12 @@ stop_worker() {
         fi
     else
         log_error "Failed to stop worker: $worker_name"
+
+        # Audit log failed stop attempt
+        if command -v audit_worker_stop >/dev/null 2>&1; then
+            audit_worker_stop "$worker_name" "stop_failed" "1"
+        fi
+
         return 1
     fi
 }

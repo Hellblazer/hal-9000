@@ -34,6 +34,13 @@ log_success() { printf "${GREEN}[spawn]${NC} %s\n" "$1"; }
 log_warn() { printf "${YELLOW}[spawn]${NC} %s\n" "$1"; }
 log_error() { printf "${RED}[spawn]${NC} ERROR: %s\n" "$1" >&2; }
 
+# Source audit logging library
+if [[ -f "/scripts/lib/audit-log.sh" ]]; then
+    source /scripts/lib/audit-log.sh
+elif [[ -f "$(dirname "${BASH_SOURCE[0]}")/lib/audit-log.sh" ]]; then
+    source "$(dirname "${BASH_SOURCE[0]}")/lib/audit-log.sh"
+fi
+
 # Issue #9: Error handling resilience
 # Retry logic for transient failures with exponential backoff
 retry_with_backoff() {
@@ -469,6 +476,12 @@ spawn_worker() {
         local container_id
         if container_id=$(retry_with_backoff 3 2 "docker run for worker $WORKER_NAME" "${docker_args[@]}"); then
             log_success "Worker started: $container_id"
+
+            # Audit log worker spawn
+            if command -v audit_worker_spawn >/dev/null 2>&1; then
+                audit_worker_spawn "$WORKER_NAME" "$WORKER_IMAGE" "${canonical_path:-$PROJECT_DIR}"
+            fi
+
             echo "$container_id"
         else
             log_error "Failed to start worker after retries"
@@ -478,6 +491,11 @@ spawn_worker() {
     else
         if retry_with_backoff 3 2 "docker run for worker $WORKER_NAME" "${docker_args[@]}"; then
             log_success "Worker started successfully"
+
+            # Audit log worker spawn
+            if command -v audit_worker_spawn >/dev/null 2>&1; then
+                audit_worker_spawn "$WORKER_NAME" "$WORKER_IMAGE" "${canonical_path:-$PROJECT_DIR}"
+            fi
         else
             log_error "Failed to start worker after retries"
             cleanup_on_error "$WORKER_NAME"

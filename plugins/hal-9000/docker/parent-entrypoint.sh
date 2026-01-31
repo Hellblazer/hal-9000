@@ -29,6 +29,13 @@ log_success() { printf "${GREEN}[parent]${NC} %s\n" "$1"; }
 log_warn() { printf "${YELLOW}[parent]${NC} %s\n" "$1"; }
 log_error() { printf "${RED}[parent]${NC} %s\n" "$1" >&2; }
 
+# Source audit logging library
+if [[ -f "/scripts/lib/audit-log.sh" ]]; then
+    source /scripts/lib/audit-log.sh
+elif [[ -f "$(dirname "${BASH_SOURCE[0]}")/lib/audit-log.sh" ]]; then
+    source "$(dirname "${BASH_SOURCE[0]}")/lib/audit-log.sh"
+fi
+
 # ============================================================================
 # RESILIENCE FUNCTIONS
 # ============================================================================
@@ -311,6 +318,11 @@ start_chromadb_server_async() {
     echo "$CHROMADB_PID" > "${HAL9000_HOME}/chromadb.pid"
 
     log_info "ChromaDB starting in background (PID: $CHROMADB_PID)"
+
+    # Audit log ChromaDB start
+    if command -v audit_chromadb_start >/dev/null 2>&1; then
+        audit_chromadb_start "$CHROMADB_PORT" "$data_dir"
+    fi
 }
 
 wait_for_chromadb() {
@@ -352,6 +364,11 @@ stop_chromadb_server() {
             kill "$pid" 2>/dev/null || true
             sleep 2
             kill -9 "$pid" 2>/dev/null || true
+
+            # Audit log ChromaDB stop
+            if command -v audit_chromadb_stop >/dev/null 2>&1; then
+                audit_chromadb_stop "$pid" "$?"
+            fi
         fi
         rm -f "$pid_file"
     fi
@@ -372,6 +389,11 @@ run_coordinator() {
 
     log_success "Coordinator running (PID: $$)"
     log_info "Monitoring workers and maintaining session state..."
+
+    # Audit log coordinator start
+    if command -v audit_coordinator_start >/dev/null 2>&1; then
+        audit_coordinator_start "hal9000-parent"
+    fi
 
     # Source coordinator functions if available
     if [[ -f "/scripts/coordinator.sh" ]]; then
@@ -414,6 +436,11 @@ run_coordinator() {
 cleanup_on_exit() {
     local exit_code=$?
     log_warn "Shutting down coordinator (exit code: $exit_code)..."
+
+    # Audit log coordinator stop
+    if command -v audit_coordinator_stop >/dev/null 2>&1; then
+        audit_coordinator_stop "hal9000-parent" "$exit_code"
+    fi
 
     # List and optionally stop workers
     local workers
