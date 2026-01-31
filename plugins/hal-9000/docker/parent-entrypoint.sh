@@ -42,12 +42,21 @@ init_directories() {
 
     # Coordinator state directories
     mkdir -p "${COORDINATOR_STATE_DIR:-/data/coordinator-state}"
-    chmod 0777 "${COORDINATOR_STATE_DIR:-/data/coordinator-state}"
+    # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
+    chmod 0770 "${COORDINATOR_STATE_DIR:-/data/coordinator-state}"
+    # Set group ownership to hal9000 if available
+    if getent group hal9000 >/dev/null 2>&1; then
+        chgrp hal9000 "${COORDINATOR_STATE_DIR:-/data/coordinator-state}" 2>/dev/null || true
+    fi
 
     # TMUX sockets directory
     mkdir -p "${TMUX_SOCKET_DIR:-/data/tmux-sockets}"
     # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
     chmod 0770 "${TMUX_SOCKET_DIR:-/data/tmux-sockets}"
+    # Set group ownership to hal9000 if available
+    if getent group hal9000 >/dev/null 2>&1; then
+        chgrp hal9000 "${TMUX_SOCKET_DIR:-/data/tmux-sockets}" 2>/dev/null || true
+    fi
 
     log_success "Directories initialized"
 }
@@ -123,6 +132,10 @@ init_tmux_server() {
     mkdir -p "$tmux_socket_dir"
     # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
     chmod 0770 "$tmux_socket_dir"
+    # Set group ownership to hal9000 if available
+    if getent group hal9000 >/dev/null 2>&1; then
+        chgrp hal9000 "$tmux_socket_dir" 2>/dev/null || true
+    fi
 
     # Kill any existing tmux server from previous runs
     tmux -S "$parent_socket" kill-server 2>/dev/null || true

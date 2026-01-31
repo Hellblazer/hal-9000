@@ -57,6 +57,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
     && locale-gen
 
+# Create hal9000 group for socket directory group ownership
+# GID 1001 matches worker's claude user GID for consistency
+RUN groupadd -g 1001 hal9000
+
 # Install ChromaDB server in a virtual environment
 RUN python3 -m venv /opt/chromadb-venv \
     && /opt/chromadb-venv/bin/pip install --no-cache-dir chromadb

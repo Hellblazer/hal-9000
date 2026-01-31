@@ -56,7 +56,11 @@ ARG CLAUDE_UID=1001
 ARG CLAUDE_GID=1001
 
 RUN groupadd -g ${CLAUDE_GID} claude && \
-    useradd -u ${CLAUDE_UID} -g claude -m -d /home/claude -s /bin/bash claude
+    useradd -u ${CLAUDE_UID} -g claude -m -d /home/claude -s /bin/bash claude && \
+    # Create hal9000 group (GID 1002 for supplementary membership)
+    # Workers need access to parent's hal9000-owned sockets/directories
+    groupadd -g 1002 hal9000 && \
+    usermod -aG hal9000 claude
 
 # ============================================================================
 # Directory Structure

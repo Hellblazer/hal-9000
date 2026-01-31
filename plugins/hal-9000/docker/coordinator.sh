@@ -28,6 +28,29 @@ log_warn() { printf "${YELLOW}[coord]${NC} %s\n" "$1"; }
 log_error() { printf "${RED}[coord]${NC} %s\n" "$1" >&2; }
 
 # ============================================================================
+# VALIDATION
+# ============================================================================
+
+validate_worker_name() {
+    local worker_name="$1"
+
+    # Empty check
+    if [[ -z "$worker_name" ]]; then
+        log_error "Worker name required"
+        return 1
+    fi
+
+    # Only allow alphanumeric, dash, underscore
+    # Prevents: path traversal (..), command injection ($(), ``), shell metacharacters
+    if [[ ! "$worker_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        log_error "Invalid worker name: $worker_name (contains invalid characters)"
+        return 1
+    fi
+
+    return 0
+}
+
+# ============================================================================
 # WORKER MANAGEMENT
 # ============================================================================
 
@@ -105,17 +128,7 @@ cleanup_stale_metadata() {
 stop_worker() {
     local worker_name="$1"
 
-    if [[ -z "$worker_name" ]]; then
-        log_error "Worker name required"
-        return 1
-    fi
-
-    # SECURITY: Validate worker name format (alphanumeric, dash, underscore only)
-    # Prevents command injection via malformed worker names
-    if [[ ! "$worker_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-        log_error "Invalid worker name: $worker_name (contains invalid characters)"
-        return 1
-    fi
+    validate_worker_name "$worker_name" || return 1
 
     log_info "Stopping worker: $worker_name"
 
@@ -188,17 +201,7 @@ cleanup_all_session_metadata() {
 view_worker_logs() {
     local worker_name="$1"
 
-    if [[ -z "$worker_name" ]]; then
-        log_error "Worker name required"
-        return 1
-    fi
-
-    # SECURITY: Validate worker name format (alphanumeric, dash, underscore only)
-    # Prevents command injection via malformed worker names
-    if [[ ! "$worker_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-        log_error "Invalid worker name: $worker_name (contains invalid characters)"
-        return 1
-    fi
+    validate_worker_name "$worker_name" || return 1
 
     docker logs -f "$worker_name"
 }
@@ -206,17 +209,7 @@ view_worker_logs() {
 attach_to_worker() {
     local worker_name="$1"
 
-    if [[ -z "$worker_name" ]]; then
-        log_error "Worker name required"
-        return 1
-    fi
-
-    # SECURITY: Validate worker name format (alphanumeric, dash, underscore only)
-    # Prevents command injection via malformed worker names
-    if [[ ! "$worker_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-        log_error "Invalid worker name: $worker_name (contains invalid characters)"
-        return 1
-    fi
+    validate_worker_name "$worker_name" || return 1
 
     # Check if worker exists
     if ! docker ps --format '{{.Names}}' | grep -q "^${worker_name}$"; then
@@ -238,7 +231,12 @@ WORKERS_REGISTRY="${COORDINATOR_STATE_DIR}/workers.json"
 
 init_coordinator_state() {
     mkdir -p "$COORDINATOR_STATE_DIR"
-    chmod 0777 "$COORDINATOR_STATE_DIR"
+    # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
+    chmod 0770 "$COORDINATOR_STATE_DIR"
+    # Set group ownership to hal9000 if available
+    if getent group hal9000 >/dev/null 2>&1; then
+        chgrp hal9000 "$COORDINATOR_STATE_DIR" 2>/dev/null || true
+    fi
 }
 
 update_worker_registry() {
@@ -303,10 +301,8 @@ validate_worker_sessions() {
             socket_name=$(basename "$socket" .sock)
             local worker_name="${socket_name#worker-}"
 
-            # SECURITY: Validate worker name format (alphanumeric, dash, underscore only)
-            # Prevents command injection via specially-crafted socket filenames
-            if [[ ! "$worker_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-                log_error "Invalid worker name from socket: $worker_name (contains invalid characters)"
+            # Validate worker name (prevents command injection via specially-crafted socket filenames)
+            if ! validate_worker_name "$worker_name" 2>/dev/null; then
                 rm -f "$socket" 2>/dev/null || true
                 ((stale_count++))
                 continue
@@ -329,17 +325,7 @@ validate_worker_sessions() {
 get_worker_tmux_socket() {
     local worker_name="$1"
 
-    if [[ -z "$worker_name" ]]; then
-        log_error "Worker name required"
-        return 1
-    fi
-
-    # SECURITY: Validate worker name format (alphanumeric, dash, underscore only)
-    # Prevents command injection via malformed worker names
-    if [[ ! "$worker_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-        log_error "Invalid worker name: $worker_name (contains invalid characters)"
-        return 1
-    fi
+    validate_worker_name "$worker_name" || return 1
 
     local socket="$TMUX_SOCKET_DIR/worker-${worker_name}.sock"
 
