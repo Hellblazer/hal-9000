@@ -84,6 +84,11 @@ make test-suite-verbose
 - **Coverage**: Container lifecycle, volume management, state persistence, DinD, image handling
 - **Script**: `test-category-07-docker-integration.sh`
 
+### Category 8: Daemon & Pool Management (DAEM-001 to DAEM-010, POOL-001 to POOL-011)
+- **Tests**: 0 automated, 21 manual/orchestrator
+- **Coverage**: Daemon lifecycle, ChromaDB integration, worker pool scaling, performance
+- **Script**: `test-category-08-daemon-pool-management.sh`
+
 ### Category 10: Error Handling & Edge Cases (ERR-001 to ERR-020)
 - **Tests**: 8 automated, 12 manual/Docker
 - **Coverage**: Missing prerequisites, invalid input, failure modes
@@ -97,7 +102,7 @@ make test-suite-verbose
 ## Test Results Summary
 
 **Automated Tests**: 50 passing, 0 failing
-**Manual/Docker Tests**: 96 documented with clear instructions
+**Manual/Docker Tests**: 117 documented with clear instructions
 **Exit Codes Validated**: All standard codes (0, 1, 2, 3, 4, 5)
 **Error Message Quality**: 100% verify helpful error messages
 
@@ -124,6 +129,7 @@ make test-category-04        # Session Management
 make test-category-05        # Command-Line Arguments
 make test-category-06        # Environment Variables
 make test-category-07        # Docker Integration
+make test-category-08        # Daemon & Pool Management
 make test-category-10        # Error Handling
 make test-category-12        # Configuration & State Files
 ```

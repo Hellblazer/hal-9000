@@ -85,6 +85,7 @@ TESTS=(
     "05:Command-Line Arguments:test-category-05-command-line-arguments.sh"
     "06:Environment Variables:test-category-06-environment-variables.sh"
     "07:Docker Integration:test-category-07-docker-integration.sh"
+    "08:Daemon & Pool Management:test-category-08-daemon-pool-management.sh"
     "10:Error Handling & Edge Cases:test-category-10-error-handling.sh"
     "12:Configuration & State Files:test-category-12-configuration-state.sh"
 )
