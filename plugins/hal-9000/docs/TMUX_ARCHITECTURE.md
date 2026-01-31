@@ -4,6 +4,103 @@
 
 HAL-9000 uses TMUX (Terminal Multiplexer) for parent-worker communication and session management. This architecture replaces TTY-based communication (`docker exec -it`) with more robust, isolated inter-process communication via Unix sockets.
 
+## Why TMUX?
+
+The selection of TMUX as the foundation for HAL-9000's orchestration was made after evaluating several alternatives. This section documents the decision rationale, trade-offs, and architectural benefits.
+
+### Alternatives Considered
+
+| Approach | Description | Pros | Cons | Verdict |
+|----------|-------------|------|------|---------|
+| **GNU Screen** | Alternative terminal multiplexer | Lightweight, similar socket-based IPC | Less mature scripting API, smaller ecosystem, fewer active maintainers | ❌ Rejected - inferior scriptability |
+| **Direct Docker Exec** | `docker exec -it` for each command | Simple, no dependencies, built into Docker | Requires TTY allocation, no session persistence, race conditions on attach, no native IPC | ❌ Rejected - unreliable for automation |
+| **Custom Daemon** | Write a custom orchestration daemon in Go/Rust | Full control, optimized for exact use case | High development cost, maintenance burden, reinventing terminal multiplexing, debugging complexity | ❌ Rejected - unnecessary complexity |
+| **SSH + Screen/TMUX** | Run SSH daemon in containers | Standard remote access pattern | Heavy (sshd per container), authentication complexity, overkill for local IPC | ❌ Rejected - over-engineered |
+| **Named Pipes (FIFOs)** | Unix named pipes for IPC | Lightweight, no dependencies | Unidirectional, no built-in multiplexing, manual session management, complex scripting | ❌ Rejected - too low-level |
+| **TMUX (Selected)** | Industry-standard terminal multiplexer | Socket-based IPC, mature scripting, session persistence, active development, proven reliability | Additional dependency, learning curve for operators | ✅ **Selected** |
+
+### TMUX Advantages
+
+**1. Socket-Based IPC**
+- Unix domain sockets provide reliable, low-latency communication
+- Sockets persist in shared Docker volumes (`/data/tmux-sockets`)
+- No TTY required - works in non-interactive contexts (automation, CI/CD)
+- Supports concurrent connections without race conditions
+
+**2. Session Persistence**
+- Claude sessions survive detach/attach cycles
+- Worker state maintained in TMUX process (no file-based serialization)
+- Eliminates TOCTOU (Time-Of-Check-Time-Of-Use) bugs
+- Session survives while parent container runs
+
+**3. Mature Scriptability**
+- Extensive command API (`tmux send-keys`, `tmux capture-pane`, `tmux list-sessions`)
+- Programmatic control from parent coordinator
+- Output capture for logging and debugging
+- Window/pane management for multi-window workflows (Claude + shell)
+
+**4. Proven Reliability**
+- Decades of production use in DevOps workflows
+- Active development and security patches
+- Cross-platform (Linux, macOS, BSD)
+- Well-documented edge cases and failure modes
+
+**5. Operator Familiarity**
+- Widely known in DevOps community
+- Standard keybindings and workflows
+- Extensive online resources and troubleshooting guides
+- Lower training cost for operations teams
+
+### Trade-Offs and Mitigations
+
+| Trade-Off | Impact | Mitigation |
+|-----------|--------|------------|
+| **Additional Dependency** | TMUX must be installed in containers | Included in base image; negligible size overhead (~500KB); widely available in package repos |
+| **Learning Curve** | Operators need TMUX knowledge | Comprehensive documentation; wrapper scripts (`tmux-send.sh`, `attach-worker.sh`) hide complexity; common operations work without TMUX knowledge |
+| **Debugging Complexity** | Socket issues can be cryptic | Detailed troubleshooting guide; `show-workers.sh` provides socket health checks; clear error messages in coordinator |
+| **Socket Permissions** | Incorrect permissions break IPC | Automated permission checks in `spawn-worker.sh`; `chmod 0770` enforcement; documented in SECURITY.md |
+
+### Decision Rationale
+
+**Primary Drivers:**
+1. **Reliability** - Production-proven for 20+ years in similar use cases (CI/CD, remote development, server administration)
+2. **Automation-Friendly** - Socket-based IPC works in non-interactive contexts (critical for CI/CD, testing, and scripting)
+3. **Session Persistence** - Maintains Claude state across detach/attach without file-based serialization (eliminates race conditions)
+4. **Scriptability** - Rich command API enables programmatic control from parent coordinator
+
+**Why Not Custom Solution?**
+Building a custom daemon would require:
+- Reimplementing terminal multiplexing primitives
+- Handling edge cases TMUX already solves (resizing, signal handling, escape sequences)
+- Ongoing maintenance and security patching
+- Extensive testing across platforms and Docker versions
+
+TMUX provides all required functionality out-of-the-box, with decades of hardening and a mature ecosystem.
+
+**Why Not Direct Docker Exec?**
+`docker exec -it` has fundamental limitations:
+- **TTY requirement** breaks automation
+- **No persistence** - each exec is independent
+- **Race conditions** - concurrent attaches cause corruption
+- **No native IPC** - requires polling or complex signaling
+
+TMUX solves all these issues with socket-based IPC and built-in session management.
+
+### Architectural Fit
+
+TMUX aligns perfectly with HAL-9000's requirements:
+
+| Requirement | How TMUX Addresses It |
+|-------------|----------------------|
+| **Parent-Worker IPC** | Unix domain sockets in shared volume (`/data/tmux-sockets`) |
+| **Session Persistence** | TMUX process maintains state (no save/restore race conditions) |
+| **Automation Support** | Socket-based commands work without TTY |
+| **Concurrent Access** | Multiple connections to same session (coordinator + operator) |
+| **Isolation** | Each worker has independent TMUX server (socket per worker) |
+| **Monitoring** | `tmux list-sessions`, `tmux list-panes` for health checks |
+| **Debugging** | Capture pane output, send commands, inspect window state |
+| **Scalability** | Minimal overhead per worker (~5MB per TMUX server process) |
+
 ## Architecture
 
 ```
