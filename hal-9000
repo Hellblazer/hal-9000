@@ -1123,6 +1123,10 @@ verify_prerequisites() {
             error "Run 'hal-9000 /login' to authenticate with your Claude subscription" 4
         fi
     else
+        # Validate API key format
+        if [[ ! "${ANTHROPIC_API_KEY}" =~ ^sk-ant- ]]; then
+            error "Invalid API key format (expected sk-ant-...)\nGet key at: https://console.anthropic.com/settings/keys" 1
+        fi
         success "Authentication: API key configured"
     fi
 
