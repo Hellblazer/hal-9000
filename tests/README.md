@@ -99,6 +99,11 @@ make test-suite-verbose
 - **Coverage**: Missing prerequisites, invalid input, failure modes
 - **Script**: `test-category-10-error-handling.sh`
 
+### Category 11: Installation & Distribution (INST-001 to INST-012)
+- **Tests**: 8 automated, 4 manual
+- **Coverage**: Install scripts, version consistency, marketplace integration
+- **Script**: `test-category-11-installation-distribution.sh`
+
 ### Category 12: Configuration & State Files (CONF-001 to CONF-017)
 - **Tests**: 2 automated, 15 manual/Docker
 - **Coverage**: File system structure, metadata, Docker labels
@@ -106,8 +111,8 @@ make test-suite-verbose
 
 ## Test Results Summary
 
-**Automated Tests**: 50 passing, 0 failing
-**Manual/Docker Tests**: 132 documented with clear instructions
+**Automated Tests**: 58 passing, 0 failing
+**Manual/Docker Tests**: 136 documented with clear instructions
 **Exit Codes Validated**: All standard codes (0, 1, 2, 3, 4, 5)
 **Error Message Quality**: 100% verify helpful error messages
 
@@ -137,6 +142,7 @@ make test-category-07        # Docker Integration
 make test-category-08        # Daemon & Pool Management
 make test-category-09        # Claude Passthrough
 make test-category-10        # Error Handling
+make test-category-11        # Installation & Distribution
 make test-category-12        # Configuration & State Files
 ```
 

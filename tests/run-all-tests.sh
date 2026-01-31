@@ -88,6 +88,7 @@ TESTS=(
     "08:Daemon & Pool Management:test-category-08-daemon-pool-management.sh"
     "09:Claude Passthrough:test-category-09-claude-passthrough.sh"
     "10:Error Handling & Edge Cases:test-category-10-error-handling.sh"
+    "11:Installation & Distribution:test-category-11-installation-distribution.sh"
     "12:Configuration & State Files:test-category-12-configuration-state.sh"
 )
 

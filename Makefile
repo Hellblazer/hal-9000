@@ -343,6 +343,10 @@ test-category-10:
 	@echo "$(YELLOW)Running Test Category 10: Error Handling & Edge Cases...$(NC)"
 	$(QUIET)./tests/test-category-10-error-handling.sh
 
+test-category-11:
+	@echo "$(YELLOW)Running Test Category 11: Installation & Distribution...$(NC)"
+	$(QUIET)./tests/test-category-11-installation-distribution.sh
+
 test-category-12:
 	@echo "$(YELLOW)Running Test Category 12: Configuration & State Files...$(NC)"
 	$(QUIET)./tests/test-category-12-configuration-state.sh
@@ -512,7 +516,7 @@ version:
 .PHONY: test-hal-9000-errors test-hal-9000-integration test-hal-9000-docker test-hal-9000-cleanup
 .PHONY: test-suite test-suite-all test-suite-verbose
 .PHONY: test-category-01 test-category-02 test-category-03 test-category-04
-.PHONY: test-category-05 test-category-06 test-category-07 test-category-08 test-category-09 test-category-10 test-category-12
+.PHONY: test-category-05 test-category-06 test-category-07 test-category-08 test-category-09 test-category-10 test-category-11 test-category-12
 .PHONY: test-dind test-pool-manager test-resource-limits benchmark-dind
 .PHONY: build build-base build-python build-node build-java build-test-image
 .PHONY: package ci lint shellcheck-detailed install-dev-tools watch version
