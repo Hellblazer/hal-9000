@@ -101,20 +101,71 @@ docker run --rm ghcr.io/hellblazer/hal-9000:worker claude --version
 - Slightly less readable than tags
 - Need process to monitor upstream security updates
 
+## Automated Updates
+
+### Automation Script
+
+Use `scripts/update-base-image-digests.sh` to check and update digests:
+
+```bash
+# Check for updates
+scripts/update-base-image-digests.sh --check
+
+# Preview what would change
+scripts/update-base-image-digests.sh --dry-run
+
+# Apply updates
+scripts/update-base-image-digests.sh --update
+```
+
+**Features:**
+- Pulls latest versions of all base images
+- Compares current digests with latest
+- Updates Dockerfiles with new digests and dates
+- Creates backups (.bak files)
+- Validates all changes
+
+### GitHub Actions Workflow
+
+**Automated weekly updates** via `.github/workflows/update-base-image-digests.yml`:
+
+- **Schedule**: Every Monday at 9:00 AM UTC
+- **Trigger**: Manual via workflow_dispatch
+- **Process**:
+  1. Check for digest updates
+  2. Apply updates if available
+  3. Validate new digests
+  4. Create automated PR with changes
+
+**PR includes**:
+- List of updated Dockerfiles
+- Before/after digest comparison
+- Validation results
+- Review checklist
+
+### Manual Trigger
+
+Run the workflow manually from GitHub Actions tab:
+
+1. Go to **Actions** → **Update Base Image Digests**
+2. Click **Run workflow**
+3. Select branch (usually `main`)
+4. Click **Run workflow**
+
+The workflow will create a PR if updates are available.
+
 ## Monitoring Upstream Updates
 
 Base images should be updated:
-- On security advisories for Debian, Node.js, Ubuntu, or Docker
-- Monthly review of upstream releases
-- When new features/fixes are needed from base image
+- **Automatically**: Weekly via GitHub Actions
+- **Manually**: On security advisories (Debian, Node.js, Ubuntu, Docker)
+- **As needed**: When new features/fixes required from base image
 
-## Automation (Future)
-
-The `hal-9000-h4i` bead tracks creating digest update automation:
-- Scheduled checks for new upstream releases
-- Security vulnerability scanning
-- Automated PR creation for digest updates
-- CI validation before merge
+**Security Monitoring:**
+- Subscribe to security mailing lists for base images
+- Monitor CVE databases for vulnerabilities
+- Review GitHub Dependabot alerts
+- Check upstream release notes for breaking changes
 
 ## References
 
