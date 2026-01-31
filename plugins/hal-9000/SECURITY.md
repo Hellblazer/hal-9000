@@ -6,7 +6,7 @@ This document describes the security model, known risks, and mitigations for the
 
 ### Non-Root Container Execution
 
-Worker containers run as the `claude` user (UID 1000) rather than root:
+Worker containers run as the `claude` user (UID 1001) rather than root:
 
 ```dockerfile
 USER claude
@@ -15,7 +15,7 @@ USER claude
 **Benefits:**
 - Limits damage from container escape vulnerabilities
 - Follows principle of least privilege
-- Volume permissions align with typical host user (UID 1000)
+- Volume permissions align with typical host user (UID 1001)
 
 **Affected paths:**
 - `/home/claude/.claude` - Claude configuration
@@ -24,7 +24,7 @@ USER claude
 
 ### Volume Permission Handling
 
-Worker containers run as UID 1000 (claude user). If your host user has a different UID:
+Worker containers run as UID 1001 (claude user). If your host user has a different UID:
 
 **Option 1: Build Custom Image with Matching UID**
 ```dockerfile
@@ -56,7 +56,7 @@ sudo systemctl restart docker
 ```
 
 **Check your UID:** Run `id -u` on the host to see your user ID.
-- Linux typically uses UID 1000 (matches container)
+- Linux typically uses UID 1000 (close to container UID 1001 - may not need custom image)
 - macOS typically uses UID 501-503 (requires custom image)
 - Enterprise environments may use UID ranges 10000+ (requires custom image)
 
@@ -218,7 +218,7 @@ Before deploying hal-9000:
 - [ ] Run parent container only in trusted environments
 - [ ] Keep Docker and hal-9000 images updated
 - [ ] Monitor container logs for security warnings
-- [ ] Verify your host UID matches container (1000) or build custom image
+- [ ] Verify your host UID matches container (1001) or build custom image
 
 ## Reporting Security Issues
 

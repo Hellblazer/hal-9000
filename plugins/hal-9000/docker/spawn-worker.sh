@@ -298,7 +298,7 @@ spawn_worker() {
     # Use a single shared volume for all workers
     local claude_volume="hal9000-claude-home"
 
-    # SECURITY: Workers run as non-root user 'claude' (UID 1000)
+    # SECURITY: Workers run as non-root user 'claude' (UID 1001)
     # Mount to /home/claude/.claude instead of /root/.claude
     local claude_home_path="/home/claude/.claude"
 

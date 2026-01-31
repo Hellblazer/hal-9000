@@ -161,7 +161,7 @@ inject_mcp_config() {
     fi
 
     # MCP server configuration
-    # SECURITY: Paths must match container user (claude, UID 1000)
+    # SECURITY: Paths must match container user (claude, UID 1001)
     local mcp_config
     mcp_config=$(cat <<'MCPEOF'
 {
@@ -281,7 +281,7 @@ warn_credential_visibility() {
 # Build docker args array for container launch
 # Sets docker_args array variable
 # Usage: init_docker_args "container-name" "/workspace/dir" "/claude/dir"
-# SECURITY: Container runs as non-root user 'claude' (UID 1000)
+# SECURITY: Container runs as non-root user 'claude' (UID 1001)
 init_docker_args() {
     local container_name="$1"
     local work_dir="$2"
