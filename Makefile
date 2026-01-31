@@ -1,4 +1,4 @@
-.PHONY: help clean validate test test-hal-9000 test-unit test-integration test-docker test-config test-errors build package ci
+.PHONY: help clean validate test test-hal-9000 test-hal-9000-unit test-hal-9000-unit-extended test-unit test-integration test-docker test-config test-errors build package ci
 
 # Colors for output
 RED := \033[0;31m
@@ -49,6 +49,7 @@ help:
 	@echo "$(GREEN)hal-9000 Testing:$(NC)"
 	@echo "  $(YELLOW)make test-hal-9000-syntax$(NC)        Check bash syntax"
 	@echo "  $(YELLOW)make test-hal-9000-unit$(NC)         Unit tests (profile, session naming)"
+	@echo "  $(YELLOW)make test-hal-9000-unit-extended$(NC) Extended unit tests (Phase 1: edges)"
 	@echo "  $(YELLOW)make test-hal-9000-integration$(NC)  Full workflow tests"
 	@echo "  $(YELLOW)make test-hal-9000-docker$(NC)       Docker socket mounting tests"
 	@echo "  $(YELLOW)make test-hal-9000-config$(NC)       Configuration override tests"
@@ -154,7 +155,7 @@ test: test-hal-9000
 	@echo "$(GREEN)║         All Tests Passed ✓                        ║$(NC)"
 	@echo "$(GREEN)╚═══════════════════════════════════════════════════╝$(NC)"
 
-test-hal-9000: test-hal-9000-syntax test-hal-9000-unit test-hal-9000-config test-hal-9000-errors test-hal-9000-integration test-hal-9000-docker
+test-hal-9000: test-hal-9000-syntax test-hal-9000-unit test-hal-9000-unit-extended test-hal-9000-config test-hal-9000-errors test-hal-9000-integration test-hal-9000-docker
 	@echo "$(GREEN)✓ All hal-9000 tests passed$(NC)"
 
 test-hal-9000-syntax: validate-bash
@@ -172,6 +173,22 @@ test-hal-9000-unit:
 	@echo "  Testing help system..."
 	$(QUIET)./scripts/build/test-hal-9000-unit.sh help-system
 	@echo "$(GREEN)✓ hal-9000 unit tests passed$(NC)"
+
+test-hal-9000-unit-extended:
+	@echo "$(YELLOW)Running extended unit tests (Phase 1)...$(NC)"
+	@echo "  Testing help & version commands..."
+	$(QUIET)./scripts/build/test-hal9000-unit-extended.sh help
+	@echo "  Testing profile detection edge cases..."
+	$(QUIET)./scripts/build/test-hal9000-unit-extended.sh profile
+	@echo "  Testing session naming determinism..."
+	$(QUIET)./scripts/build/test-hal9000-unit-extended.sh session
+	@echo "  Testing argument parsing edge cases..."
+	-$(QUIET)./scripts/build/test-hal9000-unit-extended.sh args
+	@echo "  Testing environment variable handling..."
+	$(QUIET)./scripts/build/test-hal9000-unit-extended.sh env
+	@echo "  Testing integration sanity checks..."
+	$(QUIET)./scripts/build/test-hal9000-unit-extended.sh integration
+	@echo "$(GREEN)✓ Extended unit tests passed (Phase 1 complete)$(NC)"
 
 test-hal-9000-config:
 	@echo "$(YELLOW)Testing CLAUDE_HOME configuration...$(NC)"
