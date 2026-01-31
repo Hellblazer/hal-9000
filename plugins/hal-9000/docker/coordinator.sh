@@ -57,6 +57,13 @@ stop_worker() {
         return 1
     fi
 
+    # SECURITY: Validate worker name format (alphanumeric, dash, underscore only)
+    # Prevents command injection via malformed worker names
+    if [[ ! "$worker_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        log_error "Invalid worker name: $worker_name (contains invalid characters)"
+        return 1
+    fi
+
     log_info "Stopping worker: $worker_name"
 
     if docker stop "$worker_name" >/dev/null 2>&1; then
@@ -105,6 +112,13 @@ view_worker_logs() {
         return 1
     fi
 
+    # SECURITY: Validate worker name format (alphanumeric, dash, underscore only)
+    # Prevents command injection via malformed worker names
+    if [[ ! "$worker_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        log_error "Invalid worker name: $worker_name (contains invalid characters)"
+        return 1
+    fi
+
     docker logs -f "$worker_name"
 }
 
@@ -113,6 +127,13 @@ attach_to_worker() {
 
     if [[ -z "$worker_name" ]]; then
         log_error "Worker name required"
+        return 1
+    fi
+
+    # SECURITY: Validate worker name format (alphanumeric, dash, underscore only)
+    # Prevents command injection via malformed worker names
+    if [[ ! "$worker_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        log_error "Invalid worker name: $worker_name (contains invalid characters)"
         return 1
     fi
 
