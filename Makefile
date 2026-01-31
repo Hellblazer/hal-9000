@@ -327,6 +327,10 @@ test-category-06:
 	@echo "$(YELLOW)Running Test Category 6: Environment Variables...$(NC)"
 	$(QUIET)./tests/test-category-06-environment-variables.sh
 
+test-category-07:
+	@echo "$(YELLOW)Running Test Category 7: Docker Integration...$(NC)"
+	$(QUIET)./tests/test-category-07-docker-integration.sh
+
 test-category-10:
 	@echo "$(YELLOW)Running Test Category 10: Error Handling & Edge Cases...$(NC)"
 	$(QUIET)./tests/test-category-10-error-handling.sh
@@ -500,7 +504,7 @@ version:
 .PHONY: test-hal-9000-errors test-hal-9000-integration test-hal-9000-docker test-hal-9000-cleanup
 .PHONY: test-suite test-suite-all test-suite-verbose
 .PHONY: test-category-01 test-category-02 test-category-03 test-category-04
-.PHONY: test-category-05 test-category-06 test-category-10 test-category-12
+.PHONY: test-category-05 test-category-06 test-category-07 test-category-10 test-category-12
 .PHONY: test-dind test-pool-manager test-resource-limits benchmark-dind
 .PHONY: build build-base build-python build-node build-java build-test-image
 .PHONY: package ci lint shellcheck-detailed install-dev-tools watch version

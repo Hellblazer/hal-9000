@@ -79,6 +79,11 @@ make test-suite-verbose
 - **Coverage**: Variable handling, CLI > ENV > Default precedence
 - **Script**: `test-category-06-environment-variables.sh`
 
+### Category 7: Docker Integration (DOCK-001 to DOCK-026)
+- **Tests**: 3 automated, 23 manual/Docker
+- **Coverage**: Container lifecycle, volume management, state persistence, DinD, image handling
+- **Script**: `test-category-07-docker-integration.sh`
+
 ### Category 10: Error Handling & Edge Cases (ERR-001 to ERR-020)
 - **Tests**: 8 automated, 12 manual/Docker
 - **Coverage**: Missing prerequisites, invalid input, failure modes
@@ -91,8 +96,8 @@ make test-suite-verbose
 
 ## Test Results Summary
 
-**Automated Tests**: 47 passing, 0 failing
-**Manual/Docker Tests**: 73 documented with clear instructions
+**Automated Tests**: 50 passing, 0 failing
+**Manual/Docker Tests**: 96 documented with clear instructions
 **Exit Codes Validated**: All standard codes (0, 1, 2, 3, 4, 5)
 **Error Message Quality**: 100% verify helpful error messages
 
@@ -118,6 +123,7 @@ make test-category-03        # Profile Detection
 make test-category-04        # Session Management
 make test-category-05        # Command-Line Arguments
 make test-category-06        # Environment Variables
+make test-category-07        # Docker Integration
 make test-category-10        # Error Handling
 make test-category-12        # Configuration & State Files
 ```
