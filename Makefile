@@ -286,6 +286,56 @@ test-hal-9000-cleanup:
 	@echo "$(GREEN)✓ Cleanup test structure in place$(NC)"
 
 ##############################################################################
+# COMPREHENSIVE TEST SUITE (Test Categories 1-12)
+##############################################################################
+
+# Run all comprehensive test categories
+test-suite: test-suite-all
+
+test-suite-all:
+	@echo "$(YELLOW)Running comprehensive test suite (all categories)...$(NC)"
+	$(QUIET)./tests/run-all-tests.sh
+	@echo "$(GREEN)✓ Comprehensive test suite completed$(NC)"
+
+test-suite-verbose:
+	@echo "$(YELLOW)Running comprehensive test suite (verbose mode)...$(NC)"
+	$(QUIET)./tests/run-all-tests.sh --verbose
+	@echo "$(GREEN)✓ Comprehensive test suite completed$(NC)"
+
+# Individual test category targets
+test-category-01:
+	@echo "$(YELLOW)Running Test Category 1: Help & Version Commands...$(NC)"
+	$(QUIET)./tests/test-category-01-help-version.sh
+
+test-category-02:
+	@echo "$(YELLOW)Running Test Category 2: Setup & Authentication...$(NC)"
+	$(QUIET)./tests/test-category-02-setup-authentication.sh
+
+test-category-03:
+	@echo "$(YELLOW)Running Test Category 3: Profile Detection...$(NC)"
+	$(QUIET)./tests/test-category-03-profile-detection.sh
+
+test-category-04:
+	@echo "$(YELLOW)Running Test Category 4: Session Management...$(NC)"
+	$(QUIET)./tests/test-category-04-session-management.sh
+
+test-category-05:
+	@echo "$(YELLOW)Running Test Category 5: Command-Line Arguments...$(NC)"
+	$(QUIET)./tests/test-category-05-command-line-arguments.sh
+
+test-category-06:
+	@echo "$(YELLOW)Running Test Category 6: Environment Variables...$(NC)"
+	$(QUIET)./tests/test-category-06-environment-variables.sh
+
+test-category-10:
+	@echo "$(YELLOW)Running Test Category 10: Error Handling & Edge Cases...$(NC)"
+	$(QUIET)./tests/test-category-10-error-handling.sh
+
+test-category-12:
+	@echo "$(YELLOW)Running Test Category 12: Configuration & State Files...$(NC)"
+	$(QUIET)./tests/test-category-12-configuration-state.sh
+
+##############################################################################
 # DIND TESTS
 ##############################################################################
 
@@ -448,6 +498,9 @@ version:
 .PHONY: validate validate-bash validate-json validate-markdown validate-shellcheck
 .PHONY: test test-hal-9000 test-hal-9000-syntax test-hal-9000-unit test-hal-9000-config
 .PHONY: test-hal-9000-errors test-hal-9000-integration test-hal-9000-docker test-hal-9000-cleanup
+.PHONY: test-suite test-suite-all test-suite-verbose
+.PHONY: test-category-01 test-category-02 test-category-03 test-category-04
+.PHONY: test-category-05 test-category-06 test-category-10 test-category-12
 .PHONY: test-dind test-pool-manager test-resource-limits benchmark-dind
 .PHONY: build build-base build-python build-node build-java build-test-image
 .PHONY: package ci lint shellcheck-detailed install-dev-tools watch version
