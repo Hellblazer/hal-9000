@@ -119,6 +119,19 @@ hal-9000 daemon status       # Check status
 hal-9000 daemon stop         # Stop everything
 ```
 
+**Resource Limits**:
+The parent container uses resource limits to prevent consuming all host resources:
+```bash
+export HAL9000_PARENT_MEMORY=4g    # Default: 4g
+export HAL9000_PARENT_CPUS=2       # Default: 2 CPUs
+hal-9000 daemon start
+```
+
+Verify limits with:
+```bash
+docker inspect hal9000-parent --format='Memory: {{.HostConfig.Memory}}, CPUs: {{.HostConfig.NanoCpus}}'
+```
+
 ### Worker Management
 
 **Manage active worker sessions:**
