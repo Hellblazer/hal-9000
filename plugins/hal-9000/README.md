@@ -16,6 +16,13 @@ Containerized Claude with Docker-in-Docker orchestration, persistent session sta
 
 ### Terminal Tools
 
+**Worker Management (TMUX Socket-Based):**
+- **show-workers.sh** - Display all workers with TMUX socket health (✓/⚠/○)
+- **attach-worker.sh** - Attach to worker's TMUX session (primary interface)
+- **tmux-send.sh** - Send commands to workers programmatically (automation)
+- **tmux-list-sessions.sh** - Discover workers via socket registry
+
+**Other Tools:**
 - **tmux-cli** - Terminal automation for interactive CLIs
 - **ccstatusline** - Pre-configured Claude Code status line with Powerline styling (context %, session time, git info, worktree status) - requires Nerd Font for full appearance
 - **vault** - Encrypted .env backup with SOPS
@@ -58,7 +65,42 @@ Install through the hal-9000 marketplace in Claude Code.
 
 ## Usage
 
-### Terminal Tools
+### Worker Management
+
+hal-9000 uses TMUX socket-based orchestration for isolated, scalable worker management:
+
+```bash
+# Monitor all workers
+show-workers.sh              # Full status display
+show-workers.sh -w           # Live monitoring (auto-refresh)
+show-workers.sh -c           # Compact single-line
+show-workers.sh -j | jq      # JSON for automation
+
+# Attach to specific worker
+attach-worker.sh worker-abc  # Attach to Claude window (primary)
+attach-worker.sh -s          # Interactive selection menu
+attach-worker.sh -l          # List available workers
+attach-worker.sh worker-abc shell  # Attach to shell window instead
+
+# Command execution (automation)
+tmux-send.sh worker-abc "bd ready" -c      # Send command with output capture
+tmux-send.sh worker-abc "pwd"              # Send command
+
+# Discovery
+tmux-list-sessions.sh        # List all sessions (simple)
+tmux-list-sessions.sh -v     # Verbose with details
+tmux-list-sessions.sh --json # JSON output
+```
+
+**TMUX Socket Architecture:**
+- Each worker runs independent TMUX server via socket in `/data/tmux-sockets`
+- Socket-based IPC (no TTY, no namespace sharing)
+- Better isolation, performance, and scalability
+- Session persistence (survives detach/attach)
+
+[TMUX Architecture Guide →](docs/TMUX_ARCHITECTURE.md)
+
+### Other Terminal Tools
 
 ```bash
 tmux-cli launch "python -m pdb script.py"

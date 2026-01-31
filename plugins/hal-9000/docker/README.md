@@ -1,6 +1,67 @@
-# HAL-9000 Docker Images
+# HAL-9000 Docker Images & Orchestration
 
-Pre-built Docker images for aod multi-branch development with Claude CLI and development tools.
+Pre-built Docker images for containerized Claude with parent-worker orchestration, TMUX socket-based communication, and development tools.
+
+## Orchestration Architecture
+
+### TMUX Socket-Based Parent-Worker Model
+
+Workers run independent TMUX servers communicating with parent coordinator via Unix domain sockets:
+
+```
+Parent Container                Worker Containers
+┌─────────────────────┐        ┌──────────────────┐
+│ Coordinator         │◄──────►│ TMUX Socket      │
+│ ChromaDB (8000)     │        │ Claude CLI       │
+│ (parent.sock)       │        │ Session: worker1 │
+└─────────────────────┘        └──────────────────┘
+         │
+         │                      ┌──────────────────┐
+         ├─────────────────────►│ TMUX Socket      │
+         │                      │ Claude CLI       │
+         │                      │ Session: worker2 │
+         │                      └──────────────────┘
+         │
+         │                      ┌──────────────────┐
+         └─────────────────────►│ TMUX Socket      │
+                                │ Claude CLI       │
+                                │ Session: worker3 │
+                                └──────────────────┘
+
+Shared Volumes:
+├── hal9000-tmux-sockets/       Socket IPC endpoints
+├── hal9000-coordinator-state/  Worker registry, health
+├── hal9000-claude-home/        Plugins, credentials
+└── hal9000-memory-bank/        Cross-session state
+```
+
+**Key Features:**
+- ✅ Independent TMUX servers (each worker isolated)
+- ✅ Socket-based IPC (no TTY, no namespace sharing)
+- ✅ Network isolation (bridge networking, not shared namespace)
+- ✅ Session persistence (TMUX handles state)
+- ✅ Coordinator monitoring (worker lifecycle, socket health)
+- ✅ Easy worker management (attach, send commands, monitor)
+
+### Worker Management Commands
+
+```bash
+# Monitor all workers
+show-workers.sh              # Status table with socket health
+show-workers.sh -w           # Live monitoring (2s refresh)
+
+# Attach to worker
+attach-worker.sh worker-abc  # Interactive TMUX attach
+attach-worker.sh -s          # Interactive worker selection
+
+# Send commands
+tmux-send.sh worker-abc "command" -c  # Send + capture output
+
+# Discovery
+tmux-list-sessions.sh        # List all sessions
+```
+
+[Detailed TMUX Architecture Guide →](../docs/TMUX_ARCHITECTURE.md)
 
 ## ghcr.io/hellblazer/hal-9000 Profile Images
 

@@ -119,6 +119,28 @@ hal-9000 daemon status       # Check status
 hal-9000 daemon stop         # Stop everything
 ```
 
+### Worker Management
+
+**Manage active worker sessions:**
+
+```bash
+show-workers.sh              # Display all workers with socket status
+show-workers.sh -w           # Live monitoring (auto-refresh)
+show-workers.sh -j           # JSON output for automation
+
+attach-worker.sh worker-abc  # Attach to worker's TMUX session
+attach-worker.sh -s          # Interactive worker selection
+attach-worker.sh -l          # List available workers
+attach-worker.sh -d worker   # Docker exec fallback (debugging)
+```
+
+**Status Indicators:**
+- `✓` = TMUX socket healthy (session ready)
+- `⚠` = TMUX socket stale (needs investigation)
+- `○` = TMUX socket missing (session not started yet)
+
+[Worker Management Guide →](plugins/hal-9000/docs/TMUX_ARCHITECTURE.md)
+
 ### Worker Pool (Optional)
 
 Pre-warm containers for instant startup:
@@ -131,29 +153,48 @@ hal-9000 pool scale 3        # Maintain 3 warm workers
 
 ## Architecture
 
+### Parent-Worker Orchestration
+
 ```mermaid
 graph LR
-    Parent["<b>Parent Container</b><br/>Orchestrator<br/>ChromaDB:8000"]
+    Parent["<b>Parent Container</b><br/>Orchestrator<br/>ChromaDB:8000<br/>Coordinator"]
 
-    W1["Worker 1<br/>Claude"]
-    W2["Worker 2<br/>Claude"]
-    W3["Worker 3<br/>Claude"]
+    W1["Worker 1<br/>Claude<br/>TMUX Socket"]
+    W2["Worker 2<br/>Claude<br/>TMUX Socket"]
+    W3["Worker 3<br/>Claude<br/>TMUX Socket"]
 
-    Vols["<b>Shared Volumes</b>"]
+    Vols["<b>Shared Volumes</b><br/>Plugins, Memory,<br/>TMUX Sockets"]
 
-    Parent ---|manage| W1
-    Parent ---|manage| W2
-    Parent ---|manage| W3
+    Parent ---|monitors| W1
+    Parent ---|monitors| W2
+    Parent ---|monitors| W3
 
-    W1 ---|access| Vols
-    W2 ---|access| Vols
-    W3 ---|access| Vols
+    W1 ---|socket IPC| Vols
+    W2 ---|socket IPC| Vols
+    W3 ---|socket IPC| Vols
 ```
 
-- **Parent**: Runs ChromaDB server, manages workers
-- **Workers**: Run Claude with marketplace-installed MCP servers
-- **CLAUDE_HOME**: Shared volume for plugins, credentials, and settings
-- **Session State**: Shared volume for `.claude.json` (authentication, MCP config)
+**Infrastructure:**
+- **Parent Container**: Orchestrates workers, runs ChromaDB server (port 8000), maintains coordinator
+- **Worker Containers**: Independent TMUX servers with Claude CLI, communicate via socket IPC
+- **TMUX Sockets**: Unix domain sockets in `/data/tmux-sockets` for parent-worker communication
+- **Shared Volumes**:
+  - `hal9000-claude-home` - Marketplace plugins, credentials, MCP settings
+  - `hal9000-tmux-sockets` - Worker TMUX server sockets (socket-based IPC)
+  - `hal9000-coordinator-state` - Worker registry and session health
+  - `hal9000-memory-bank` - Cross-session persistent memory
+
+**Network Isolation:**
+- Workers use bridge networking (not shared namespace)
+- Access parent services (ChromaDB) via parent IP address
+- Each worker has independent network stack
+- Better security and enables future distributed deployment
+
+**Session Management:**
+- Each worker runs independent TMUX session with Claude in window 0, shell in window 1
+- Sessions survive detach/attach cycles (TMUX handles persistence)
+- Coordinator monitors worker lifecycle and socket health
+- Session state lives in TMUX (no file-based race conditions)
 
 ## Requirements
 
@@ -251,10 +292,14 @@ aod-broadcast "cmd"      # Send to all
 
 ## Troubleshooting
 
+### System Diagnostics
+
 ```bash
 hal-9000 --diagnose              # Show diagnostic info
 hal-9000 daemon status           # Check daemon health
-docker logs hal9000-parent     # View parent logs
+docker logs hal9000-parent       # View parent logs
+show-workers.sh                  # Display all workers + socket status
+show-workers.sh -w               # Live monitoring
 ```
 
 ### Common Issues
@@ -274,6 +319,52 @@ docker ps
 ```bash
 hal-9000 daemon restart
 ```
+
+**"Worker socket not found / stale"**
+```bash
+# Check socket health
+show-workers.sh          # Shows socket status (✓/⚠/○)
+
+# If socket is stale (⚠), wait for coordinator to clean it up
+# Coordinator validates sockets every 30 seconds
+
+# Or manually check socket
+ls -la /data/tmux-sockets/worker-*.sock
+```
+
+**"Cannot attach to worker"**
+```bash
+# Verify worker is running and socket is healthy
+show-workers.sh -v              # Detailed status
+docker ps | grep worker-abc     # Check container exists
+
+# Try attaching with retry
+attach-worker.sh worker-abc     # Has built-in retry logic
+
+# Or use fallback
+attach-worker.sh -d worker-abc  # Docker exec fallback
+```
+
+**"TMUX session frozen"**
+```bash
+# Detach from TMUX (doesn't kill session)
+# Press Ctrl+B, then D
+
+# If completely frozen, kill TMUX socket (coordinator will recreate)
+docker exec hal9000-parent rm -f /data/tmux-sockets/worker-*.sock
+
+# Restart parent to trigger socket recreation
+hal-9000 daemon restart
+```
+
+### TMUX Architecture Details
+
+[TMUX Architecture Guide →](plugins/hal-9000/docs/TMUX_ARCHITECTURE.md) - Comprehensive reference for:
+- Socket-based IPC architecture
+- TMUX session lifecycle
+- Session persistence model
+- Troubleshooting socket issues
+- Security considerations
 
 ## Documentation
 
