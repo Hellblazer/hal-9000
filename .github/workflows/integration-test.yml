@@ -166,6 +166,12 @@ jobs:
           bash scripts/tests/run-integration-scenarios.sh
           echo "✓ Phase 4 passed"
 
+      - name: Phase 5 - Network Security Tests (8 tests)
+        run: |
+          echo "Running Phase 5: Network Security Tests..."
+          bash plugins/hal-9000/docker/test-network-isolation.sh
+          echo "✓ Phase 5 passed"
+
       - name: Test Summary
         run: |
           echo ""
@@ -176,12 +182,14 @@ jobs:
           echo "Phase 2: Docker Integration......... ✓"
           echo "Phase 3: Daemon & Performance....... ✓"
           echo "Phase 4: Integration Scenarios...... ✓"
+          echo "Phase 5: Network Security........... ✓"
           echo "----------------------------------------"
-          echo "Total tests in CI: 134 (All phases)"
+          echo "Total tests in CI: 139 (All phases)"
           echo "  - Phase 1: 30 tests"
           echo "  - Phase 2: 32 tests"
           echo "  - Phase 3: 44 tests"
           echo "  - Phase 4: 28 tests"
+          echo "  - Phase 5:  5 tests (network isolation)"
           echo "========================================"
 
   docker-build-test:
@@ -281,11 +289,12 @@ jobs:
           fi
 
           if [ "${{ needs.comprehensive-tests.result }}" = "success" ]; then
-            echo "✓ Comprehensive Tests (134 tests): PASSED"
+            echo "✓ Comprehensive Tests (139 tests): PASSED"
             echo "  - Phase 1: Foundation Tests (30)"
             echo "  - Phase 2: Docker Integration (32)"
             echo "  - Phase 3: Daemon & Performance (44)"
             echo "  - Phase 4: Integration Scenarios (28)"
+            echo "  - Phase 5: Network Security (5)"
           else
             echo "✗ Comprehensive Tests: FAILED"
           fi
