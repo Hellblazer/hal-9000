@@ -49,6 +49,59 @@ get_worker_ids() {
         --format "{{.ID}}"
 }
 
+cleanup_session_metadata() {
+    local worker_name="$1"
+    local session_dir="${HAL9000_HOME:-/root/.hal9000}/sessions"
+    local metadata_file="$session_dir/${worker_name}.json"
+
+    # Ensure session directory exists
+    mkdir -p "$session_dir" 2>/dev/null || true
+
+    # Check if metadata file exists before removal
+    if [[ -f "$metadata_file" ]]; then
+        if rm -f "$metadata_file"; then
+            log_info "Cleaned up session metadata: $worker_name"
+            return 0
+        else
+            log_warn "Failed to remove session metadata: $metadata_file"
+            return 1
+        fi
+    else
+        log_info "Session metadata not found: $worker_name (already cleaned)"
+        return 0
+    fi
+}
+
+cleanup_stale_metadata() {
+    local session_dir="${HAL9000_HOME:-/root/.hal9000}/sessions"
+    local stale_days="${1:-7}"  # Default: 7 days old
+    local count=0
+
+    # Ensure session directory exists
+    if [[ ! -d "$session_dir" ]]; then
+        log_info "Session directory does not exist: $session_dir"
+        return 0
+    fi
+
+    log_info "Cleaning up stale session metadata (older than $stale_days days)..."
+
+    # Find and remove files older than specified days
+    while IFS= read -r -d '' file; do
+        if rm -f "$file"; then
+            log_info "Removed stale session metadata: $(basename "$file")"
+            ((count++))
+        else
+            log_warn "Failed to remove stale metadata: $file"
+        fi
+    done < <(find "$session_dir" -name "*.json" -type f -mtime "+$stale_days" -print0 2>/dev/null)
+
+    if [[ $count -gt 0 ]]; then
+        log_success "Cleaned up $count stale session metadata files"
+    else
+        log_info "No stale session metadata found"
+    fi
+}
+
 stop_worker() {
     local worker_name="$1"
 
@@ -70,7 +123,7 @@ stop_worker() {
         log_success "Worker stopped: $worker_name"
 
         # Clean up session metadata
-        rm -f "${HAL9000_HOME:-/root/.hal9000}/sessions/${worker_name}.json"
+        cleanup_session_metadata "$worker_name"
     else
         log_error "Failed to stop worker: $worker_name"
         return 1
@@ -98,10 +151,38 @@ stop_all_workers() {
         fi
     done
 
-    # Clean up all session metadata
-    rm -f "${HAL9000_HOME:-/root/.hal9000}/sessions/hal9000-worker-"*.json 2>/dev/null || true
-
     log_success "All workers stopped"
+}
+
+cleanup_all_session_metadata() {
+    local session_dir="${HAL9000_HOME:-/root/.hal9000}/sessions"
+    local count=0
+
+    # Ensure session directory exists
+    mkdir -p "$session_dir" 2>/dev/null || true
+
+    log_info "Cleaning up all session metadata..."
+
+    if [[ ! -d "$session_dir" ]]; then
+        log_info "Session directory does not exist: $session_dir"
+        return 0
+    fi
+
+    # Remove all worker metadata files
+    while IFS= read -r -d '' file; do
+        if rm -f "$file"; then
+            log_info "Removed session metadata: $(basename "$file")"
+            ((count++))
+        else
+            log_warn "Failed to remove session metadata: $file"
+        fi
+    done < <(find "$session_dir" -name "*.json" -type f -print0 2>/dev/null)
+
+    if [[ $count -gt 0 ]]; then
+        log_success "Cleaned up $count session metadata files"
+    else
+        log_info "No session metadata files found to clean up"
+    fi
 }
 
 view_worker_logs() {
@@ -329,13 +410,24 @@ Commands:
   stop-all          Stop all workers
   logs <name>       View worker logs (follow mode)
   attach <name>     Attach to worker shell
+  cleanup-metadata <name>     Remove session metadata for specific worker
+  cleanup-all-metadata        Remove all session metadata files
+  cleanup-stale [days]        Remove stale metadata (default: 7 days old)
   status            Show status summary
   help              Show this help
+
+Metadata Management:
+  Session metadata (.json files) are created in ~/.hal9000/sessions/
+  when workers are started and removed when workers are stopped.
+  Use cleanup commands to manually remove orphaned metadata.
 
 Examples:
   coordinator.sh list
   coordinator.sh stop hal9000-worker-1234567890
   coordinator.sh attach hal9000-worker-1234567890
+  coordinator.sh cleanup-metadata hal9000-worker-1234567890
+  coordinator.sh cleanup-stale 14          # Remove metadata older than 14 days
+  coordinator.sh cleanup-all-metadata
   coordinator.sh stop-all
 EOF
 }
@@ -362,6 +454,15 @@ main() {
             ;;
         attach)
             attach_to_worker "$@"
+            ;;
+        cleanup-metadata)
+            cleanup_session_metadata "$@"
+            ;;
+        cleanup-all-metadata)
+            cleanup_all_session_metadata
+            ;;
+        cleanup-stale)
+            cleanup_stale_metadata "$@"
             ;;
         status)
             show_status

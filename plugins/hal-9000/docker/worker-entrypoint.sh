@@ -348,8 +348,21 @@ start_tmux_session() {
 }
 
 # ============================================================================
-# SIGNAL HANDLING
+# SIGNAL HANDLING & CLEANUP
 # ============================================================================
+
+# Cleanup lifecycle:
+# 1. Worker process cleanup (THIS function):
+#    - Kill TMUX server (graceful session termination)
+#    - Container filesystem cleanup happens automatically
+# 2. Session metadata cleanup (coordinator.sh):
+#    - Triggered on normal shutdown via `coordinator.sh stop <worker>`
+#    - Calls cleanup_session_metadata() to remove ${HAL9000_HOME}/sessions/*.json
+# 3. Stale metadata cleanup (manual or periodic):
+#    - Use `coordinator.sh cleanup-stale [days]` to remove old metadata files
+#    - Useful for cleanup after container crashes or timeouts
+# Note: Session metadata files are stored on host/shared volume, not in container
+# Worker process cannot directly clean up host-side metadata files
 
 cleanup_on_exit() {
     log_info "Worker shutting down..."
