@@ -109,10 +109,17 @@ make test-suite-verbose
 - **Coverage**: File system structure, metadata, Docker labels
 - **Script**: `test-category-12-configuration-state.sh`
 
+### Category 14: Regression Test Suite (REG-001 to REG-XXX)
+- **Tests**: 0 automated (grows as bugs are discovered), 1 template
+- **Coverage**: Regression tests for previously fixed bugs
+- **Script**: `test-category-14-regression-suite.sh`
+- **Note**: This suite expands as bugs are found during manual testing and development
+
 ## Test Results Summary
 
 **Automated Tests**: 58 passing, 0 failing
 **Manual/Docker Tests**: 136 documented with clear instructions
+**Regression Tests**: 0 (suite will grow as bugs are discovered)
 **Exit Codes Validated**: All standard codes (0, 1, 2, 3, 4, 5)
 **Error Message Quality**: 100% verify helpful error messages
 
@@ -144,6 +151,7 @@ make test-category-09        # Claude Passthrough
 make test-category-10        # Error Handling
 make test-category-11        # Installation & Distribution
 make test-category-12        # Configuration & State Files
+make test-category-14        # Regression Test Suite
 ```
 
 ### Master Test Runner Options
