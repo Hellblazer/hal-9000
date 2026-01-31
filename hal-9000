@@ -778,6 +778,8 @@ daemon_start() {
         docker run -d
         --name "$PARENT_CONTAINER"
         --restart unless-stopped
+        --memory "${HAL9000_PARENT_MEMORY:-4g}"
+        --cpus "${HAL9000_PARENT_CPUS:-2}"
         -v /var/run/docker.sock:/var/run/docker.sock
         -v "${HAL9000_HOME}:/root/.hal9000"
         -v hal9000-chromadb:/data/chromadb
