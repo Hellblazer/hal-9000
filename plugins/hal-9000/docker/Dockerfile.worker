@@ -10,7 +10,8 @@
 #
 # Build: docker build -f Dockerfile.worker -t ghcr.io/hellblazer/hal-9000:worker .
 
-FROM node:20-bookworm-slim
+# node:20-bookworm-slim (pinned 2026-01-31)
+FROM node@sha256:6c51af7dc83f4708aaac35991306bca8f478351cfd2bda35750a62d7efcf05bb
 
 LABEL maintainer="hal-9000"
 LABEL description="HAL-9000 worker - Claude CLI with foundation MCP servers"

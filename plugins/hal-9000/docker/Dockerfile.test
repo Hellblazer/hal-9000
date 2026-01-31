@@ -10,7 +10,8 @@
 # For CI:
 #   docker run --privileged hal9000-test /hal-9000/test/run-tests.sh
 
-FROM docker:27-dind
+# docker:27-dind (pinned 2026-01-31)
+FROM docker@sha256:aa3df78ecf320f5fafdce71c659f1629e96e9de0968305fe1de670e0ca9176ce
 
 # Install dependencies needed for hal-9000
 RUN apk add --no-cache \

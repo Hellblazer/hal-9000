@@ -5,7 +5,8 @@
 # Publish: docker push ghcr.io/hellblazer/hal-9000:latest
 # Use with aod: aod.sh automatically uses this image
 
-FROM debian:bookworm-slim
+# debian:bookworm-slim (pinned 2026-01-31)
+FROM debian@sha256:56ff6d36d4eb3db13a741b342ec466f121480b5edded42e4b7ee850ce7a418ee
 
 LABEL maintainer="hal-9000"
 LABEL description="HAL-9000 base image with Claude CLI, MCP servers, and claude-code-tools"

@@ -10,7 +10,8 @@
 #
 # Note: This is NOT used by CI - it's for local thorough testing only.
 
-FROM ubuntu:24.04
+# ubuntu:24.04 (pinned 2026-01-31)
+FROM ubuntu@sha256:cd1dba651b3080c3686ecf4e3c4220f026b521fb76978881737d24f200828b2b
 
 ENV DEBIAN_FRONTEND=noninteractive
 
