@@ -1396,15 +1396,16 @@ launch_container_session() {
             # Normal mode: restore session state and run Claude with proper TTY
             info "Launching Claude..."
             docker exec -it "$session_name" bash -c "
+                # FILE-BASED SESSION PERSISTENCE:
+                # State is persisted across session attachments via .claude.json file
                 # Restore Claude session state from persistent volume
-                # The volume is initialized with pristine config on first creation,
-                # so the container gets a clean environment with no host-specific paths
                 if [ -f /root/.claude-session/.claude.json ]; then
                   cp /root/.claude-session/.claude.json /root/.claude.json
                 fi
-                # Run Claude
+                # Run Claude (maintains session in memory while running)
                 claude
                 # Save Claude session state back to persistent volume after exit
+                # This enables resuming the exact session on next attach
                 [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
             "
         fi

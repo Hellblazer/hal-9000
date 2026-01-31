@@ -221,11 +221,12 @@ print_worker_info() {
 # ============================================================================
 
 # Session state with TMUX-based architecture:
-# - Claude runs in TMUX pane, maintaining own session state
-# - TMUX session persists across container operations
-# - State file location: /home/claude/.claude/session.json (managed by Claude)
-# - No need for external save/restore - TMUX handles persistence
-# - For cross-container persistence, use Memory Bank MCP
+# - TMUX provides terminal multiplexing and process management
+# - Claude state persists via file-based storage in CLAUDE_HOME (/home/claude/.claude)
+# - State files: session.json, credentials, plugin configs (managed by Claude CLI)
+# - TMUX socket persistence: Stored in shared volume, survives container restart
+# - For cross-container persistence across attachments: File-based storage in shared volume
+# - For cross-session reasoning persistence: Use Memory Bank MCP server
 
 ensure_session_persistence() {
     local session_dir="$CLAUDE_HOME"
