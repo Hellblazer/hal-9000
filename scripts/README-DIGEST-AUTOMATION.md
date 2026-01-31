@@ -229,10 +229,56 @@ schedule:
   - cron: '0 9 * * *'  # Daily at 9 AM UTC
 ```
 
+## Worker Image SHA Digest Update
+
+In addition to base images, worker image allowlists can use SHA digests for maximum security.
+
+### Worker Image Script (`update-image-shas.sh`)
+
+**Purpose**: Update the ALLOWED_IMAGES array in spawn-worker.sh with SHA digests
+
+**Usage**:
+```bash
+# Show current digests for all worker images
+./scripts/update-image-shas.sh --show
+
+# Check if allowlist uses SHA digests
+./scripts/update-image-shas.sh --check
+
+# Update allowlist with SHA digests
+./scripts/update-image-shas.sh --update
+```
+
+**What it does**:
+1. Fetches SHA256 digests for each worker image profile (worker, base, python, node, java)
+2. Updates the ALLOWED_IMAGES array in spawn-worker.sh
+3. Creates backup before modifying
+
+**Security Benefit**:
+While version tags (e.g., `:worker-v3.0.0`) are good practice, SHA digests provide
+cryptographic verification that the exact tested image is being used.
+
+## Python Dependency Pinning
+
+Python packages in the parent container are pinned to exact versions.
+
+**File**: `plugins/hal-9000/docker/requirements-parent.txt`
+
+**Maintenance**:
+```bash
+# Audit for vulnerabilities
+pip-audit -r plugins/hal-9000/docker/requirements-parent.txt
+
+# Update version in requirements file
+# Then rebuild and test parent container
+```
+
 ## References
 
 - [Docker Image Manifest Spec](https://docs.docker.com/registry/spec/manifest-v2-2/)
 - [GitHub Actions Scheduled Events](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#schedule)
 - [Supply Chain Security Best Practices](https://slsa.dev/)
+- [pip-audit for Python security](https://pypi.org/project/pip-audit/)
 - Related: `hal-9000-dot` (Pin base image digests)
 - Related: `hal-9000-h4i` (Create digest update automation)
+- Related: `hal-9000-p8i` (Pin dependencies and use SHA digests)

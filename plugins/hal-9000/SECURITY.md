@@ -66,16 +66,50 @@ Worker images are validated against an allowlist to prevent supply chain attacks
 
 ```bash
 ALLOWED_IMAGES=(
-    "ghcr.io/hellblazer/hal-9000:worker"
     "ghcr.io/hellblazer/hal-9000:worker-v3.0.0"
-    "ghcr.io/hellblazer/hal-9000:base"
-    # ... versioned tags for immutability
+    "ghcr.io/hellblazer/hal-9000:base-v3.0.0"
+    # Versioned tags for supply chain security
 )
 ```
 
 **Rationale:** Prevents arbitrary image execution that could contain malicious code.
 
-**Note:** The allowlist includes versioned tags (e.g., `:worker-v3.0.0`) which won't be reused, providing protection against tag mutation attacks.
+**Security Levels:**
+1. **Version tags** (current): Tags like `:worker-v3.0.0` won't be reused, providing good protection
+2. **SHA digests** (maximum): Add `@sha256:...` suffix for cryptographic verification
+
+**Upgrading to SHA Digests:**
+```bash
+# Update allowlist with SHA digests for maximum security
+./scripts/update-image-shas.sh --update
+```
+
+This produces entries like:
+```bash
+"ghcr.io/hellblazer/hal-9000:worker-v3.0.0@sha256:abc123..."
+```
+
+### Python Dependency Pinning
+
+The parent container pins Python dependencies to exact versions:
+
+```
+# plugins/hal-9000/docker/requirements-parent.txt
+chromadb==0.5.23  # Exact version pinned
+```
+
+**Benefits:**
+- Prevents silent upgrades to compromised versions
+- Reproducible builds
+- Audit trail in git history
+
+**Maintenance:**
+```bash
+# Audit for vulnerabilities
+pip-audit -r requirements-parent.txt
+
+# Update and test before committing
+```
 
 ### Input Validation
 

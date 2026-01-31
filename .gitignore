@@ -12,12 +12,13 @@ logs/
 **/*.iml
 
 # Prevent .txt documentation sprawl (ART-676)
-# Only allow .txt in test resources and archived docs
+# Only allow .txt in test resources, archived docs, and requirements files
 /*.txt
 **/*.txt
 !**/src/test/resources/**/*.txt
 !**/docs/archive/**/*.txt
 !scripts/tests/fixtures/**/*.txt
+!**/requirements*.txt
 
 # Prevent Python script sprawl in root (ART-677)
 # Only allow Python in proper locations (scripts/, src/, tests/)
@@ -60,6 +61,9 @@ logs/
 !/scripts/setup-foundation-mcp.sh
 !/scripts/agent-registry.py
 !/scripts/validate-handoff-graph.py
+!/scripts/update-base-image-digests.sh
+!/scripts/update-image-shas.sh
+!/scripts/README-DIGEST-AUTOMATION.md
 /tests/
 
 # Working documents - temporary/ephemeral files for agent work

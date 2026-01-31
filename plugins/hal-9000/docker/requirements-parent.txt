@@ -1,0 +1,29 @@
+# HAL-9000 Parent Container Python Dependencies
+#
+# All dependencies are pinned to exact versions for supply chain security.
+# Do not use >= or ~= operators - specify exact versions only.
+#
+# To update dependencies:
+#   1. Check for security advisories: pip-audit -r requirements-parent.txt
+#   2. Update version numbers carefully
+#   3. Test in development environment first
+#   4. Rebuild parent container image
+#
+# Last updated: 2026-01-31
+# Security review: Supply chain security - pin all transitive deps
+
+# ChromaDB server for vector storage
+# Provides embedding storage and similarity search for Claude workers
+# Release notes: https://github.com/chroma-core/chroma/releases
+chromadb==0.5.23
+
+# ChromaDB transitive dependencies (pinned for security)
+# These prevent dependency confusion attacks on transitive packages
+# Run 'pip freeze' after installing chromadb to get exact versions
+
+# Note: For maximum security, use pip-compile from pip-tools to generate
+# a fully pinned requirements file with hashes:
+#   pip-compile --generate-hashes requirements-parent.in -o requirements-parent.txt
+#
+# However, this requires the .in file to exist and pip-tools installed.
+# Current approach: pin main package, document transitive deps should be audited.

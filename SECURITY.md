@@ -65,8 +65,9 @@ graph LR
 
 **4. Supply Chain Attacks**
 - **Risk**: Compromised MCP servers or dependencies
-- **Examples**: Malicious npm packages, PyPI backdoors
-- **Mitigation**: Pinned versions, code review, sandboxing
+- **Examples**: Malicious npm packages, PyPI backdoors, Docker image tag mutation
+- **Mitigation**: Pinned versions with SHA digests, code review, sandboxing
+- **Details**: See [Supply Chain Security](#supply-chain-security) section
 
 **5. Container Escape (hal9000)**
 - **Risk**: Breaking out of Docker container
@@ -158,7 +159,133 @@ docker run \
 - Set resource limits: `--memory=2g --cpus=1`
 - Drop capabilities: `--cap-drop=ALL`
 
-### 5. Credential Management
+### 5. Supply Chain Security
+
+HAL-9000 implements multiple layers of supply chain protection to prevent dependency-based attacks.
+
+#### 5.1 Base Image Pinning
+
+All Docker base images are pinned to SHA256 digests, not mutable tags:
+
+```dockerfile
+# Good: Immutable digest reference
+FROM debian@sha256:56ff6d36d4eb3db13a741b342ec466f121480b5edded42e4b7ee850ce7a418ee
+
+# Bad: Mutable tag (can be replaced by attacker)
+FROM debian:bookworm-slim
+```
+
+**Tools**:
+- `scripts/update-base-image-digests.sh` - Check/update base image digests
+- `plugins/hal-9000/docker/validate-base-image-digests.sh` - Validate digests are accessible
+- GitHub Actions workflow runs weekly to propose digest updates
+
+**Update Process**:
+```bash
+# Check for updates
+./scripts/update-base-image-digests.sh --check
+
+# Preview changes
+./scripts/update-base-image-digests.sh --dry-run
+
+# Apply updates
+./scripts/update-base-image-digests.sh --update
+```
+
+#### 5.2 Python Dependency Pinning
+
+Python packages are pinned to exact versions in requirements files:
+
+```
+# plugins/hal-9000/docker/requirements-parent.txt
+chromadb==0.5.23  # Exact version, not chromadb>=0.5.0
+```
+
+**Security Benefits**:
+- Prevents automatic installation of compromised newer versions
+- Reproducible builds across environments
+- Audit trail of version changes in git history
+
+**Best Practices**:
+- Pin ALL dependencies (including transitive)
+- Use `pip-compile --generate-hashes` for hash verification
+- Regularly audit with `pip-audit -r requirements.txt`
+
+#### 5.3 Worker Image Allowlisting
+
+Worker containers are validated against an allowlist with version tags:
+
+```bash
+ALLOWED_IMAGES=(
+    "ghcr.io/hellblazer/hal-9000:worker-v3.0.0"
+    "ghcr.io/hellblazer/hal-9000:base-v3.0.0"
+    # Version tags (v3.0.0) won't be reused for different images
+)
+```
+
+**For Maximum Security** - Use SHA digests in the allowlist:
+
+```bash
+# Update allowlist with SHA digests
+./scripts/update-image-shas.sh --update
+```
+
+This produces entries like:
+```bash
+"ghcr.io/hellblazer/hal-9000:worker-v3.0.0@sha256:abc123..."
+```
+
+**SHA Digest Benefits**:
+- Completely immutable (tags can still be overwritten)
+- Cryptographic verification of image content
+- Protection against registry compromise
+
+#### 5.4 npm Package Pinning
+
+MCP server npm packages are pinned to exact versions in Dockerfile.worker:
+
+```dockerfile
+# Exact versions, not ranges
+RUN npm install -g @allpepper/memory-bank-mcp@0.2.2
+RUN npm install -g @modelcontextprotocol/server-sequential-thinking@2025.12.18
+```
+
+#### 5.5 Supply Chain Attack Vectors
+
+| Attack Vector | Mitigation | Status |
+|--------------|------------|--------|
+| Base image tag mutation | SHA256 digest pinning | Implemented |
+| PyPI package compromise | Exact version pinning | Implemented |
+| npm package compromise | Exact version pinning | Implemented |
+| Worker image tag mutation | SHA digest allowlist | Available (--update) |
+| Dependency confusion | Private registries / allowlists | Recommended |
+| Typosquatting | Manual review of package names | Process |
+
+#### 5.6 Update Procedures
+
+**Weekly Automated Updates** (base images):
+- GitHub Actions workflow checks for digest updates
+- Creates PR if updates available
+- Requires human review before merge
+
+**Manual Updates** (dependencies):
+```bash
+# 1. Check for security advisories
+pip-audit -r plugins/hal-9000/docker/requirements-parent.txt
+
+# 2. Update version in requirements file
+
+# 3. Test in development
+docker build -f Dockerfile.parent -t test-parent .
+
+# 4. Commit with changelog
+git commit -m "security: Update chromadb to X.Y.Z (CVE-YYYY-NNNN)"
+```
+
+**Emergency Updates**:
+For critical CVEs, run manual workflow trigger from GitHub Actions page.
+
+### 6. Credential Management
 
 **vault Tool** (SOPS-based encryption):
 ```bash

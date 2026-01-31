@@ -62,9 +62,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # GID 1001 matches worker's claude user GID for consistency
 RUN groupadd -g 1001 hal9000
 
+# Copy pinned requirements for supply chain security
+COPY docker/requirements-parent.txt /tmp/requirements-parent.txt
+
 # Install ChromaDB server in a virtual environment
+# Using pinned version from requirements file to prevent supply chain attacks
 RUN python3 -m venv /opt/chromadb-venv \
-    && /opt/chromadb-venv/bin/pip install --no-cache-dir chromadb
+    && /opt/chromadb-venv/bin/pip install --no-cache-dir -r /tmp/requirements-parent.txt \
+    && rm /tmp/requirements-parent.txt
 
 # Add ChromaDB to PATH
 ENV PATH="/opt/chromadb-venv/bin:${PATH}"
