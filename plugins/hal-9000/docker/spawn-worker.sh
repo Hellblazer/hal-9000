@@ -13,8 +13,10 @@
 #   -h, --help            Show this help
 #
 # The worker container:
-# - Shares parent's network namespace (--network=container:PARENT)
+# - Uses independent bridge network (network isolation)
+# - Accesses parent services (ChromaDB) via parent IP address
 # - Mounts shared CLAUDE_HOME volume (marketplace installations persist)
+# - Mounts shared TMUX sockets volume (for inter-process communication)
 # - Mounts project directory at /workspace
 # - Users install MCP servers via: claude plugin marketplace add / claude plugin install
 
@@ -86,8 +88,9 @@ Marketplace:
   Installations are stored in shared CLAUDE_HOME volume.
 
 Network:
-  Worker shares parent's network namespace via --network=container:$PARENT_CONTAINER
-  This allows access to parent's services (e.g., ChromaDB on localhost:8000)
+  Workers use independent bridge network for isolation and security.
+  They access parent services (e.g., ChromaDB) via parent's IP address.
+  Parent IP is automatically detected and passed as PARENT_IP environment variable.
 EOF
 }
 
@@ -220,12 +223,24 @@ spawn_worker() {
     # Container name
     docker_args+=(--name "$WORKER_NAME")
 
-    # Network namespace sharing
+    # Network configuration: Use bridge network for isolation
+    # Workers no longer share parent's network namespace for better security/isolation
+    # Instead, they connect to ChromaDB via HTTP using parent's IP address
+    docker_args+=(--network "bridge")
+
+    # Get parent container IP for ChromaDB access
     if [[ -n "$PARENT_CONTAINER" ]]; then
-        docker_args+=(--network "container:${PARENT_CONTAINER}")
-        log_info "Sharing network with parent: $PARENT_CONTAINER"
+        local parent_ip
+        parent_ip=$(docker inspect "$PARENT_CONTAINER" --format='{{.NetworkSettings.IPAddress}}' 2>/dev/null || echo "")
+
+        if [[ -n "$parent_ip" ]]; then
+            docker_args+=(-e "PARENT_IP=$parent_ip")
+            log_info "Parent IP: $parent_ip (workers will access services via this IP)"
+        else
+            log_warn "Could not determine parent IP - workers will use hostname resolution"
+        fi
     else
-        log_warn "Running with default bridge network"
+        log_warn "Parent container not specified - workers will need explicit service configuration"
     fi
 
     # Mount project directory if specified
@@ -297,6 +312,10 @@ spawn_worker() {
         local hal9000_home="${HAL9000_HOME:-$HOME/.hal9000}"
         local claude_home="${hal9000_home}/claude"
         mkdir -p "$claude_home" 2>/dev/null || true
+        # Also create TMUX sockets directory in host mode
+        local tmux_sockets_dir="${hal9000_home}/tmux-sockets"
+        mkdir -p "$tmux_sockets_dir" 2>/dev/null || true
+        chmod 0777 "$tmux_sockets_dir" 2>/dev/null || true
         docker_args+=(-v "${claude_home}:${claude_home_path}")
         log_info "Host mode: using shared directory $claude_home"
     fi
@@ -309,6 +328,19 @@ spawn_worker() {
     docker volume create "$membank_volume" >/dev/null 2>&1 || true
     docker_args+=(-v "${membank_volume}:/data/memory-bank")
     log_info "Memory Bank: shared volume $membank_volume"
+
+    # Mount shared TMUX sockets volume for inter-process communication
+    # Each worker's TMUX server uses a socket in this shared directory
+    local tmux_volume="hal9000-tmux-sockets"
+    docker volume create "$tmux_volume" >/dev/null 2>&1 || true
+    docker_args+=(-v "${tmux_volume}:/data/tmux-sockets")
+    log_info "TMUX sockets: shared volume $tmux_volume"
+
+    # Mount shared coordinator state volume for session tracking
+    local coordinator_state_volume="hal9000-coordinator-state"
+    docker volume create "$coordinator_state_volume" >/dev/null 2>&1 || true
+    docker_args+=(-v "${coordinator_state_volume}:/data/coordinator-state")
+    log_info "Coordinator state: shared volume $coordinator_state_volume"
 
     # Mount shared ChromaDB data volume (if it exists)
     if docker volume inspect "hal9000-chromadb" >/dev/null 2>&1; then

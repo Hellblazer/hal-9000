@@ -85,6 +85,11 @@ COPY docker/init-volumes.sh /scripts/init-volumes.sh
 COPY docker/setup-dashboard.sh /scripts/setup-dashboard.sh
 COPY docker/tmux-dashboard.conf /scripts/tmux-dashboard.conf
 
+# Copy TMUX control utilities
+COPY scripts/tmux-send.sh /scripts/tmux-send.sh
+COPY scripts/tmux-attach.sh /scripts/tmux-attach.sh
+COPY scripts/tmux-list-sessions.sh /scripts/tmux-list-sessions.sh
+
 # Make scripts executable
 RUN chmod +x /scripts/*.sh
 

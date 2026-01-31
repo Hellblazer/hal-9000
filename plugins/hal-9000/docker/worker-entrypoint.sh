@@ -39,6 +39,14 @@ log_error() { printf "${RED}[${WORKER_NAME}]${NC} %s\n" "$1" >&2; }
 CLAUDE_HOME="${CLAUDE_HOME:-/home/claude/.claude}"
 WORKSPACE="${WORKSPACE:-/workspace}"
 MEMORY_BANK_ROOT="${MEMORY_BANK_ROOT:-/data/memory-bank}"
+
+# ChromaDB configuration
+# If PARENT_IP is set (network decoupling mode), use it as ChromaDB host
+# Otherwise, fall back to CHROMADB_HOST or localhost
+CHROMADB_HOST="${CHROMADB_HOST:-}"
+if [[ -z "$CHROMADB_HOST" && -n "${PARENT_IP:-}" ]]; then
+    CHROMADB_HOST="${PARENT_IP}"
+fi
 CHROMADB_HOST="${CHROMADB_HOST:-localhost}"
 CHROMADB_PORT="${CHROMADB_PORT:-8000}"
 
@@ -115,7 +123,14 @@ EOF
 
     log_success "Foundation MCP servers configured:"
     log_info "  - memory-bank: ${MEMORY_BANK_ROOT}"
-    log_info "  - chromadb: http://${CHROMADB_HOST}:${CHROMADB_PORT}"
+
+    # Log ChromaDB configuration with network mode info
+    if [[ -n "${PARENT_IP:-}" ]]; then
+        log_info "  - chromadb: http://${CHROMADB_HOST}:${CHROMADB_PORT} (via PARENT_IP)"
+    else
+        log_info "  - chromadb: http://${CHROMADB_HOST}:${CHROMADB_PORT}"
+    fi
+
     log_info "  - sequential-thinking: enabled"
 }
 
@@ -194,6 +209,96 @@ print_worker_info() {
     echo "  Add more via: claude plugin install <plugin>"
     echo "============================================"
     echo
+    echo "Session State:"
+    echo "  Session runs in TMUX (independent process manager)"
+    echo "  State persists across detach/attach cycles"
+    echo "  Use tmux-attach.sh to reconnect to session"
+    echo
+}
+
+# ============================================================================
+# SESSION STATE MANAGEMENT
+# ============================================================================
+
+# Session state with TMUX-based architecture:
+# - Claude runs in TMUX pane, maintaining own session state
+# - TMUX session persists across container operations
+# - State file location: /home/claude/.claude/session.json (managed by Claude)
+# - No need for external save/restore - TMUX handles persistence
+# - For cross-container persistence, use Memory Bank MCP
+
+ensure_session_persistence() {
+    local session_dir="$CLAUDE_HOME"
+
+    # Ensure session directory exists and is writable
+    if [[ ! -d "$session_dir" ]]; then
+        mkdir -p "$session_dir"
+        chmod 0700 "$session_dir"
+    fi
+
+    # Session state will be managed by Claude CLI within TMUX
+    # No action needed here - TMUX handles session persistence
+    log_info "Session persistence configured (TMUX-based)"
+}
+
+# ============================================================================
+# TMUX SESSION MANAGEMENT
+# ============================================================================
+
+TMUX_SOCKET_DIR="${TMUX_SOCKET_DIR:-/data/tmux-sockets}"
+TMUX_ENABLED="${TMUX_ENABLED:-true}"
+
+init_tmux_sockets_dir() {
+    if [[ "$TMUX_ENABLED" != "true" ]]; then
+        log_info "TMUX disabled (TMUX_ENABLED=false)"
+        return 0
+    fi
+
+    log_info "Initializing TMUX socket directory: $TMUX_SOCKET_DIR"
+
+    mkdir -p "$TMUX_SOCKET_DIR"
+    chmod 0777 "$TMUX_SOCKET_DIR"
+
+    log_success "TMUX socket directory ready"
+}
+
+start_tmux_session() {
+    if [[ "$TMUX_ENABLED" != "true" ]]; then
+        log_info "TMUX disabled - starting Claude directly"
+        return 1
+    fi
+
+    local tmux_socket="$TMUX_SOCKET_DIR/worker-${WORKER_NAME}.sock"
+    local session_name="worker-${WORKER_NAME}"
+
+    log_info "Starting TMUX session: $session_name"
+    log_info "Socket path: $tmux_socket"
+
+    # Kill any stale TMUX server with this socket
+    tmux -S "$tmux_socket" kill-server 2>/dev/null || true
+    sleep 0.5
+
+    # Create TMUX session with Claude in first window
+    tmux -S "$tmux_socket" new-session -d -s "$session_name" -x 120 -y 30 \
+        "exec claude" 2>/dev/null || {
+        log_error "Failed to create TMUX session"
+        return 1
+    }
+
+    log_success "TMUX session created: $session_name"
+
+    # Create additional shell window for debugging
+    tmux -S "$tmux_socket" new-window -t "$session_name" -n "shell" -c "$WORKSPACE" \
+        "exec bash" 2>/dev/null || {
+        log_warn "Failed to create shell window"
+    }
+
+    log_success "Added shell debug window"
+
+    # Export socket path for later use
+    export TMUX_SOCKET="$tmux_socket"
+
+    return 0
 }
 
 # ============================================================================
@@ -202,6 +307,12 @@ print_worker_info() {
 
 cleanup_on_exit() {
     log_info "Worker shutting down..."
+
+    if [[ "$TMUX_ENABLED" == "true" && -n "${TMUX_SOCKET:-}" ]]; then
+        log_info "Cleaning up TMUX server..."
+        tmux -S "$TMUX_SOCKET" kill-server 2>/dev/null || true
+    fi
+
     exit 0
 }
 
@@ -220,6 +331,8 @@ main() {
     setup_workspace
     verify_claude
     verify_mcp_servers
+    init_tmux_sockets_dir
+    ensure_session_persistence
 
     print_worker_info
 
@@ -227,9 +340,17 @@ main() {
     case "${1:-claude}" in
         claude)
             log_info "Starting Claude..."
-            exec claude
+            if start_tmux_session; then
+                log_success "TMUX session ready - keeping worker alive"
+                # Keep worker process alive (TMUX session is managing Claude)
+                exec tail -f /dev/null
+            else
+                log_warn "TMUX failed - falling back to direct execution"
+                exec claude
+            fi
             ;;
         claude-*)
+            # For non-standard Claude modes, run directly
             exec claude "${1#claude-}" "${@:2}"
             ;;
         bash|sh)

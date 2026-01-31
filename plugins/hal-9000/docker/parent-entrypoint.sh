@@ -40,6 +40,14 @@ init_directories() {
     mkdir -p "${HAL9000_HOME:-/root/.hal9000}/logs"
     mkdir -p "${HAL9000_HOME:-/root/.hal9000}/config"
 
+    # Coordinator state directories
+    mkdir -p "${COORDINATOR_STATE_DIR:-/data/coordinator-state}"
+    chmod 0777 "${COORDINATOR_STATE_DIR:-/data/coordinator-state}"
+
+    # TMUX sockets directory
+    mkdir -p "${TMUX_SOCKET_DIR:-/data/tmux-sockets}"
+    chmod 0777 "${TMUX_SOCKET_DIR:-/data/tmux-sockets}"
+
     log_success "Directories initialized"
 }
 
@@ -62,19 +70,33 @@ verify_docker_socket() {
 }
 
 init_tmux_server() {
-    log_info "Initializing tmux server..."
+    log_info "Initializing parent TMUX server..."
+
+    local tmux_socket_dir="${TMUX_SOCKET_DIR:-/data/tmux-sockets}"
+    local parent_socket="$tmux_socket_dir/parent.sock"
+
+    # Ensure socket directory exists
+    mkdir -p "$tmux_socket_dir"
+    chmod 0777 "$tmux_socket_dir"
 
     # Kill any existing tmux server from previous runs
-    tmux kill-server 2>/dev/null || true
+    tmux -S "$parent_socket" kill-server 2>/dev/null || true
+    sleep 0.5
 
-    # Start tmux server with specific socket
-    tmux -L hal9000 new-session -d -s dashboard -n status
+    # Start parent TMUX server with specific socket
+    tmux -S "$parent_socket" new-session -d -s "hal9000-coordinator" -x 200 -y 50
+
+    # Create coordinator window
+    tmux -S "$parent_socket" new-window -t "hal9000-coordinator" -n "status"
 
     # Create dashboard window content
-    tmux -L hal9000 send-keys -t dashboard:status \
+    tmux -S "$parent_socket" send-keys -t "hal9000-coordinator:status" \
         "watch -n 5 'echo \"=== HAL-9000 Parent Dashboard ===\"; echo; docker ps --filter name=hal9000-worker --format \"table {{.Names}}\t{{.Status}}\t{{.RunningFor}}\"'" Enter
 
-    log_success "tmux server initialized (socket: hal9000)"
+    # Export for use in coordinator
+    export TMUX_SOCKET="$parent_socket"
+
+    log_success "Parent TMUX server initialized (socket: $parent_socket)"
 }
 
 pull_worker_image() {
@@ -195,18 +217,43 @@ run_coordinator() {
     trap cleanup_on_exit SIGTERM SIGINT
 
     log_success "Coordinator running (PID: $$)"
-    log_info "Use 'docker exec hal9000-parent /scripts/spawn-worker.sh' to spawn workers"
-    log_info "Or attach to dashboard: 'docker exec -it hal9000-parent tmux -L hal9000 attach'"
+    log_info "Monitoring workers and maintaining session state..."
 
-    # Keep container running
-    # In production, this would be replaced with actual coordination logic
+    # Source coordinator functions if available
+    if [[ -f "/scripts/coordinator.sh" ]]; then
+        source /scripts/coordinator.sh
+    fi
+
+    # Coordination loop
+    local check_interval=5
+    local registry_update_interval=30
+    local last_registry_update=0
+
     while true; do
-        sleep 60
+        local now
+        now=$(date +%s)
 
-        # Periodic health check
+        # Periodic worker registry update
+        if [[ $((now - last_registry_update)) -ge $registry_update_interval ]]; then
+            if command -v update_worker_registry >/dev/null 2>&1; then
+                update_worker_registry
+                last_registry_update=$now
+            fi
+
+            # Validate sessions (clean up stale TMUX sockets)
+            if command -v validate_worker_sessions >/dev/null 2>&1; then
+                validate_worker_sessions
+            fi
+        fi
+
+        # Brief health check
         local worker_count
         worker_count=$(docker ps --filter "name=hal9000-worker" --format "{{.Names}}" | wc -l)
-        log_info "Active workers: $worker_count"
+        if [[ $((now % 60)) -eq 0 ]]; then
+            log_info "Coordinator health check: $worker_count active workers"
+        fi
+
+        sleep "$check_interval"
     done
 }
 
@@ -236,8 +283,11 @@ cleanup_on_exit() {
         kill "$pool_pid" 2>/dev/null || true
     fi
 
-    # Clean up tmux
-    tmux -L hal9000 kill-server 2>/dev/null || true
+    # Clean up parent TMUX server
+    if [[ -n "${TMUX_SOCKET:-}" ]]; then
+        log_info "Cleaning up parent TMUX server..."
+        tmux -S "$TMUX_SOCKET" kill-server 2>/dev/null || true
+    fi
 
     # Remove PID file
     rm -f "${HAL9000_HOME}/coordinator.pid"

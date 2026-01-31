@@ -127,6 +127,113 @@ attach_to_worker() {
 }
 
 # ============================================================================
+# WORKER REGISTRY (TMUX-BASED)
+# ============================================================================
+
+COORDINATOR_STATE_DIR="${COORDINATOR_STATE_DIR:-/data/coordinator-state}"
+TMUX_SOCKET_DIR="${TMUX_SOCKET_DIR:-/data/tmux-sockets}"
+WORKERS_REGISTRY="${COORDINATOR_STATE_DIR}/workers.json"
+
+init_coordinator_state() {
+    mkdir -p "$COORDINATOR_STATE_DIR"
+    chmod 0777 "$COORDINATOR_STATE_DIR"
+}
+
+update_worker_registry() {
+    local workers
+    workers=$(docker ps --filter "name=hal9000-worker" --format "{{.Names}}" 2>/dev/null)
+
+    init_coordinator_state
+
+    # Build workers.json
+    local registry='{'
+    local first=true
+
+    if [[ -n "$workers" ]]; then
+        while IFS= read -r worker_name; do
+            [[ -z "$worker_name" ]] && continue
+
+            if [[ "$first" == "false" ]]; then
+                registry="$registry,"
+            fi
+            first=false
+
+            local tmux_socket="$TMUX_SOCKET_DIR/worker-${worker_name}.sock"
+            local tmux_ok="false"
+            if [[ -e "$tmux_socket" ]]; then
+                tmux_ok="true"
+            fi
+
+            # Get container info
+            local container_id
+            container_id=$(docker ps --filter "name=^${worker_name}$" --format "{{.ID}}" 2>/dev/null)
+
+            # Get uptime
+            local created_at
+            created_at=$(docker inspect "$container_id" --format='{{.Created}}' 2>/dev/null || echo "unknown")
+
+            registry="$registry\"$worker_name\":{\"status\":\"running\",\"tmux_socket\":\"$tmux_socket\",\"tmux_ready\":$tmux_ok,\"container_id\":\"$container_id\",\"created_at\":\"$created_at\"}"
+        done <<< "$workers"
+    fi
+
+    registry="$registry}"
+
+    # Write registry file (atomic write with temp file)
+    local temp_file="${WORKERS_REGISTRY}.tmp"
+    echo "$registry" > "$temp_file"
+    mv "$temp_file" "$WORKERS_REGISTRY"
+
+    log_info "Worker registry updated: $(echo "$workers" | wc -l) workers"
+}
+
+validate_worker_sessions() {
+    init_coordinator_state
+
+    local stale_count=0
+
+    # Check TMUX sockets for stale entries
+    if [[ -d "$TMUX_SOCKET_DIR" ]]; then
+        for socket in "$TMUX_SOCKET_DIR"/worker-*.sock; do
+            [[ ! -e "$socket" ]] && continue
+
+            # Extract worker name from socket path
+            local socket_name
+            socket_name=$(basename "$socket" .sock)
+            local worker_name="${socket_name#worker-}"
+
+            # Check if corresponding container is running
+            if ! docker ps --format '{{.Names}}' | grep -q "^${worker_name}$"; then
+                log_warn "Removing stale TMUX socket: $socket"
+                rm -f "$socket" 2>/dev/null || true
+                ((stale_count++))
+            fi
+        done
+    fi
+
+    if [[ $stale_count -gt 0 ]]; then
+        log_info "Cleaned up $stale_count stale TMUX sockets"
+    fi
+}
+
+get_worker_tmux_socket() {
+    local worker_name="$1"
+
+    if [[ -z "$worker_name" ]]; then
+        log_error "Worker name required"
+        return 1
+    fi
+
+    local socket="$TMUX_SOCKET_DIR/worker-${worker_name}.sock"
+
+    if [[ ! -e "$socket" ]]; then
+        log_error "TMUX socket not found for worker: $worker_name"
+        return 1
+    fi
+
+    echo "$socket"
+}
+
+# ============================================================================
 # STATUS
 # ============================================================================
 

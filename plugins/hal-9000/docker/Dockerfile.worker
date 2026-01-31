@@ -66,7 +66,9 @@ RUN groupadd -g ${CLAUDE_GID} claude && \
 # - /workspace: Project files (mounted per-session)
 # - /home/claude/.claude: CLAUDE_HOME (shared volume for marketplace)
 # - /data/memory-bank: Memory Bank data (shared volume)
-RUN mkdir -p /workspace /home/claude/.claude /data/memory-bank /scripts && \
+# - /data/tmux-sockets: TMUX socket directory for inter-process communication
+RUN mkdir -p /workspace /home/claude/.claude /data/memory-bank /data/tmux-sockets /scripts && \
+    chmod 0777 /data/tmux-sockets && \
     chown -R claude:claude /workspace /home/claude /data/memory-bank /scripts
 
 # ============================================================================
@@ -110,9 +112,12 @@ RUN test -x /home/claude/.local/bin/claude && \
 # Switch back to root for remaining setup
 USER root
 
-# Copy entrypoint script
+# Copy entrypoint and utility scripts
 COPY docker/worker-entrypoint.sh /scripts/worker-entrypoint.sh
-RUN chmod +x /scripts/worker-entrypoint.sh
+COPY scripts/tmux-send.sh /scripts/tmux-send.sh
+COPY scripts/tmux-attach.sh /scripts/tmux-attach.sh
+COPY scripts/tmux-list-sessions.sh /scripts/tmux-list-sessions.sh
+RUN chmod +x /scripts/*.sh
 
 # Environment variables
 ENV CLAUDE_HOME=/home/claude/.claude
