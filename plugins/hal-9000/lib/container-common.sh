@@ -233,6 +233,48 @@ with open(settings_file, 'w') as f:
 }
 
 # ============================================================================
+# RESOURCE LIMITS
+# ============================================================================
+
+# Add resource limits to docker_args array
+# Usage: add_resource_limits "4g" "2" "100" (memory, cpus, pids-limit)
+#   or   add_resource_limits "" "" "" (skip if empty)
+add_resource_limits() {
+    local memory="$1"
+    local cpus="$2"
+    local pids_limit="$3"
+
+    # Only add if specified (not empty)
+    if [[ -n "$memory" ]]; then
+        docker_args+=(--memory "$memory")
+    fi
+    if [[ -n "$cpus" ]]; then
+        docker_args+=(--cpus "$cpus")
+    fi
+    if [[ -n "$pids_limit" ]]; then
+        docker_args+=(--pids-limit "$pids_limit")
+    fi
+}
+
+# ============================================================================
+# CREDENTIAL WARNINGS
+# ============================================================================
+
+# Warn about API key environment variables visible in docker inspect
+# Usage: warn_credential_visibility
+warn_credential_visibility() {
+    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+        warn "SECURITY: ANTHROPIC_API_KEY via env var - visible in 'docker inspect'"
+        warn "  Prefer credential files in ~/.claude/.credentials.json instead"
+    fi
+
+    if [[ -n "${CHROMADB_API_KEY:-}" ]]; then
+        warn "SECURITY: CHROMADB_API_KEY via env var - visible in 'docker inspect'"
+        warn "  Prefer credential files in ~/.claude/.credentials.json instead"
+    fi
+}
+
+# ============================================================================
 # DOCKER HELPERS
 # ============================================================================
 
@@ -294,5 +336,6 @@ export -f check_container_prerequisites
 export -f acquire_lock release_lock
 export -f get_next_container_slot
 export -f inject_mcp_config
+export -f add_resource_limits warn_credential_visibility
 export -f init_docker_args add_chromadb_env build_tmux_command
 export -f get_other_sessions

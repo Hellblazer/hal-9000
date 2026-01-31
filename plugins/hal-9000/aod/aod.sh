@@ -6,7 +6,14 @@
 # - Launches isolated hal9000 containers per worktree
 # - Manages tmux sessions for easy switching
 #
-# Usage: ./aod.sh [config_file]
+# Usage: ./aod.sh [OPTIONS] [config_file]
+#
+# Options:
+#   --memory SIZE         Memory limit for all containers (default: $AOD_MEMORY)
+#   --cpus N              CPU limit for all containers (default: $AOD_CPUS)
+#   --pids-limit N        Process limit for all containers (default: $AOD_PIDS_LIMIT)
+#   --no-limits           Disable resource limits
+#   -h, --help            Show this help
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -24,6 +31,11 @@ ALLOWED_IMAGES=(
     "ghcr.io/hellblazer/hal-9000:node-v3.0.0"
     "ghcr.io/hellblazer/hal-9000:java-v3.0.0"
 )
+
+# Resource limits (can be overridden via environment or configuration)
+AOD_MEMORY="${AOD_MEMORY:-4g}"
+AOD_CPUS="${AOD_CPUS:-2}"
+AOD_PIDS_LIMIT="${AOD_PIDS_LIMIT:-100}"
 
 # Source shared library for common functions
 # shellcheck source=../lib/container-common.sh
@@ -375,6 +387,9 @@ launch_session() {
     # Ensure memory-bank directory exists
     mkdir -p "$HOME/memory-bank"
 
+    # Warn about credential visibility in environment variables
+    warn_credential_visibility
+
     # Build docker command using array for proper quoting
     # SECURITY: Container runs as non-root user 'claude' (UID 1000)
     # Mount paths must match container user home directory
@@ -396,6 +411,16 @@ launch_session() {
     [[ -n "${CHROMADB_TENANT:-}" ]] && docker_args+=(-e CHROMADB_TENANT)
     [[ -n "${CHROMADB_DATABASE:-}" ]] && docker_args+=(-e CHROMADB_DATABASE)
     [[ -n "${CHROMADB_API_KEY:-}" ]] && docker_args+=(-e CHROMADB_API_KEY)
+
+    # Apply resource limits if enabled
+    if [[ "${APPLY_LIMITS:-true}" == "true" ]]; then
+        docker_args+=(--memory "$AOD_MEMORY")
+        docker_args+=(--cpus "$AOD_CPUS")
+        docker_args+=(--pids-limit "$AOD_PIDS_LIMIT")
+        info "Resource limits: memory=$AOD_MEMORY, cpus=$AOD_CPUS, pids=$AOD_PIDS_LIMIT"
+    else
+        warn "Resource limits disabled"
+    fi
 
     # Add image as last argument
     docker_args+=("$image")
@@ -439,13 +464,55 @@ EOF
     printf '%s\n' "$state_entry" >> "$AOD_DIR/sessions.log"
 }
 
+# Parse global arguments for resource limits
+parse_resource_args() {
+    APPLY_LIMITS=true
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --memory)
+                AOD_MEMORY="$2"
+                shift 2
+                ;;
+            --cpus)
+                AOD_CPUS="$2"
+                shift 2
+                ;;
+            --pids-limit)
+                AOD_PIDS_LIMIT="$2"
+                shift 2
+                ;;
+            --no-limits)
+                APPLY_LIMITS=false
+                shift
+                ;;
+            -h|--help)
+                # Show help (this will be handled by caller if needed)
+                return 1
+                ;;
+            *)
+                # Return remaining args for config file parsing
+                printf '%s\n' "$@"
+                return 0
+                ;;
+        esac
+    done
+}
+
 # Main execution
 main() {
     local config_file="${1:-aod.conf}"
-    
+
     printf "${BLUE}╔════════════════════════════════════════╗${NC}\n"
     printf "${BLUE}║   aod - Multi-Branch Development      ║${NC}\n"
     printf "${BLUE}╚════════════════════════════════════════╝${NC}\n\n"
+
+    # Parse resource limit arguments
+    local remaining_args
+    remaining_args=$(parse_resource_args "$@") || return 1
+    if [[ -n "$remaining_args" ]]; then
+        config_file="$(echo "$remaining_args" | head -1)"
+    fi
 
     check_prerequisites
     init_aod_dir

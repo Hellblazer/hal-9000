@@ -24,6 +24,11 @@ readonly LOCKFILE="$HAL9000_DIR/hal9000.lock"
 # shellcheck source=../lib/container-common.sh
 source "${SCRIPT_DIR}/../lib/container-common.sh"
 
+# Resource limits (can be overridden via environment)
+HAL9000_MEMORY="${HAL9000_MEMORY:-4g}"
+HAL9000_CPUS="${HAL9000_CPUS:-2}"
+HAL9000_PIDS_LIMIT="${HAL9000_PIDS_LIMIT:-100}"
+
 # Cleanup lock on exit (uses release_lock from container-common.sh)
 cleanup_on_exit() {
     release_lock "$LOCKFILE"
@@ -45,6 +50,10 @@ Options for 'run':
   --slot N             Use specific slot number
   --name NAME          Custom session name (default: hal9000-N)
   --detach             Don't attach to session after launch
+  --memory SIZE        Memory limit (default: $HAL9000_MEMORY)
+  --cpus N             CPU limit (default: $HAL9000_CPUS)
+  --pids-limit N       Process limit (default: $HAL9000_PIDS_LIMIT)
+  --no-limits          Disable resource limits
 
 Options for 'squad':
   --sessions N         Number of sessions to launch
@@ -204,6 +213,7 @@ launch_session() {
     local slot="$3"
     local profile="$4"
     local detach="${5:-false}"
+    local apply_limits="${6:-true}"
 
     info "Launching hal9000 session: $session_name (slot $slot)"
 
@@ -263,6 +273,9 @@ launch_session() {
     # Ensure memory-bank directory exists
     mkdir -p "$HOME/memory-bank"
 
+    # Warn about credential visibility in environment variables
+    warn_credential_visibility
+
     # Build docker command using array for proper quoting
     local container_name="hal9000-${session_name}-slot${slot}"
     local -a docker_args=(
@@ -281,6 +294,16 @@ launch_session() {
     [[ -n "${CHROMADB_TENANT:-}" ]] && docker_args+=(-e CHROMADB_TENANT)
     [[ -n "${CHROMADB_DATABASE:-}" ]] && docker_args+=(-e CHROMADB_DATABASE)
     [[ -n "${CHROMADB_API_KEY:-}" ]] && docker_args+=(-e CHROMADB_API_KEY)
+
+    # Apply resource limits if enabled
+    if [[ "$apply_limits" == "true" ]]; then
+        docker_args+=(--memory "$HAL9000_MEMORY")
+        docker_args+=(--cpus "$HAL9000_CPUS")
+        docker_args+=(--pids-limit "$HAL9000_PIDS_LIMIT")
+        info "Resource limits: memory=$HAL9000_MEMORY, cpus=$HAL9000_CPUS, pids=$HAL9000_PIDS_LIMIT"
+    else
+        warn "Resource limits disabled"
+    fi
 
     # Add image as last argument
     docker_args+=("$image")
@@ -368,6 +391,7 @@ cmd_run() {
     local name=""
     local detach="false"
     local work_dir=""
+    local apply_limits="true"
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -387,6 +411,22 @@ cmd_run() {
                 ;;
             --detach|-d)
                 detach="true"
+                shift
+                ;;
+            --memory)
+                HAL9000_MEMORY="$2"
+                shift 2
+                ;;
+            --cpus)
+                HAL9000_CPUS="$2"
+                shift 2
+                ;;
+            --pids-limit)
+                HAL9000_PIDS_LIMIT="$2"
+                shift 2
+                ;;
+            --no-limits)
+                apply_limits="false"
                 shift
                 ;;
             -*)
@@ -421,7 +461,7 @@ cmd_run() {
         die "Session name must contain only alphanumeric characters, underscores, and hyphens"
     fi
 
-    launch_session "$name" "$work_dir" "$slot" "$profile" "$detach"
+    launch_session "$name" "$work_dir" "$slot" "$profile" "$detach" "$apply_limits"
 
     # Release lock after session is launched
     release_lock "$LOCKFILE"
@@ -432,6 +472,7 @@ cmd_squad() {
     local config_file=""
     local num_sessions=""
     local profile=""
+    local apply_limits="true"
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -444,6 +485,22 @@ cmd_squad() {
                 profile="$2"
                 validate_profile "$profile"
                 shift 2
+                ;;
+            --memory)
+                HAL9000_MEMORY="$2"
+                shift 2
+                ;;
+            --cpus)
+                HAL9000_CPUS="$2"
+                shift 2
+                ;;
+            --pids-limit)
+                HAL9000_PIDS_LIMIT="$2"
+                shift 2
+                ;;
+            --no-limits)
+                apply_limits="false"
+                shift
                 ;;
             -*)
                 die "Unknown option: $1"
@@ -478,7 +535,7 @@ cmd_squad() {
             printf "Session $i of $num_sessions\n"
             printf "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n\n"
 
-            launch_session "$session_name" "$work_dir" "$slot" "$profile" "true"
+            launch_session "$session_name" "$work_dir" "$slot" "$profile" "true" "$apply_limits"
             printf "\n"
         done
     elif [[ -n "$config_file" ]]; then
@@ -505,7 +562,7 @@ cmd_squad() {
             printf "Profile: %s\n" "${task_profile:-default}"
             printf "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n\n"
 
-            launch_session "$session_name" "$work_dir" "$slot" "$task_profile" "true"
+            launch_session "$session_name" "$work_dir" "$slot" "$task_profile" "true" "$apply_limits"
             printf "\n"
         done <<< "$tasks"
     else
