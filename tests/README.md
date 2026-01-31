@@ -89,6 +89,11 @@ make test-suite-verbose
 - **Coverage**: Daemon lifecycle, ChromaDB integration, worker pool scaling, performance
 - **Script**: `test-category-08-daemon-pool-management.sh`
 
+### Category 9: Claude Passthrough (PASS-001 to PASS-015)
+- **Tests**: 0 automated, 15 manual/Docker
+- **Coverage**: Plugin management, MCP servers, system commands, slash commands
+- **Script**: `test-category-09-claude-passthrough.sh`
+
 ### Category 10: Error Handling & Edge Cases (ERR-001 to ERR-020)
 - **Tests**: 8 automated, 12 manual/Docker
 - **Coverage**: Missing prerequisites, invalid input, failure modes
@@ -102,7 +107,7 @@ make test-suite-verbose
 ## Test Results Summary
 
 **Automated Tests**: 50 passing, 0 failing
-**Manual/Docker Tests**: 117 documented with clear instructions
+**Manual/Docker Tests**: 132 documented with clear instructions
 **Exit Codes Validated**: All standard codes (0, 1, 2, 3, 4, 5)
 **Error Message Quality**: 100% verify helpful error messages
 
@@ -130,6 +135,7 @@ make test-category-05        # Command-Line Arguments
 make test-category-06        # Environment Variables
 make test-category-07        # Docker Integration
 make test-category-08        # Daemon & Pool Management
+make test-category-09        # Claude Passthrough
 make test-category-10        # Error Handling
 make test-category-12        # Configuration & State Files
 ```
