@@ -176,6 +176,39 @@ verify_claude() {
     log_success "Claude CLI version: $version"
 }
 
+verify_chromadb_connectivity() {
+    log_info "Verifying ChromaDB connectivity..."
+
+    # Try to connect to ChromaDB with retries and exponential backoff
+    local max_attempts=5
+    local attempt=1
+    local wait_time=2  # Start with 2 second wait
+
+    while [[ $attempt -le $max_attempts ]]; do
+        # Use curl to check ChromaDB health endpoint
+        if curl -s -m 5 "http://${CHROMADB_HOST}:${CHROMADB_PORT}/api/v1/heartbeat" >/dev/null 2>&1; then
+            log_success "ChromaDB connectivity verified: http://${CHROMADB_HOST}:${CHROMADB_PORT}"
+            return 0
+        fi
+
+        if [[ $attempt -lt $max_attempts ]]; then
+            log_warn "ChromaDB connection attempt $attempt/$max_attempts failed, retrying in ${wait_time}s..."
+            sleep "$wait_time"
+            # Exponential backoff: 2s, 4s, 8s, 16s
+            wait_time=$((wait_time * 2))
+        fi
+
+        ((attempt++))
+    done
+
+    # ChromaDB not responding - log warning but don't fail
+    # (ChromaDB may start later, chroma-mcp has its own reconnection logic)
+    log_warn "ChromaDB not responding after $max_attempts attempts"
+    log_warn "ChromaDB configuration: host=${CHROMADB_HOST}, port=${CHROMADB_PORT}"
+    log_info "Note: chroma-mcp client will retry automatically when Claude uses ChromaDB"
+    return 1  # Warning, not fatal
+}
+
 verify_mcp_servers() {
     log_info "Verifying foundation MCP servers..."
 
@@ -344,6 +377,7 @@ main() {
     setup_workspace
     verify_claude
     verify_mcp_servers
+    verify_chromadb_connectivity  # Non-fatal: logs warning if ChromaDB unavailable
     init_tmux_sockets_dir
     ensure_session_persistence
 
