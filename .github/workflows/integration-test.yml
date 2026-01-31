@@ -5,13 +5,19 @@ on:
     branches: [ main ]
     paths:
       - 'plugins/hal-9000/**'
+      - 'scripts/build/test-*.sh'
+      - 'scripts/tests/run-*.sh'
       - 'templates/**'
+      - 'Makefile'
       - '.github/workflows/integration-test.yml'
   pull_request:
     branches: [ main ]
     paths:
       - 'plugins/hal-9000/**'
+      - 'scripts/build/test-*.sh'
+      - 'scripts/tests/run-*.sh'
       - 'templates/**'
+      - 'Makefile'
   workflow_dispatch:
 
 jobs:
@@ -123,10 +129,45 @@ jobs:
             exit 1
           fi
 
+  comprehensive-tests:
+    name: Comprehensive Test Suite
+    runs-on: ubuntu-latest
+    needs: quick-smoke-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Phase 1 - Foundation Tests
+        run: |
+          echo "Running Phase 1: Foundation Tests (30 tests)..."
+          bash scripts/build/test-hal9000-unit-extended.sh help
+          bash scripts/build/test-hal9000-unit-extended.sh profile
+          bash scripts/build/test-hal9000-unit-extended.sh session
+          echo "✓ Phase 1 passed"
+
+      - name: Phase 2 - Docker Integration Tests
+        run: |
+          echo "Running Phase 2: Docker Integration Tests (32 tests)..."
+          bash plugins/hal-9000/docker/test-phase2-session-lifecycle.sh
+          echo "✓ Phase 2 passed"
+
+      - name: Phase 3 - Daemon & Performance Tests
+        run: |
+          echo "Running Phase 3: Daemon & Performance Tests (44 tests)..."
+          bash plugins/hal-9000/docker/test-phase3-performance.sh
+          echo "✓ Phase 3 passed"
+
+      - name: Phase 4 - Integration Scenarios
+        run: |
+          echo "Running Phase 4: Integration Scenarios (28 tests)..."
+          bash scripts/tests/run-integration-scenarios.sh
+          echo "✓ Phase 4 passed"
+
   docker-build-test:
     name: Docker Build Test
     runs-on: ubuntu-latest
-    needs: quick-smoke-test
+    needs: [quick-smoke-test, comprehensive-tests]
 
     steps:
       - name: Checkout code
@@ -201,7 +242,7 @@ jobs:
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [quick-smoke-test, docker-build-test]
+    needs: [quick-smoke-test, comprehensive-tests, docker-build-test]
     if: always()
 
     steps:
@@ -216,6 +257,12 @@ jobs:
             echo "✗ Quick Smoke Test: FAILED"
           fi
 
+          if [ "${{ needs.comprehensive-tests.result }}" = "success" ]; then
+            echo "✓ Comprehensive Tests (134 tests): PASSED"
+          else
+            echo "✗ Comprehensive Tests: FAILED"
+          fi
+
           if [ "${{ needs.docker-build-test.result }}" = "success" ]; then
             echo "✓ Docker Build Test: PASSED"
           else
@@ -225,9 +272,10 @@ jobs:
           echo ""
 
           if [ "${{ needs.quick-smoke-test.result }}" != "success" ] || \
+             [ "${{ needs.comprehensive-tests.result }}" != "success" ] || \
              [ "${{ needs.docker-build-test.result }}" != "success" ]; then
             echo "Some tests failed!"
             exit 1
           fi
 
-          echo "All tests passed!"
+          echo "All tests passed (quick-smoke + comprehensive + docker-build)!"
