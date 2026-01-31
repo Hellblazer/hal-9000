@@ -347,7 +347,7 @@ SESSION COMMANDS:
 
 OPTIONS:
   --setup                Interactive setup for API key (first-time setup)
-  --profile PROFILE      Profile: base, python, node, java (default: auto-detect)
+  --profile, -p PROFILE  Profile: base, python, node, java (default: auto-detect)
   --shell, -s            Start bash shell instead of Claude
   --name NAME            Custom session name (default: auto from directory)
   --api-key KEY          Anthropic API key (or set ANTHROPIC_API_KEY env var)
@@ -1505,7 +1505,7 @@ main() {
     # Parse arguments for interactive session mode
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --profile)
+            --profile|-p)
                 profile="$2"
                 shift 2
                 ;;
@@ -1572,6 +1572,18 @@ main() {
         if ! verify_prerequisites; then
             exit 1
         fi
+    fi
+
+    # Validate profile if explicitly provided
+    if [[ -n "$profile" ]]; then
+        case "$profile" in
+            base|python|node|java)
+                # Valid profile
+                ;;
+            *)
+                error "Invalid profile: $profile (must be: base, python, node, java)" 2
+                ;;
+        esac
     fi
 
     if [[ "$verify_only" == "true" ]]; then
