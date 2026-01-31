@@ -51,9 +51,9 @@ ENV TERM=xterm-256color
 # ============================================================================
 
 # Create non-root user for running Claude BEFORE installing user-specific tools
-# UID/GID 1000 matches common host user for volume permissions
-ARG CLAUDE_UID=1000
-ARG CLAUDE_GID=1000
+# UID/GID 1001 (avoiding conflict with node user UID 1000 in base image)
+ARG CLAUDE_UID=1001
+ARG CLAUDE_GID=1001
 
 RUN groupadd -g ${CLAUDE_GID} claude && \
     useradd -u ${CLAUDE_UID} -g claude -m -d /home/claude -s /bin/bash claude
