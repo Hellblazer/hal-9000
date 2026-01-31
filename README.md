@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Container Registry](https://img.shields.io/badge/ghcr.io-hellblazer%2Fhal--9000-blue?logo=docker)](https://github.com/Hellblazer/hal-9000/pkgs/container/hal-9000)
 
-Run Claude Code in isolated Docker containers with Docker-in-Docker orchestration, persistent session state, and full marketplace support.
+Run Claude Code in isolated Docker containers with Docker-in-Docker orchestration, persistent storage, and full marketplace support.
 
 ## Quick Start
 
@@ -192,9 +192,10 @@ graph LR
 
 **Session Management:**
 - Each worker runs independent TMUX session with Claude in window 0, shell in window 1
-- Sessions survive detach/attach cycles (TMUX handles persistence)
+- Sessions survive detach/attach cycles while parent runs (TMUX maintains active state)
+- For cross-session persistence, use Memory Bank MCP to save work before stopping containers
 - Coordinator monitors worker lifecycle and socket health
-- Session state lives in TMUX (no file-based race conditions)
+- Session state lives in TMUX process (no file-based race conditions)
 
 ## Requirements
 
@@ -216,15 +217,24 @@ hal-9000 /login    # Login once, persists in shared volume
 export ANTHROPIC_API_KEY=sk-ant-api03-...
 ```
 
-### Session State Persistence
+### Persistent Storage
 
-hal-9000 maintains state across container instances using shared volumes:
+hal-9000 uses shared volumes for data that persists across container restarts:
 
 - **`hal9000-claude-home`** - Marketplace plugins, credentials, MCP configurations
 - **`hal9000-claude-session`** - Authentication tokens, session settings
-- **`hal9000-memory-bank`** - Cross-session persistent memory
+- **`hal9000-memory-bank`** - Cross-session persistent memory (use Memory Bank MCP)
 
-Set up MCP servers once—credentials and configurations persist across all sessions automatically.
+**What persists:**
+- ✅ Plugins, credentials, MCP configurations (volume storage)
+- ✅ ChromaDB data, Memory Bank files (volume storage)
+- ✅ Active Claude session while parent runs (TMUX process)
+
+**What doesn't persist:**
+- ❌ Claude conversation state when worker container stops
+- ❌ In-memory data not saved to Memory Bank MCP
+
+Set up MCP servers once—configurations persist. Use Memory Bank MCP to preserve work across container restarts.
 
 ### Profiles
 
