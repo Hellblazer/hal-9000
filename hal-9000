@@ -94,8 +94,10 @@ load_config() {
                 export CONTAINER_IMAGE_BASE="$value"
                 ;;
             *)
-                # Silently ignore unknown variables - do not execute arbitrary code
-                :
+                # SECURITY: Log warning for unknown config variables
+                # Helps detect typos or accidental configuration changes
+                # Known variables: CONTAINER_IMAGE_BASE
+                warn "Config: Unknown variable '$key' in $HAL9000_CONFIG_FILE (ignored for security)"
                 ;;
         esac
     done < "$HAL9000_CONFIG_FILE"
