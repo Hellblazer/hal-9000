@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# show-workers.sh - Display HAL-9000 worker status with tmux integration
+# show-workers.sh - Display HAL-9000 worker status with TMUX socket tracking
 #
 # Shows active workers with:
 # - Container status (running, memory, CPU)
-# - tmux window assignment
+# - TMUX socket health (✓ healthy, ⚠ stale, ○ missing)
 # - Session metadata
 # - Resource usage
+# - Coordinator status
 #
 # Usage:
 #   show-workers.sh              # Full status view
@@ -31,6 +32,30 @@ SESSION_NAME="${SESSION_NAME:-hal9000}"
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
+
+# ============================================================================
+# SOCKET-BASED ARCHITECTURE (NEW)
+# ============================================================================
+
+TMUX_SOCKET_DIR="${TMUX_SOCKET_DIR:-/data/tmux-sockets}"
+
+worker_has_socket() {
+    local worker_name="$1"
+    local socket="$TMUX_SOCKET_DIR/worker-${worker_name}.sock"
+    [[ -e "$socket" ]]
+}
+
+worker_socket_healthy() {
+    local worker_name="$1"
+    local socket="$TMUX_SOCKET_DIR/worker-${worker_name}.sock"
+
+    if [[ ! -e "$socket" ]]; then
+        return 1
+    fi
+
+    # Check if TMUX can access the socket
+    tmux -S "$socket" list-sessions >/dev/null 2>&1
+}
 
 get_tmux_windows() {
     tmux -L "$TMUX_SOCKET" list-windows -t "$SESSION_NAME" 2>/dev/null \
@@ -111,7 +136,7 @@ show_workers_table() {
 
     # Table header
     printf "${BOLD}  %-35s  %-8s  %-10s  %-8s  %-6s${NC}\n" \
-        "WORKER" "STATUS" "UPTIME" "MEMORY" "WINDOW"
+        "WORKER" "STATUS" "UPTIME" "MEMORY" "SOCKET"
     printf "  %-35s  %-8s  %-10s  %-8s  %-6s\n" \
         "───────────────────────────────────" "────────" "──────────" "────────" "──────"
 
@@ -142,10 +167,14 @@ show_workers_table() {
         local memory="N/A"
         memory=$(docker stats --no-stream --format "{{.MemUsage}}" "$worker" 2>/dev/null | cut -d'/' -f1 | tr -d ' ') || memory="N/A"
 
-        # Check tmux window
-        local window_indicator="${RED}○${NC}"
-        if worker_has_window "$worker"; then
-            window_indicator="${GREEN}●${NC}"
+        # Check TMUX socket health (new socket-based architecture)
+        local socket_indicator="${RED}○${NC}"
+        if worker_has_socket "$worker"; then
+            if worker_socket_healthy "$worker"; then
+                socket_indicator="${GREEN}✓${NC}"
+            else
+                socket_indicator="${YELLOW}⚠${NC}"
+            fi
         fi
 
         # Status color
@@ -169,18 +198,22 @@ show_workers_table() {
         fi
 
         printf "  %-35s  %-17s  %-10s  %-8s  %s\n" \
-            "$short_name" "$status_display" "$uptime" "$memory" "$window_indicator"
+            "$short_name" "$status_display" "$uptime" "$memory" "$socket_indicator"
     done <<< "$workers"
 }
 
 show_footer() {
     echo
     printf "${BOLD}  Quick Actions:${NC}\n"
-    printf "    ${CYAN}attach-worker.sh <name>${NC}  - Attach to worker in tmux\n"
-    printf "    ${CYAN}coordinator.sh stop <name>${NC} - Stop a worker\n"
-    printf "    ${CYAN}spawn-worker.sh${NC}          - Create new worker\n"
+    printf "    ${CYAN}attach-worker.sh <name>${NC}        - Attach to worker's TMUX session\n"
+    printf "    ${CYAN}attach-worker.sh <name> shell${NC} - Attach to shell window\n"
+    printf "    ${CYAN}coordinator.sh stop <name>${NC}    - Stop a worker\n"
+    printf "    ${CYAN}spawn-worker.sh${NC}               - Create new worker\n"
     echo
-    printf "  ${BOLD}tmux Keys:${NC} ${MAGENTA}Ctrl-B w${NC}=spawn  ${MAGENTA}Ctrl-B n/p${NC}=next/prev  ${MAGENTA}Ctrl-B 1-9${NC}=window\n"
+    printf "  ${BOLD}Socket Indicators:${NC}\n"
+    printf "    ${GREEN}✓${NC} = Socket healthy  ${YELLOW}⚠${NC} = Socket stale  ${RED}○${NC} = Socket missing\n"
+    echo
+    printf "  ${BOLD}TMUX Keys:${NC} ${MAGENTA}Ctrl-B d${NC}=detach  ${MAGENTA}Ctrl-B n/p${NC}=next/prev  ${MAGENTA}Ctrl-B ,${NC}=rename\n"
     echo
 }
 
@@ -200,13 +233,27 @@ show_compact() {
         parent_status="●"
     fi
 
-    printf "HAL-9000: parent=%s workers=%d" "$parent_status" "$worker_count"
+    local coordinator_status="○"
+    if [[ -d "$TMUX_SOCKET_DIR" ]] && [[ -n "$(ls -A "$TMUX_SOCKET_DIR"/parent.sock 2>/dev/null)" ]]; then
+        coordinator_status="●"
+    fi
+
+    printf "HAL-9000: parent=%s coordinator=%s workers=%d" "$parent_status" "$coordinator_status" "$worker_count"
 
     if [[ $worker_count -gt 0 ]]; then
         printf " ["
         docker ps --filter "name=hal9000-worker" --format "{{.Names}}" 2>/dev/null \
             | while IFS= read -r w; do
-                printf "%s " "${w#hal9000-worker-}"
+                # Add socket health indicator
+                if worker_has_socket "$w"; then
+                    if worker_socket_healthy "$w"; then
+                        printf "${GREEN}✓${NC}%s " "${w#hal9000-worker-}"
+                    else
+                        printf "${YELLOW}⚠${NC}%s " "${w#hal9000-worker-}"
+                    fi
+                else
+                    printf "${RED}○${NC}%s " "${w#hal9000-worker-}"
+                fi
             done
         printf "\b]"
     fi
@@ -221,8 +268,15 @@ show_json() {
 
     if [[ -n "$workers" ]]; then
         workers_json=$(echo "$workers" | while IFS= read -r worker; do
-            local has_window=false
-            worker_has_window "$worker" && has_window=true
+            local has_socket=false
+            local socket_healthy=false
+
+            if worker_has_socket "$worker"; then
+                has_socket=true
+                if worker_socket_healthy "$worker"; then
+                    socket_healthy=true
+                fi
+            fi
 
             local session_data="{}"
             local session_file="${HAL9000_HOME:-/root/.hal9000}/sessions/${worker}.json"
@@ -230,13 +284,16 @@ show_json() {
                 session_data=$(cat "$session_file")
             fi
 
-            docker inspect "$worker" 2>/dev/null | jq --arg name "$worker" --arg window "$has_window" --argjson session "$session_data" '
+            docker inspect "$worker" 2>/dev/null | jq --arg name "$worker" --arg socket "$has_socket" --arg healthy "$socket_healthy" --argjson session "$session_data" '
                 .[0] | {
                     name: $name,
                     status: .State.Status,
                     started: .State.StartedAt,
                     image: .Config.Image,
-                    tmux_window: ($window == "true"),
+                    tmux_socket: {
+                        exists: ($socket == "true"),
+                        healthy: ($healthy == "true")
+                    },
                     session: $session
                 }
             '
@@ -246,21 +303,21 @@ show_json() {
     local parent_running=false
     docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^hal9000-parent$" && parent_running=true
 
-    local tmux_session=false
-    tmux -L "$TMUX_SOCKET" has-session -t "$SESSION_NAME" 2>/dev/null && tmux_session=true
+    local coordinator_active=false
+    if [[ -d "$TMUX_SOCKET_DIR" ]] && [[ -n "$(ls -A "$TMUX_SOCKET_DIR"/parent.sock 2>/dev/null)" ]]; then
+        coordinator_active=true
+    fi
 
     jq -n \
         --argjson workers "$workers_json" \
         --argjson parent "$parent_running" \
-        --argjson tmux "$tmux_session" \
-        --arg socket "$TMUX_SOCKET" \
-        --arg session "$SESSION_NAME" \
+        --argjson coordinator "$coordinator_active" \
+        --arg socket_dir "$TMUX_SOCKET_DIR" \
         '{
             parent_running: $parent,
-            tmux: {
-                active: $tmux,
-                socket: $socket,
-                session: $session
+            coordinator: {
+                active: $coordinator,
+                socket_dir: $socket_dir
             },
             worker_count: ($workers | length),
             workers: $workers
@@ -269,7 +326,7 @@ show_json() {
 
 show_help() {
     cat <<EOF
-Show HAL-9000 Worker Status
+Show HAL-9000 Worker Status (Socket-Based Architecture)
 
 Usage: show-workers.sh [options]
 
@@ -285,9 +342,18 @@ Examples:
   show-workers.sh -w        # Live updating view
   show-workers.sh -j | jq   # JSON for scripting
 
+Socket Indicators:
+  ✓  = TMUX socket exists and healthy
+  ⚠  = TMUX socket exists but stale
+  ○  = TMUX socket not found (session not ready)
+
+Architecture:
+  Each worker has independent TMUX server via socket in /data/tmux-sockets
+  Coordinator monitors workers and maintains socket registry
+  Socket health indicates worker session readiness
+
 Environment:
-  TMUX_SOCKET     tmux socket name (default: hal9000)
-  SESSION_NAME    tmux session name (default: hal9000)
+  TMUX_SOCKET_DIR   Socket directory (default: /data/tmux-sockets)
 EOF
 }
 
