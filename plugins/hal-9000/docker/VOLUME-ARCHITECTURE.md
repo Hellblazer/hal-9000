@@ -2,6 +2,16 @@
 
 This document describes the volume and storage architecture for the HAL-9000 Docker-in-Docker system, enabling data sharing between parent and worker containers.
 
+## Security: Per-User Volume Isolation
+
+**IMPORTANT**: As of v3.0.0, all user-facing volumes are isolated per-user to prevent cross-user attacks:
+- Malicious plugin installation affecting other users
+- Memory bank poisoning across users
+- Session state tampering
+- Credential theft
+
+Volume naming follows the pattern: `hal9000-<type>-<user_hash>` where `<user_hash>` is an 8-character SHA-256 hash of the username/UID.
+
 ## Overview
 
 ```mermaid
@@ -9,13 +19,18 @@ graph TB
     subgraph Host["Host Machine"]
         subgraph HostDirs["Host Directories"]
             HAL["~/.hal9000/<br/>config, sessions, logs"]
-            CLAUDE["~/.claude/<br/>settings, credentials"]
+            USERDIRS["~/.hal9000/users/<hash>/<br/>user-isolated data"]
         end
 
-        subgraph DockerVols["Docker Volumes"]
-            V1["hal9000-chromadb"]
-            V2["hal9000-memory-bank"]
-            V3["hal9000-claude-home"]
+        subgraph DockerVols["Docker Volumes (User-Isolated)"]
+            V1["hal9000-chromadb (shared)"]
+            V2["hal9000-memory-bank-<hash>"]
+            V3["hal9000-claude-home-<hash>"]
+            V4["hal9000-tmux-sockets-<hash>"]
+        end
+
+        subgraph SharedVols["Docker Volumes (Shared Read-Only)"]
+            V5["hal9000-base-plugins (ro)"]
         end
     end
 
@@ -25,24 +40,24 @@ graph TB
             P2["/data/chromadb<br/>(server)"]
         end
 
-        subgraph W1["Worker 1"]
-            W1C["/root/.claude"]
+        subgraph W1["Worker 1 (User A)"]
+            W1C["/home/claude/.claude"]
             W1D["/data/memory-bank"]
             W1W["/workspace"]
         end
 
-        subgraph W2["Worker 2"]
-            W2C["/root/.claude"]
+        subgraph W2["Worker 2 (User B)"]
+            W2C["/home/claude/.claude"]
             W2D["/data/memory-bank"]
             W2W["/workspace"]
         end
     end
 
     V1 --> P2
-    V2 --> W1D
-    V2 --> W2D
-    V3 --> W1C
-    V3 --> W2C
+    V2 -.->|"User A only"| W1D
+    V3 -.->|"User A only"| W1C
+    V5 -->|"read-only"| W1C
+    V5 -->|"read-only"| W2C
 ```
 
 ## Directory Structure
@@ -62,12 +77,24 @@ graph TB
 
 ### Docker Named Volumes
 
-| Volume | Purpose | Default Mount |
-|--------|---------|---------------|
-| `hal9000-chromadb` | Shared ChromaDB storage | `/data/chromadb` |
-| `hal9000-memorybank` | Shared Memory Bank | `/data/membank` |
-| `hal9000-plugins` | Marketplace plugins | `/data/plugins` |
-| `hal9000-claude-{worker}` | Per-worker Claude state | `/root/.claude` |
+#### User-Isolated Volumes (per-user, hash-suffixed)
+
+| Volume Pattern | Purpose | Default Mount |
+|----------------|---------|---------------|
+| `hal9000-claude-home-<hash>` | User's Claude config, plugins, credentials | `/home/claude/.claude` |
+| `hal9000-memory-bank-<hash>` | User's Memory Bank data | `/data/memory-bank` |
+| `hal9000-tmux-sockets-<hash>` | User's TMUX sockets | `/data/tmux-sockets` |
+| `hal9000-coordinator-state-<hash>` | User's coordinator state | `/data/coordinator-state` |
+| `hal9000-claude-session-<hash>` | User's session state | `/root/.claude-session` |
+
+Where `<hash>` is an 8-character SHA-256 hash of the username/UID.
+
+#### Shared Volumes (all users)
+
+| Volume | Purpose | Mount Mode |
+|--------|---------|------------|
+| `hal9000-chromadb` | Shared ChromaDB storage (tenant-isolated) | read-write |
+| `hal9000-base-plugins` | Core plugins (foundation MCP servers) | **read-only** |
 
 ## Volume Categories
 
@@ -306,6 +333,28 @@ Workers connect to parent's ChromaDB server via HTTP:
 
 ## Security Considerations
 
+### Per-User Volume Isolation
+
+As of v3.0.0, volumes are isolated per-user using an 8-character hash of the username/UID:
+
+```bash
+# User "alice" gets volumes like:
+hal9000-claude-home-a1b2c3d4
+hal9000-memory-bank-a1b2c3d4
+hal9000-tmux-sockets-a1b2c3d4
+
+# User "bob" gets separate volumes:
+hal9000-claude-home-e5f6g7h8
+hal9000-memory-bank-e5f6g7h8
+hal9000-tmux-sockets-e5f6g7h8
+```
+
+This prevents:
+- **Malicious plugin attacks**: User A installing malicious plugins that execute in User B's sessions
+- **Memory bank poisoning**: User A modifying User B's memory bank to inject false context
+- **TMUX hijacking**: User A attaching to or controlling User B's TMUX sessions
+- **Credential theft**: User A accessing User B's API keys or auth tokens
+
 ### Volume Permissions
 
 ```bash
@@ -313,21 +362,24 @@ Workers connect to parent's ChromaDB server via HTTP:
 chmod 700 ~/.hal9000
 chmod 600 ~/.hal9000/config/hal9000.conf
 
-# Credentials need protection
-chmod 600 ~/.hal9000/workers/*/.*
+# User-isolated directories are restricted
+chmod 700 ~/.hal9000/users/<hash>/claude
+chmod 700 ~/.hal9000/users/<hash>/tmux-sockets
 ```
 
 ### Secrets Management
 
-- API keys stored in environment variables, not files
-- Credentials copied at worker spawn time
+- API keys stored in secret files, NOT environment variables
+- Secret files mounted read-only into containers
+- Credentials isolated per-user in separate volumes
 - No secrets in shared volumes
 
-### Isolation
+### Isolation Layers
 
-- Workers can't access parent's orchestration data
-- Workers can't access other workers' Claude configs
-- Shared data (ChromaDB, Memory Bank) is intentionally shared
+1. **User-level**: Each user gets isolated volumes (hash-suffixed)
+2. **Worker-level**: Each worker gets its own ChromaDB tenant
+3. **Container-level**: Workers run as non-root user 'claude' (UID 1001)
+4. **Network-level**: Workers use bridge network (not shared namespace)
 
 ## Troubleshooting
 
@@ -380,15 +432,32 @@ docker restart worker-name
 ## Volume Mount Summary
 
 ```bash
-# Full worker spawn with all volumes
+# User hash is computed from $USER or UID
+USER_HASH=$(echo -n "$USER" | sha256sum | cut -c1-8)
+
+# Full worker spawn with user-isolated volumes
 docker run -d --rm \
     --name hal9000-worker-$NAME \
-    --network container:hal9000-parent \
-    -v hal9000-claude-$NAME:/root/.claude \
+    --network bridge \
+    -v hal9000-claude-home-$USER_HASH:/home/claude/.claude \
+    -v hal9000-memory-bank-$USER_HASH:/data/memory-bank \
+    -v hal9000-tmux-sockets-$USER_HASH:/data/tmux-sockets \
+    -v hal9000-coordinator-state-$USER_HASH:/data/coordinator-state \
+    -v hal9000-base-plugins:/home/claude/.claude/base-plugins:ro \
     -v hal9000-chromadb:/data/chromadb \
-    -v hal9000-memorybank:/data/membank \
-    -v hal9000-plugins:/data/plugins \
     -v /path/to/project:/workspace \
-    -e ANTHROPIC_API_KEY \
+    -v /run/secrets/anthropic_key:/run/secrets/anthropic_key:ro \
+    -e CHROMA_TENANT=$NAME \
+    -e HAL9000_USER_HASH=$USER_HASH \
     ghcr.io/hellblazer/hal-9000:worker
+```
+
+### Volume Isolation Verification
+
+```bash
+# Verify user can only see their own volumes
+docker volume ls | grep "hal9000.*-$(echo -n "$USER" | sha256sum | cut -c1-8)"
+
+# Check no cross-user volume access
+docker exec worker-name ls /data/memory-bank  # Only sees own data
 ```

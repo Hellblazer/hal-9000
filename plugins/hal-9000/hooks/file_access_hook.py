@@ -27,6 +27,19 @@ import signal
 import sys
 from pathlib import Path
 
+# Import security audit logging (graceful degradation if unavailable)
+try:
+    from security_audit import (
+        audit_hook_deny,
+        audit_hook_timeout,
+        audit_hook_error,
+        audit_secret_access_attempt,
+        audit_symlink_bypass_attempt,
+    )
+    SECURITY_AUDIT_AVAILABLE = True
+except ImportError:
+    SECURITY_AUDIT_AVAILABLE = False
+
 
 # ============================================================================
 # CONFIGURATION
@@ -133,7 +146,11 @@ def is_sensitive_file(file_path: str) -> tuple[bool, str | None]:
     ]
 
     # Only add resolved path if it's different from original
-    if original_path == resolved_path:
+    # If paths differ, log potential symlink bypass attempt
+    if original_path != resolved_path:
+        if SECURITY_AUDIT_AVAILABLE:
+            audit_symlink_bypass_attempt(original_path, resolved_path)
+    else:
         paths_to_check = [(original_path, "path")]
 
     for path, path_type in paths_to_check:
@@ -183,6 +200,11 @@ def check_file_access(data: dict) -> tuple[str, str | None]:
     is_sensitive, reason = is_sensitive_file(file_path)
 
     if is_sensitive:
+        # Log security event: sensitive file access denied
+        if SECURITY_AUDIT_AVAILABLE:
+            audit_hook_deny(tool_name, file_path, reason or "sensitive file")
+            audit_secret_access_attempt(tool_name, file_path)
+
         full_reason = (
             f"{reason}\n\n"
             "This hook prevents access to sensitive files that may contain:\n"
@@ -234,6 +256,10 @@ def main():
         sys.exit(0)
 
     except TimeoutError:
+        # Log security event: timeout
+        if SECURITY_AUDIT_AVAILABLE:
+            audit_hook_timeout('file_access', HOOK_TIMEOUT)
+
         # FAIL-CLOSED: Timeout means DENY
         print(json.dumps({
             "hookSpecificOutput": {
@@ -253,6 +279,10 @@ def main():
         sys.exit(0)
 
     except json.JSONDecodeError as e:
+        # Log security event: parse error
+        if SECURITY_AUDIT_AVAILABLE:
+            audit_hook_error('file_access', f'JSON parse error: {e}')
+
         # FAIL-CLOSED: Invalid input means DENY
         print(json.dumps({
             "hookSpecificOutput": {
@@ -267,6 +297,10 @@ def main():
         sys.exit(0)
 
     except Exception as e:
+        # Log security event: unexpected error
+        if SECURITY_AUDIT_AVAILABLE:
+            audit_hook_error('file_access', str(e))
+
         # FAIL-CLOSED: Any unexpected error means DENY
         print(json.dumps({
             "hookSpecificOutput": {

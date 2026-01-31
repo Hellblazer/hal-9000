@@ -8,9 +8,43 @@ Seccomp is a Linux kernel security feature that restricts which system calls a p
 
 ## Profiles
 
-### `hal9000-base.json` - Production Profile
+### `hal9000.json` - Enforcing Profile (RECOMMENDED)
 
-Restrictive seccomp profile for HAL-9000 worker containers.
+The primary enforcing seccomp profile for HAL-9000 worker containers. Uses an **allow-by-default** approach with explicit blocks for dangerous syscalls.
+
+**Design Philosophy:**
+- Default action: `SCMP_ACT_ALLOW` (allow syscalls by default)
+- Dangerous syscalls explicitly blocked with `SCMP_ACT_ERRNO` (returns EPERM)
+- Minimal configuration, maximum compatibility
+
+**Blocks dangerous syscalls (with EPERM):**
+- Container escape vectors: `mount`, `umount`, `pivot_root`, `setns`, `unshare`
+- Process tracing: `ptrace`, `process_vm_readv`, `process_vm_writev`
+- Kernel operations: `kexec_load`, `init_module`, `delete_module`, `bpf`
+- System configuration: `reboot`, `sethostname`, `setdomainname`
+- Time manipulation: `clock_settime`, `settimeofday`
+- Swap management: `swapon`, `swapoff`
+- I/O port access: `ioperm`, `iopl`
+
+**Key difference from Docker's default:**
+- Explicitly blocks `bpf` (eBPF programs can be used for rootkits)
+- Blocks `setns` (primary container escape vector)
+- More restrictive on namespace manipulation
+
+**Usage:**
+```bash
+# Automatically applied when starting workers via hal-9000
+hal-9000 daemon start  # Initializes profile at ~/.hal9000/seccomp/hal9000.json
+hal-9000 /path/to/project
+
+# Or manually with Docker
+docker run --security-opt seccomp=/path/to/hal9000.json \
+  ghcr.io/hellblazer/hal-9000:worker
+```
+
+### `hal9000-base.json` - Allowlist Profile (Maximum Security)
+
+Restrictive seccomp profile using a **deny-by-default** approach with explicit allowlist of safe syscalls.
 
 **Blocks dangerous syscalls:**
 - Kernel module operations (`init_module`, `delete_module`, `finit_module`)
@@ -90,9 +124,28 @@ docker run --security-opt seccomp=unconfined \
 
 ### Testing Workflow
 
-1. **Start with audit mode:**
+Use the `test-seccomp.sh` script to validate profiles:
+
+```bash
+cd plugins/hal-9000/seccomp
+
+# Test audit mode (logs violations but allows them)
+./test-seccomp.sh audit
+
+# Test enforcing mode (RECOMMENDED - blocks dangerous syscalls)
+./test-seccomp.sh enforce
+
+# Test base mode (deny-by-default allowlist)
+./test-seccomp.sh base
+```
+
+**Manual Testing:**
+
+1. **Start with audit mode to identify syscall usage:**
    ```bash
-   HAL9000_SECCOMP_MODE=audit hal-9000 /tmp/test-project
+   # Run container with audit profile
+   docker run --security-opt seccomp=./hal9000-audit.json \
+     ghcr.io/hellblazer/hal-9000:worker
    ```
 
 2. **Run typical Claude CLI operations:**
@@ -110,16 +163,18 @@ docker run --security-opt seccomp=unconfined \
    docker logs <container-id> 2>&1 | grep -i seccomp
    ```
 
-4. **Verify no critical syscalls blocked:**
-   - If operations fail, check which syscalls were blocked
-   - Add necessary syscalls to allowlist if legitimate
-   - Keep dangerous syscalls blocked
-
-5. **Switch to production mode:**
+4. **Switch to enforcing mode:**
    ```bash
-   # Remove audit mode env var
-   unset HAL9000_SECCOMP_MODE
-   hal-9000 /tmp/test-project
+   # Use the primary enforcing profile
+   docker run --security-opt seccomp=./hal9000.json \
+     ghcr.io/hellblazer/hal-9000:worker
+   ```
+
+5. **Verify dangerous syscalls are blocked:**
+   ```bash
+   # This should fail with EPERM
+   docker run --security-opt seccomp=./hal9000.json \
+     --cap-add=SYS_ADMIN alpine mount -t tmpfs tmpfs /mnt
    ```
 
 ## Security Benefits

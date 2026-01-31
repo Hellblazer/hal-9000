@@ -7,6 +7,13 @@ import json
 import sys
 import os
 
+# Import security audit logging (graceful degradation if unavailable)
+try:
+    from security_audit import audit_command_blocked
+    SECURITY_AUDIT_AVAILABLE = True
+except ImportError:
+    SECURITY_AUDIT_AVAILABLE = False
+
 # Add hooks directory to Python path so we can import the other modules
 PLUGIN_ROOT = os.environ.get('CLAUDE_PLUGIN_ROOT')
 if PLUGIN_ROOT:
@@ -79,6 +86,10 @@ def main():
             combined_reason = "Multiple safety checks failed:\n\n"
             for i, reason in enumerate(block_reasons, 1):
                 combined_reason += f"{i}. {reason}\n\n"
+
+        # Log security event: command blocked
+        if SECURITY_AUDIT_AVAILABLE:
+            audit_command_blocked(command, combined_reason[:100])
 
         print(json.dumps({
             "hookSpecificOutput": {

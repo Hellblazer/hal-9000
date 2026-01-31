@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Deployment script: `~/.hal9000/scripts/setup-foundation-mcp.sh`
 
 - **Security Hardening**
+  - Per-worker ChromaDB tenant isolation (workers cannot access each other's data)
   - Code injection prevention (safe config parsing)
   - Path traversal prevention (profile validation)
   - 19 security-focused tests

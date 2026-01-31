@@ -15,10 +15,13 @@ readonly PARENT_IMAGE="ghcr.io/hellblazer/hal-9000:parent"
 readonly DEFAULT_PROFILE="base"
 readonly DEFAULT_CONTAINER_IMAGE_BASE="ghcr.io/hellblazer/hal-9000"
 
-# Shared Docker volumes for CLAUDE_HOME and session state - all workers share these
-readonly CLAUDE_HOME_VOLUME="hal9000-claude-home"
-readonly CLAUDE_SESSION_VOLUME="hal9000-claude-session"
-readonly MEMORY_BANK_VOLUME="hal9000-memory-bank"
+# Base volume names (will be suffixed with user hash for isolation)
+readonly CLAUDE_HOME_VOLUME_BASE="hal9000-claude-home"
+readonly CLAUDE_SESSION_VOLUME_BASE="hal9000-claude-session"
+readonly MEMORY_BANK_VOLUME_BASE="hal9000-memory-bank"
+
+# Cached user hash for consistent volume naming within a session
+_CACHED_USER_HASH=""
 
 # Claude subcommands that should be passed through to container
 readonly CLAUDE_SUBCOMMANDS="mcp|plugin|doctor|install|setup-token|update"
@@ -133,6 +136,66 @@ store_api_key_secret() {
     chmod 400 "$secret_file"
 }
 
+# Initialize seccomp profile on host filesystem
+# Docker requires the seccomp profile to be on the HOST before container starts
+# This copies the profile from the plugin directory to HAL9000_HOME
+init_seccomp_profile() {
+    local seccomp_dir="${HAL9000_HOME}/seccomp"
+    local seccomp_profile="${seccomp_dir}/hal9000.json"
+
+    # Source profile location (bundled with hal-9000)
+    # Try multiple locations for the source profile
+    local source_profile=""
+    local search_paths=(
+        "${HAL9000_HOME}/../hal-9000/plugins/hal-9000/seccomp/hal9000.json"
+        "/opt/hal-9000/seccomp/hal9000.json"
+        "$(dirname "${BASH_SOURCE[0]}")/plugins/hal-9000/seccomp/hal9000.json"
+    )
+
+    for path in "${search_paths[@]}"; do
+        if [[ -f "$path" ]]; then
+            source_profile="$path"
+            break
+        fi
+    done
+
+    # Create seccomp directory
+    mkdir -p "$seccomp_dir"
+    chmod 755 "$seccomp_dir"
+
+    if [[ -n "$source_profile" ]]; then
+        # Copy profile to HAL9000_HOME
+        cp "$source_profile" "$seccomp_profile"
+        chmod 644 "$seccomp_profile"
+        success "Seccomp profile initialized: $seccomp_profile"
+    elif [[ ! -f "$seccomp_profile" ]]; then
+        # Create a minimal enforcing profile if source not found
+        warn "Seccomp source profile not found, creating minimal profile"
+        cat > "$seccomp_profile" << 'SECCOMP_EOF'
+{
+  "defaultAction": "SCMP_ACT_ALLOW",
+  "archMap": [
+    {"architecture": "SCMP_ARCH_X86_64", "subArchitectures": ["SCMP_ARCH_X86", "SCMP_ARCH_X32"]},
+    {"architecture": "SCMP_ARCH_AARCH64", "subArchitectures": ["SCMP_ARCH_ARM"]}
+  ],
+  "syscalls": [
+    {"names": ["mount", "umount", "umount2", "pivot_root"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1},
+    {"names": ["ptrace", "process_vm_readv", "process_vm_writev"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1},
+    {"names": ["setns", "unshare"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1},
+    {"names": ["kexec_load", "kexec_file_load"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1},
+    {"names": ["init_module", "finit_module", "delete_module"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1},
+    {"names": ["bpf"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1},
+    {"names": ["reboot", "sethostname", "setdomainname"], "action": "SCMP_ACT_ERRNO", "errnoRet": 1}
+  ]
+}
+SECCOMP_EOF
+        chmod 644 "$seccomp_profile"
+        success "Minimal seccomp profile created: $seccomp_profile"
+    else
+        info "Seccomp profile already exists: $seccomp_profile"
+    fi
+}
+
 # Get path to API key secret file (if it exists)
 # Returns: path to secret file, or empty if not available
 get_api_key_secret_path() {
@@ -151,6 +214,78 @@ has_api_key() {
         return 0
     fi
     return 1
+}
+
+#==============================================================================
+# User identity and volume isolation
+#==============================================================================
+
+# SECURITY: Per-user volume isolation
+# Each user gets their own isolated volumes to prevent cross-user attacks:
+# - Malicious plugin installation affecting other users
+# - Memory bank poisoning across users
+# - Session state tampering
+
+# Generate user hash for volume isolation
+# Uses $USER if available, falls back to UID for containerized environments
+generate_user_hash() {
+    local user_id
+
+    # Prefer $USER environment variable (human-readable, stable across sessions)
+    if [[ -n "${USER:-}" ]]; then
+        user_id="$USER"
+    # Fall back to username from id command
+    elif user_id=$(id -un 2>/dev/null); then
+        : # user_id already set
+    # Last resort: use numeric UID
+    else
+        user_id="uid-$(id -u 2>/dev/null || echo "unknown")"
+    fi
+
+    # Generate 8-character hash for volume naming
+    # SHA-256 ensures consistent, collision-resistant hash
+    if command -v sha256sum &>/dev/null; then
+        echo -n "$user_id" | sha256sum | cut -c1-8
+    elif command -v shasum &>/dev/null; then
+        # macOS uses shasum instead of sha256sum
+        echo -n "$user_id" | shasum -a 256 | cut -c1-8
+    else
+        # Fallback: use first 8 chars of user_id
+        echo "${user_id:0:8}"
+    fi
+}
+
+# Get cached user hash (computed once, reused for consistency)
+get_user_hash() {
+    if [[ -z "$_CACHED_USER_HASH" ]]; then
+        _CACHED_USER_HASH=$(generate_user_hash)
+    fi
+    echo "$_CACHED_USER_HASH"
+}
+
+# Get user-scoped volume name
+# Usage: get_user_volume <base-name>
+# Example: get_user_volume "claude-home" -> "hal9000-claude-home-a1b2c3d4"
+get_user_volume() {
+    local base_name="$1"
+    local user_hash
+    user_hash=$(get_user_hash)
+    echo "hal9000-${base_name}-${user_hash}"
+}
+
+# Get user-scoped CLAUDE_HOME volume name
+get_claude_home_volume() {
+    get_user_volume "claude-home"
+}
+
+# Get user-scoped session volume name
+get_claude_session_volume() {
+    get_user_volume "claude-session"
+}
+
+# Get user-scoped memory bank volume name
+get_memory_bank_volume() {
+    get_user_volume "memory-bank"
 }
 
 # Get container image base with precedence: env var > config file > default
@@ -251,17 +386,29 @@ list_local_profiles() {
 # Claude command passthrough
 #==============================================================================
 
-# Ensure shared volumes exist
+# Ensure user-scoped volumes exist
 ensure_volumes() {
-    docker volume create "$CLAUDE_HOME_VOLUME" >/dev/null 2>&1 || true
-    docker volume create "$CLAUDE_SESSION_VOLUME" >/dev/null 2>&1 || true
-    docker volume create "$MEMORY_BANK_VOLUME" >/dev/null 2>&1 || true
+    # SECURITY: Use user-scoped volumes for isolation
+    local claude_home_vol
+    local claude_session_vol
+    local memory_bank_vol
+    claude_home_vol=$(get_claude_home_volume)
+    claude_session_vol=$(get_claude_session_volume)
+    memory_bank_vol=$(get_memory_bank_volume)
+
+    docker volume create "$claude_home_vol" >/dev/null 2>&1 || true
+    docker volume create "$claude_session_vol" >/dev/null 2>&1 || true
+    docker volume create "$memory_bank_vol" >/dev/null 2>&1 || true
+
+    # Initialize seccomp profile on host filesystem (required for direct mode)
+    # This ensures the profile is available before any container starts
+    init_seccomp_profile 2>/dev/null || true
 
     # Initialize volumes with pristine Claude config on first creation
     # This ensures containers start in a clean state with no host-specific paths
     docker run --rm \
-        -v "${CLAUDE_SESSION_VOLUME}:/session" \
-        -v "${CLAUDE_HOME_VOLUME}:/claude-home" \
+        -v "${claude_session_vol}:/session" \
+        -v "${claude_home_vol}:/claude-home" \
         alpine:latest \
         sh -c '
             # Initialize session volume with pristine Claude config
@@ -284,15 +431,18 @@ EOF
         ' >/dev/null 2>&1 || true
 }
 
-# Check if subscription login is configured in the shared volume
+# Check if subscription login is configured in the user-scoped volume
 # Returns 0 if logged in, 1 if not
 check_subscription_auth() {
     ensure_volumes
 
+    local claude_home_vol
+    claude_home_vol=$(get_claude_home_volume)
+
     # Check for auth credentials in the volume
     # Claude stores session data in .claude/
     docker run --rm \
-        -v "${CLAUDE_HOME_VOLUME}:/root/.claude:ro" \
+        -v "${claude_home_vol}:/root/.claude:ro" \
         alpine:latest \
         sh -c 'test -f /root/.claude/.credentials.json || test -f /root/.claude/statsig_user_id' \
         2>/dev/null
@@ -310,12 +460,20 @@ run_claude_command() {
     image_base=$(get_container_image_base)
     local image="${image_base}:base"
 
+    # SECURITY: Use user-scoped volumes for isolation
+    local claude_home_vol
+    local claude_session_vol
+    local memory_bank_vol
+    claude_home_vol=$(get_claude_home_volume)
+    claude_session_vol=$(get_claude_session_volume)
+    memory_bank_vol=$(get_memory_bank_volume)
+
     # Build docker args
     local docker_args=(
         docker run --rm -it
-        -v "${CLAUDE_HOME_VOLUME}:/root/.claude"
-        -v "${CLAUDE_SESSION_VOLUME}:/root/.claude-session"
-        -v "${MEMORY_BANK_VOLUME}:/root/memory-bank"
+        -v "${claude_home_vol}:/root/.claude"
+        -v "${claude_session_vol}:/root/.claude-session"
+        -v "${memory_bank_vol}:/root/memory-bank"
         -e "CLAUDE_HOME=/root/.claude"
         -e "MEMORY_BANK_ROOT=/root/memory-bank"
     )
@@ -490,10 +648,15 @@ CONFIGURATION:
 
   Precedence: environment variable > config file > default
 
-VOLUMES:
-  hal9000-claude-home       Shared CLAUDE_HOME - plugins, credentials, config persist here
-  hal9000-claude-session    Shared session state - .claude.json (auth state) persists here
-  hal9000-memory-bank       Shared memory bank for cross-session context
+VOLUMES (User-Isolated):
+  Volumes are isolated per user for security. Each user gets their own volumes:
+
+  hal9000-claude-home-<hash>       User's CLAUDE_HOME - plugins, credentials, config
+  hal9000-claude-session-<hash>    User's session state - .claude.json (auth state)
+  hal9000-memory-bank-<hash>       User's memory bank for cross-session context
+
+  Where <hash> is an 8-character hash of your username/UID.
+  This prevents cross-user attacks (malicious plugin installation, data poisoning).
 
 For more information, see documentation at:
   https://github.com/hellblazer/hal-9000/blob/main/README.md
@@ -648,25 +811,33 @@ show_diagnostics() {
         info "    → Run 'hal-9000 /login' to authenticate"
     fi
 
-    # Check Docker volumes
+    # Check Docker volumes (user-scoped for isolation)
     echo ""
-    info "Docker Volumes:"
-    if docker volume inspect "$CLAUDE_HOME_VOLUME" &>/dev/null; then
-        success "  $CLAUDE_HOME_VOLUME (exists)"
+    local user_hash
+    user_hash=$(get_user_hash)
+    info "Docker Volumes (user: ${USER:-$(id -un 2>/dev/null || echo uid-$(id -u))}, hash: ${user_hash}):"
+
+    local claude_home_vol
+    local memory_bank_vol
+    claude_home_vol=$(get_claude_home_volume)
+    memory_bank_vol=$(get_memory_bank_volume)
+
+    if docker volume inspect "$claude_home_vol" &>/dev/null; then
+        success "  $claude_home_vol (exists)"
         # Show volume size if possible
         local vol_path
-        vol_path=$(docker volume inspect "$CLAUDE_HOME_VOLUME" --format '{{.Mountpoint}}' 2>/dev/null || true)
+        vol_path=$(docker volume inspect "$claude_home_vol" --format '{{.Mountpoint}}' 2>/dev/null || true)
         if [[ -n "$vol_path" ]]; then
             info "    → Mountpoint: $vol_path"
         fi
     else
-        info "  $CLAUDE_HOME_VOLUME (not yet created)"
+        info "  $claude_home_vol (not yet created)"
     fi
 
-    if docker volume inspect "$MEMORY_BANK_VOLUME" &>/dev/null; then
-        success "  $MEMORY_BANK_VOLUME (exists)"
+    if docker volume inspect "$memory_bank_vol" &>/dev/null; then
+        success "  $memory_bank_vol (exists)"
     else
-        info "  $MEMORY_BANK_VOLUME (not yet created)"
+        info "  $memory_bank_vol (not yet created)"
     fi
 
     # Check hal9000 storage
@@ -714,9 +885,9 @@ show_diagnostics() {
     # Container config info
     echo ""
     info "Container config:"
-    echo "  CLAUDE_HOME: /root/.claude (from $CLAUDE_HOME_VOLUME volume)"
-    echo "  Memory Bank: /root/memory-bank (from $MEMORY_BANK_VOLUME volume)"
-    echo "  Plugins installed in container persist across all sessions"
+    echo "  CLAUDE_HOME: /root/.claude (from $claude_home_vol volume)"
+    echo "  Memory Bank: /root/memory-bank (from $memory_bank_vol volume)"
+    echo "  Plugins installed in container persist across YOUR sessions (user-isolated)"
 }
 
 #==============================================================================
@@ -831,6 +1002,10 @@ daemon_start() {
     mkdir -p "$HAL9000_HOME/sessions"
     mkdir -p "$HAL9000_HOME/logs"
     mkdir -p "$HAL9000_HOME/config"
+
+    # Initialize seccomp profile on host filesystem
+    # Required for worker containers - Docker reads profile before container starts
+    init_seccomp_profile
 
     # Store API key to secret file if available (security: avoid env var exposure)
     store_api_key_secret
@@ -1408,9 +1583,21 @@ launch_container_session() {
     info "  Session: $session_name"
     info "  Directory: $abs_project_path"
 
+    # SECURITY: Use user-scoped volumes for isolation
+    local claude_home_vol
+    local claude_session_vol
+    local memory_bank_vol
+    local user_hash
+    claude_home_vol=$(get_claude_home_volume)
+    claude_session_vol=$(get_claude_session_volume)
+    memory_bank_vol=$(get_memory_bank_volume)
+    user_hash=$(get_user_hash)
+
+    info "  User isolation: hash=${user_hash}"
+
     # Build docker run command
     # NO --rm: container persists for reattachment
-    # Uses shared Docker volumes for CLAUDE_HOME and memory bank
+    # Uses user-scoped Docker volumes for CLAUDE_HOME and memory bank
     local docker_args=(
         docker run
         -d
@@ -1419,15 +1606,17 @@ launch_container_session() {
         --label "hal9000.project=$abs_project_path"
         --label "hal9000.profile=$profile"
         --label "hal9000.shell_mode=$shell_mode"
+        --label "hal9000.user_hash=$user_hash"
         -v "$abs_project_path:/workspace"
-        -v "${CLAUDE_HOME_VOLUME}:/root/.claude"
-        -v "${CLAUDE_SESSION_VOLUME}:/root/.claude-session"
-        -v "${MEMORY_BANK_VOLUME}:/root/memory-bank"
+        -v "${claude_home_vol}:/root/.claude"
+        -v "${claude_session_vol}:/root/.claude-session"
+        -v "${memory_bank_vol}:/root/memory-bank"
         -v /var/run/docker.sock:/var/run/docker.sock
         -e "CLAUDE_HOME=/root/.claude"
         -e "HAL9000_SESSION=$session_name"
         -e "HAL9000_PROJECT_DIR=$abs_project_path"
         -e "MEMORY_BANK_ROOT=/root/memory-bank"
+        -e "HAL9000_USER_HASH=$user_hash"
     )
 
     # SECURITY: Mount API key as secret file instead of environment variable

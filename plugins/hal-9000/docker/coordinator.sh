@@ -258,6 +258,11 @@ stop_worker() {
             audit_worker_stop "$worker_name" "user_request" "0"
         fi
 
+        # Security audit: log worker stop
+        if command -v log_security_event >/dev/null 2>&1; then
+            log_security_event "WORKER_STOP" "name=${worker_name} reason=user_request exit_code=0" "INFO"
+        fi
+
         # Clean up session metadata with retry
         if retry_with_backoff "cleanup_session_metadata '$worker_name'" 2; then
             log_success "Session metadata cleaned up"
@@ -270,6 +275,11 @@ stop_worker() {
         # Audit log failed stop attempt
         if command -v audit_worker_stop >/dev/null 2>&1; then
             audit_worker_stop "$worker_name" "stop_failed" "1"
+        fi
+
+        # Security audit: log failed stop (potential issue)
+        if command -v log_security_event >/dev/null 2>&1; then
+            log_security_event "WORKER_STOP" "name=${worker_name} reason=stop_failed exit_code=1" "WARN"
         fi
 
         return 1

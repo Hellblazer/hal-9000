@@ -1,0 +1,179 @@
+{
+  "defaultAction": "SCMP_ACT_ALLOW",
+  "archMap": [
+    {
+      "architecture": "SCMP_ARCH_X86_64",
+      "subArchitectures": [
+        "SCMP_ARCH_X86",
+        "SCMP_ARCH_X32"
+      ]
+    },
+    {
+      "architecture": "SCMP_ARCH_AARCH64",
+      "subArchitectures": [
+        "SCMP_ARCH_ARM"
+      ]
+    }
+  ],
+  "syscalls": [
+    {
+      "names": [
+        "mount",
+        "umount",
+        "umount2",
+        "pivot_root"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1,
+      "comment": "Filesystem manipulation - blocked to prevent container escape"
+    },
+    {
+      "names": [
+        "ptrace",
+        "process_vm_readv",
+        "process_vm_writev"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1,
+      "comment": "Process tracing/debugging - blocked to prevent credential theft and process manipulation"
+    },
+    {
+      "names": [
+        "setns",
+        "unshare"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1,
+      "comment": "Namespace manipulation - blocked to prevent container breakout"
+    },
+    {
+      "names": [
+        "kexec_load",
+        "kexec_file_load"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1,
+      "comment": "Kernel execution - blocked to prevent kernel takeover"
+    },
+    {
+      "names": [
+        "init_module",
+        "finit_module",
+        "delete_module"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1,
+      "comment": "Kernel module loading - blocked to prevent rootkit installation"
+    },
+    {
+      "names": [
+        "bpf"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1,
+      "comment": "eBPF program loading - blocked to prevent kernel-level manipulation"
+    },
+    {
+      "names": [
+        "reboot",
+        "sethostname",
+        "setdomainname"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1,
+      "comment": "System configuration - blocked to prevent host disruption"
+    },
+    {
+      "names": [
+        "swapon",
+        "swapoff"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1,
+      "comment": "Swap management - blocked to prevent resource exhaustion attacks"
+    },
+    {
+      "names": [
+        "acct",
+        "quotactl",
+        "syslog"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1,
+      "comment": "System accounting and logging - blocked to prevent audit tampering"
+    },
+    {
+      "names": [
+        "clock_settime",
+        "clock_settime64",
+        "settimeofday",
+        "stime"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1,
+      "comment": "Time manipulation - blocked to prevent security log tampering"
+    },
+    {
+      "names": [
+        "add_key",
+        "keyctl",
+        "request_key"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1,
+      "comment": "Kernel keyring - blocked to prevent credential manipulation"
+    },
+    {
+      "names": [
+        "ioperm",
+        "iopl"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1,
+      "comment": "I/O port access - blocked to prevent hardware manipulation"
+    },
+    {
+      "names": [
+        "open_by_handle_at",
+        "name_to_handle_at"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1,
+      "comment": "File handle manipulation - blocked to prevent filesystem escape"
+    },
+    {
+      "names": [
+        "perf_event_open",
+        "lookup_dcookie",
+        "kcmp"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1,
+      "comment": "Profiling and debugging - blocked to prevent information leakage"
+    },
+    {
+      "names": [
+        "get_kernel_syms",
+        "query_module",
+        "nfsservctl",
+        "_sysctl",
+        "sysfs",
+        "uselib",
+        "ustat",
+        "vhangup",
+        "vm86",
+        "vm86old",
+        "modify_ldt",
+        "get_mempolicy",
+        "set_mempolicy",
+        "mbind",
+        "migrate_pages",
+        "move_pages",
+        "userfaultfd"
+      ],
+      "action": "SCMP_ACT_ERRNO",
+      "errnoRet": 1,
+      "comment": "Deprecated/dangerous syscalls - blocked for defense in depth"
+    }
+  ]
+}

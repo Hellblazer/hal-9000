@@ -342,6 +342,249 @@ test_dockerfile_copies_lib() {
 }
 
 # ============================================================================
+# TEST 9: Security logging functions exist and work
+# ============================================================================
+test_security_logging() {
+    log_test "Test 9: Security logging functions exist and work correctly"
+
+    # Setup
+    export HAL9000_HOME="/tmp/hal9000-test-security-$$"
+    export WORKER_ID="test-worker-123"
+    mkdir -p "$HAL9000_HOME/logs"
+
+    # Source library
+    source "${SCRIPT_DIR}/lib/audit-log.sh"
+
+    # Test log_security_event function exists
+    if ! command -v log_security_event >/dev/null 2>&1; then
+        log_fail "log_security_event function not found"
+        rm -rf "$HAL9000_HOME"
+        return 1
+    fi
+    log_pass "log_security_event function exists"
+
+    # Test security event logging
+    log_security_event "HOOK_DENY" "tool=Read file=\".env\" reason=\"sensitive file\"" "WARN"
+
+    # Verify security log file exists
+    local security_log_file="$HAL9000_HOME/logs/security.log"
+    if [[ ! -f "$security_log_file" ]]; then
+        log_fail "Security log file not created: $security_log_file"
+        rm -rf "$HAL9000_HOME"
+        return 1
+    fi
+    log_pass "Security log file created"
+
+    # Verify security log entry format (pipe-delimited)
+    local security_entry
+    security_entry=$(cat "$security_log_file")
+
+    if [[ "$security_entry" =~ \|.*WARN.*\|.*HOOK_DENY.*\| ]]; then
+        log_pass "Security log entry has correct pipe-delimited format"
+    else
+        log_fail "Security log entry format incorrect: $security_entry"
+        rm -rf "$HAL9000_HOME"
+        return 1
+    fi
+
+    # Verify worker ID is included
+    if [[ "$security_entry" =~ worker=test-worker-123 ]]; then
+        log_pass "Security log entry includes worker ID"
+    else
+        log_fail "Security log entry missing worker ID: $security_entry"
+        rm -rf "$HAL9000_HOME"
+        return 1
+    fi
+
+    # Clean up
+    rm -rf "$HAL9000_HOME"
+}
+
+# ============================================================================
+# TEST 10: Security convenience functions work
+# ============================================================================
+test_security_convenience_functions() {
+    log_test "Test 10: Security convenience functions work correctly"
+
+    # Setup
+    export HAL9000_HOME="/tmp/hal9000-test-security-conv-$$"
+    export WORKER_ID="test-worker-456"
+    mkdir -p "$HAL9000_HOME/logs"
+
+    # Source library
+    source "${SCRIPT_DIR}/lib/audit-log.sh"
+
+    # Test audit_hook_deny
+    if ! command -v audit_hook_deny >/dev/null 2>&1; then
+        log_fail "audit_hook_deny function not found"
+        rm -rf "$HAL9000_HOME"
+        return 1
+    fi
+    audit_hook_deny "Read" ".env" "sensitive file" "WARN"
+    log_pass "audit_hook_deny function works"
+
+    # Test audit_chromadb_auth_success
+    if ! command -v audit_chromadb_auth_success >/dev/null 2>&1; then
+        log_fail "audit_chromadb_auth_success function not found"
+        rm -rf "$HAL9000_HOME"
+        return 1
+    fi
+    audit_chromadb_auth_success "worker-abc" "172.17.0.3"
+    log_pass "audit_chromadb_auth_success function works"
+
+    # Test audit_chromadb_auth_failure
+    if ! command -v audit_chromadb_auth_failure >/dev/null 2>&1; then
+        log_fail "audit_chromadb_auth_failure function not found"
+        rm -rf "$HAL9000_HOME"
+        return 1
+    fi
+    audit_chromadb_auth_failure "172.17.0.5" "invalid_token"
+    log_pass "audit_chromadb_auth_failure function works"
+
+    # Test audit_bulk_query
+    if ! command -v audit_bulk_query >/dev/null 2>&1; then
+        log_fail "audit_bulk_query function not found"
+        rm -rf "$HAL9000_HOME"
+        return 1
+    fi
+    audit_bulk_query "worker-def" "1500" "default"
+    log_pass "audit_bulk_query function works"
+
+    # Verify all events were logged
+    local security_log_file="$HAL9000_HOME/logs/security.log"
+    local entry_count
+    entry_count=$(wc -l < "$security_log_file")
+
+    if [[ "$entry_count" -ge 4 ]]; then
+        log_pass "All security convenience functions logged events ($entry_count entries)"
+    else
+        log_fail "Expected at least 4 log entries, got $entry_count"
+        rm -rf "$HAL9000_HOME"
+        return 1
+    fi
+
+    # Verify BULK_QUERY has correct severity (should be ERROR for 1500 results)
+    if grep -q "| ERROR | BULK_QUERY |" "$security_log_file"; then
+        log_pass "Bulk query correctly logged as ERROR for high result count"
+    else
+        log_fail "Bulk query severity incorrect for high result count"
+    fi
+
+    # Clean up
+    rm -rf "$HAL9000_HOME"
+}
+
+# ============================================================================
+# TEST 11: Security log rotation works
+# ============================================================================
+test_security_log_rotation() {
+    log_test "Test 11: Security log rotation works correctly"
+
+    # Setup
+    export HAL9000_HOME="/tmp/hal9000-test-security-rotation-$$"
+    export AUDIT_LOG_MAX_SIZE=1000  # 1KB for testing
+    export AUDIT_LOG_MAX_FILES=3
+    mkdir -p "$HAL9000_HOME/logs"
+
+    # Source library
+    source "${SCRIPT_DIR}/lib/audit-log.sh"
+
+    local security_log_file="$HAL9000_HOME/logs/security.log"
+
+    # Create a log file larger than threshold
+    local large_content=""
+    for i in {1..100}; do
+        large_content+="2026-01-31T12:00:00Z | WARN | TEST_EVENT | This is a test log entry number $i that is reasonably long to fill up the log file quickly\n"
+    done
+    printf "%b" "$large_content" > "$security_log_file"
+
+    # Write another entry to trigger rotation
+    log_security_event "ROTATION_TEST" "details=test" "INFO"
+
+    # Check that rotation occurred
+    if [[ -f "${security_log_file}.1" ]]; then
+        log_pass "Security log rotation created .1 file"
+    else
+        log_warn "Security log rotation may not have triggered (file size: $(wc -c < "$security_log_file"))"
+    fi
+
+    # Clean up
+    rm -rf "$HAL9000_HOME"
+}
+
+# ============================================================================
+# TEST 12: Security log file permissions
+# ============================================================================
+test_security_log_permissions() {
+    log_test "Test 12: Security log file has secure permissions"
+
+    # Setup
+    export HAL9000_HOME="/tmp/hal9000-test-security-perms-$$"
+    mkdir -p "$HAL9000_HOME/logs"
+
+    # Source library
+    source "${SCRIPT_DIR}/lib/audit-log.sh"
+
+    # Write a security event
+    log_security_event "PERM_TEST" "details=test" "INFO"
+
+    local security_log_file="$HAL9000_HOME/logs/security.log"
+
+    # Check permissions (should be 0640)
+    local perms
+    perms=$(stat -c %a "$security_log_file" 2>/dev/null || stat -f %Lp "$security_log_file" 2>/dev/null || echo "unknown")
+
+    if [[ "$perms" == "640" ]]; then
+        log_pass "Security log file has correct permissions: 0640"
+    else
+        log_warn "Security log file permissions: $perms (expected 640)"
+    fi
+
+    # Clean up
+    rm -rf "$HAL9000_HOME"
+}
+
+# ============================================================================
+# TEST 13: Query security log function works
+# ============================================================================
+test_query_security_log() {
+    log_test "Test 13: Query security log function works"
+
+    # Setup
+    export HAL9000_HOME="/tmp/hal9000-test-security-query-$$"
+    mkdir -p "$HAL9000_HOME/logs"
+
+    # Source library
+    source "${SCRIPT_DIR}/lib/audit-log.sh"
+
+    # Test query_security_log function exists
+    if ! command -v query_security_log >/dev/null 2>&1; then
+        log_fail "query_security_log function not found"
+        rm -rf "$HAL9000_HOME"
+        return 1
+    fi
+    log_pass "query_security_log function exists"
+
+    # Write some test events
+    log_security_event "HOOK_DENY" "tool=Read" "WARN"
+    log_security_event "AUTH_SUCCESS" "worker=abc" "INFO"
+    log_security_event "HOOK_DENY" "tool=Write" "WARN"
+
+    # Query for HOOK_DENY events
+    local results
+    results=$(query_security_log "HOOK_DENY" 1)
+
+    if echo "$results" | grep -q "HOOK_DENY"; then
+        log_pass "query_security_log correctly filters events"
+    else
+        log_fail "query_security_log did not return expected results"
+    fi
+
+    # Clean up
+    rm -rf "$HAL9000_HOME"
+}
+
+# ============================================================================
 # MAIN TEST RUNNER
 # ============================================================================
 main() {
@@ -358,6 +601,13 @@ main() {
     test_scripts_source_library || true
     test_audit_calls_exist || true
     test_dockerfile_copies_lib || true
+
+    # Security logging tests
+    test_security_logging || true
+    test_security_convenience_functions || true
+    test_security_log_rotation || true
+    test_security_log_permissions || true
+    test_query_security_log || true
 
     echo
     echo "=========================================="

@@ -1,6 +1,6 @@
 {
   "$schema": "https://claude.ai/settings-schema.json",
-  "$comment": "HAL-9000 Worker MCP Settings - Connect to parent's ChromaDB server with authentication",
+  "$comment": "HAL-9000 Worker MCP Settings - Connect to parent's SHARED ChromaDB server with authentication",
 
   "theme": "dark",
   "preferredNotificationChannel": "terminal",
@@ -18,7 +18,8 @@
         "CHROMA_ANONYMIZED_TELEMETRY": "false",
         "CHROMA_CLIENT_AUTH_PROVIDER": "chromadb.auth.token_authn.TokenAuthClientProvider",
         "CHROMA_CLIENT_AUTH_CREDENTIALS_FILE": "/run/secrets/chromadb_token"
-      }
+      },
+      "$comment": "SHARED ChromaDB: All workers share the same collections for cross-worker knowledge sharing. Authentication via token file."
     },
 
     "memory-bank": {

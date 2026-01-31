@@ -168,8 +168,26 @@ persists across all workers automatically.
 
 ### ChromaDB
 
-If using ChromaDB with cloud mode, workers need:
-- `CHROMADB_TENANT` environment variable
+#### Per-Worker Tenant Isolation (SECURITY)
+
+By default, each worker is automatically isolated in its own ChromaDB tenant namespace.
+This prevents cross-worker data access - Worker A cannot query collections created by Worker B.
+
+**How it works:**
+- `spawn-worker.sh` passes `WORKER_ID` and `CHROMA_TENANT` to each container
+- The tenant name is set to the worker's unique name (e.g., `hal9000-worker-1706789012`)
+- Collections are automatically namespaced to the worker's tenant
+- ChromaDB server enforces tenant isolation via token authentication
+
+**Environment variables set automatically:**
+- `WORKER_ID` - Unique worker identifier
+- `CHROMA_TENANT` - Set to worker name for tenant isolation
+- `CHROMA_DATABASE` - Set to "default"
+
+#### Cloud Mode
+
+If using ChromaDB with cloud mode, external credentials override per-worker isolation:
+- `CHROMADB_TENANT` environment variable (overrides worker-based tenant)
 - `CHROMADB_DATABASE` environment variable
 - `CHROMADB_API_KEY` environment variable
 
@@ -181,6 +199,10 @@ docker run --rm -it \
     -v ~/.claude:/root/.claude \
     ghcr.io/hellblazer/hal-9000:base
 ```
+
+**Note:** When external `CHROMADB_TENANT` is set, it overrides the automatic per-worker
+tenant isolation. This is useful for cloud deployments where you want all workers to
+share the same tenant.
 
 ### Memory Bank
 

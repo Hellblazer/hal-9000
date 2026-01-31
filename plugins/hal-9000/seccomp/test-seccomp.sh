@@ -29,19 +29,28 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 # Seccomp profiles
 AUDIT_PROFILE="$SCRIPT_DIR/hal9000-audit.json"
+ENFORCE_PROFILE="$SCRIPT_DIR/hal9000.json"
 BASE_PROFILE="$SCRIPT_DIR/hal9000-base.json"
 
-# Test mode (audit or enforce)
+# Test mode (audit, enforce, or base)
 TEST_MODE="${1:-audit}"
 
 if [[ "$TEST_MODE" == "audit" ]]; then
     SECCOMP_PROFILE="$AUDIT_PROFILE"
     log_info "Testing in AUDIT mode (logs violations, doesn't block)"
 elif [[ "$TEST_MODE" == "enforce" ]]; then
+    SECCOMP_PROFILE="$ENFORCE_PROFILE"
+    log_info "Testing in ENFORCE mode (blocks dangerous syscalls with EPERM)"
+elif [[ "$TEST_MODE" == "base" ]]; then
     SECCOMP_PROFILE="$BASE_PROFILE"
-    log_info "Testing in ENFORCE mode (blocks dangerous syscalls)"
+    log_info "Testing in BASE mode (allowlist-based profile)"
 else
-    echo "Usage: $0 [audit|enforce]"
+    echo "Usage: $0 [audit|enforce|base]"
+    echo ""
+    echo "Modes:"
+    echo "  audit   - Test with audit profile (logs but allows dangerous syscalls)"
+    echo "  enforce - Test with enforcing profile (blocks dangerous syscalls, RECOMMENDED)"
+    echo "  base    - Test with base profile (deny-by-default allowlist)"
     exit 2
 fi
 
@@ -195,7 +204,7 @@ echo "Total:  $((TESTS_PASSED + TESTS_FAILED))"
 echo "=========================================="
 
 if [[ $TESTS_FAILED -eq 0 ]]; then
-    echo "✅ All tests passed!"
+    echo "All tests passed!"
     echo ""
     if [[ "$TEST_MODE" == "audit" ]]; then
         echo "Next step: Review audit logs for syscall violations"
@@ -203,13 +212,19 @@ if [[ $TESTS_FAILED -eq 0 ]]; then
         echo ""
         echo "Then test in enforce mode:"
         echo "  $0 enforce"
+    elif [[ "$TEST_MODE" == "enforce" ]]; then
+        echo "Seccomp profile validated in ENFORCE mode!"
+        echo "Dangerous syscalls (mount, ptrace, setns, bpf, kexec_load) are BLOCKED with EPERM."
+        echo ""
+        echo "Profile ready for production use at:"
+        echo "  $SECCOMP_PROFILE"
     else
-        echo "Seccomp profile validated in enforce mode!"
+        echo "Seccomp profile validated in BASE mode!"
         echo "Profile ready for production use."
     fi
     exit 0
 else
-    echo "❌ Some tests failed"
+    echo "Some tests failed"
     echo ""
     echo "Investigate failures before using profile in production."
     exit 1

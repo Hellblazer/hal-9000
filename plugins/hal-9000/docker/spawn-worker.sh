@@ -114,6 +114,73 @@ WORKER_MEMORY="${WORKER_MEMORY:-4g}"
 WORKER_CPUS="${WORKER_CPUS:-2}"
 WORKER_PIDS_LIMIT="${WORKER_PIDS_LIMIT:-100}"
 
+# SECURITY: Seccomp profile for syscall filtering
+# Profile must be on HOST filesystem (Docker reads it before container starts)
+# Blocks dangerous syscalls like mount, ptrace, setns, bpf, kexec_load
+SECCOMP_PROFILE="${HAL9000_HOME:-$HOME/.hal9000}/seccomp/hal9000.json"
+
+# ============================================================================
+# USER IDENTITY AND VOLUME ISOLATION
+# ============================================================================
+
+# SECURITY: Per-user volume isolation
+# Each user gets their own isolated volumes to prevent cross-user attacks:
+# - Malicious plugin installation affecting other users
+# - Memory bank poisoning across users
+# - TMUX socket hijacking
+
+# Cache for user hash (computed once per session)
+_CACHED_USER_HASH=""
+
+# Generate user hash for volume isolation
+# Uses $USER if available, falls back to UID for containerized environments
+generate_user_hash() {
+    local user_id
+
+    # Prefer $USER environment variable (human-readable, stable across sessions)
+    if [[ -n "${USER:-}" ]]; then
+        user_id="$USER"
+    # Fall back to username from id command
+    elif user_id=$(id -un 2>/dev/null); then
+        : # user_id already set
+    # Last resort: use numeric UID
+    else
+        user_id="uid-$(id -u 2>/dev/null || echo "unknown")"
+    fi
+
+    # Generate 8-character hash for volume naming
+    # SHA-256 ensures consistent, collision-resistant hash
+    echo -n "$user_id" | sha256sum | cut -c1-8
+}
+
+# Get cached user hash (computed once, reused for consistency)
+get_user_hash() {
+    if [[ -z "$_CACHED_USER_HASH" ]]; then
+        _CACHED_USER_HASH=$(generate_user_hash)
+    fi
+    echo "$_CACHED_USER_HASH"
+}
+
+# Get user-scoped volume name
+# Usage: get_user_volume <base-name>
+# Example: get_user_volume "claude-home" -> "hal9000-claude-home-a1b2c3d4"
+get_user_volume() {
+    local base_name="$1"
+    local user_hash
+    user_hash=$(get_user_hash)
+    echo "hal9000-${base_name}-${user_hash}"
+}
+
+# Ensure user-scoped volume exists
+# Creates the volume if it doesn't exist
+ensure_user_volume() {
+    local volume_name="$1"
+    if ! docker volume inspect "$volume_name" >/dev/null 2>&1; then
+        docker volume create "$volume_name" >/dev/null 2>&1 || true
+        log_info "Created user-scoped volume: $volume_name"
+    fi
+}
+
 # ============================================================================
 # ARGUMENT PARSING
 # ============================================================================
@@ -355,16 +422,35 @@ spawn_worker() {
         log_info "Mounting project: $canonical_path -> /workspace"
     fi
 
-    # Mount shared CLAUDE_HOME volume for marketplace persistence
-    # All workers share the same CLAUDE_HOME so marketplace installations persist
+    # =========================================================================
+    # SECURITY: Per-user volume isolation
+    # =========================================================================
+    # Each user gets their own isolated volumes to prevent cross-user attacks:
+    # - Malicious plugin installation affecting other users
+    # - Memory bank poisoning across users
+    # - TMUX socket hijacking
+    #
+    # Volume naming: hal9000-<type>-<user_hash>
+    # Example: hal9000-claude-home-a1b2c3d4 for user "alice"
+    # =========================================================================
+
+    local user_hash
+    user_hash=$(get_user_hash)
+    log_info "User isolation: hash=${user_hash} (user=${USER:-$(id -un 2>/dev/null || echo uid-$(id -u))})"
+
     # Detect Docker-in-Docker mode (running inside a container)
     local in_container=false
     if [[ -f "/.dockerenv" ]] || grep -q docker /proc/1/cgroup 2>/dev/null; then
         in_container=true
     fi
 
-    # Use a single shared volume for all workers
-    local claude_volume="hal9000-claude-home"
+    # SECURITY: User-scoped CLAUDE_HOME volume
+    # Each user gets their own CLAUDE_HOME, preventing:
+    # - Malicious plugin installation affecting other users
+    # - Credential theft via shared config
+    # - Settings tampering
+    local claude_volume
+    claude_volume=$(get_user_volume "claude-home")
 
     # SECURITY: Workers run as non-root user 'claude' (UID 1001)
     # Mount to /home/claude/.claude instead of /root/.claude
@@ -372,44 +458,68 @@ spawn_worker() {
 
     if [[ "$in_container" == "true" ]]; then
         # Inside container - use named volumes (host paths won't work)
-        docker volume create "$claude_volume" >/dev/null 2>&1 || true
+        ensure_user_volume "$claude_volume"
         docker_args+=(-v "${claude_volume}:${claude_home_path}")
-        log_info "DinD mode: using shared volume $claude_volume"
+        log_info "DinD mode: user volume $claude_volume"
     else
-        # Running on host - use host directory (shared across all workers)
+        # Running on host - use user-scoped directory
         local hal9000_home="${HAL9000_HOME:-$HOME/.hal9000}"
-        local claude_home="${hal9000_home}/claude"
+        local claude_home="${hal9000_home}/users/${user_hash}/claude"
         mkdir -p "$claude_home" 2>/dev/null || true
-        # Also create TMUX sockets directory in host mode
-        local tmux_sockets_dir="${hal9000_home}/tmux-sockets"
+        # SECURITY: Restrict to owner only
+        chmod 700 "$claude_home" 2>/dev/null || true
+
+        # Also create user-scoped TMUX sockets directory
+        local tmux_sockets_dir="${hal9000_home}/users/${user_hash}/tmux-sockets"
         mkdir -p "$tmux_sockets_dir" 2>/dev/null || true
-        # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
-        chmod 0770 "$tmux_sockets_dir" 2>/dev/null || true
+        # SECURITY: Restrict to owner only (no group/world access)
+        chmod 700 "$tmux_sockets_dir" 2>/dev/null || true
+
         docker_args+=(-v "${claude_home}:${claude_home_path}")
-        log_info "Host mode: using shared directory $claude_home"
+        log_info "Host mode: user directory $claude_home"
     fi
 
-    log_info "Marketplace installations will persist in CLAUDE_HOME"
+    log_info "User-isolated CLAUDE_HOME: $claude_volume"
 
-    # Mount shared Memory Bank volume (required for foundation MCP server)
-    # Create if doesn't exist - all workers share this for persistent memory
-    local membank_volume="hal9000-memory-bank"
-    docker volume create "$membank_volume" >/dev/null 2>&1 || true
+    # OPTIONAL: Shared read-only base plugins for efficiency
+    # Base plugins (foundation MCP servers, core commands) can be shared read-only
+    # to avoid duplicating large installations across users
+    local base_plugins_volume="hal9000-base-plugins"
+    if docker volume inspect "$base_plugins_volume" >/dev/null 2>&1; then
+        # Mount shared base plugins as read-only overlay
+        docker_args+=(-v "${base_plugins_volume}:/home/claude/.claude/base-plugins:ro")
+        log_info "Shared base plugins: $base_plugins_volume (read-only)"
+    fi
+
+    # SECURITY: User-scoped Memory Bank volume
+    # Each user gets their own memory bank to prevent:
+    # - Memory bank poisoning across users
+    # - Information leakage between users
+    local membank_volume
+    membank_volume=$(get_user_volume "memory-bank")
+    ensure_user_volume "$membank_volume"
     docker_args+=(-v "${membank_volume}:/data/memory-bank")
-    log_info "Memory Bank: shared volume $membank_volume"
+    log_info "User-isolated Memory Bank: $membank_volume"
 
-    # Mount shared TMUX sockets volume for inter-process communication
-    # Each worker's TMUX server uses a socket in this shared directory
-    local tmux_volume="hal9000-tmux-sockets"
-    docker volume create "$tmux_volume" >/dev/null 2>&1 || true
+    # SECURITY: User-scoped TMUX sockets volume
+    # Each user gets their own TMUX sockets to prevent:
+    # - TMUX session hijacking
+    # - Cross-user command injection
+    local tmux_volume
+    tmux_volume=$(get_user_volume "tmux-sockets")
+    ensure_user_volume "$tmux_volume"
     docker_args+=(-v "${tmux_volume}:/data/tmux-sockets")
-    log_info "TMUX sockets: shared volume $tmux_volume"
+    log_info "User-isolated TMUX sockets: $tmux_volume"
 
-    # Mount shared coordinator state volume for session tracking
-    local coordinator_state_volume="hal9000-coordinator-state"
-    docker volume create "$coordinator_state_volume" >/dev/null 2>&1 || true
+    # SECURITY: User-scoped coordinator state volume
+    # Each user gets their own coordinator state to prevent:
+    # - Session tracking manipulation
+    # - Cross-user worker interference
+    local coordinator_state_volume
+    coordinator_state_volume=$(get_user_volume "coordinator-state")
+    ensure_user_volume "$coordinator_state_volume"
     docker_args+=(-v "${coordinator_state_volume}:/data/coordinator-state")
-    log_info "Coordinator state: shared volume $coordinator_state_volume"
+    log_info "User-isolated coordinator state: $coordinator_state_volume"
 
     # Mount shared ChromaDB data volume (if it exists)
     if docker volume inspect "hal9000-chromadb" >/dev/null 2>&1; then
@@ -427,6 +537,19 @@ spawn_worker() {
     else
         log_warn "ChromaDB auth: token file not found at $chromadb_token_file"
         log_warn "Workers will not be able to authenticate with ChromaDB"
+    fi
+
+    # SECURITY: Mount ChromaDB TLS certificate (read-only bind mount)
+    # Certificate is generated by parent and used by workers to verify server identity
+    # This enables encrypted HTTPS connections to ChromaDB
+    local chromadb_cert_file="/run/secrets/chromadb.crt"
+    if [[ -f "$chromadb_cert_file" ]]; then
+        docker_args+=(-v "${chromadb_cert_file}:/run/secrets/chromadb.crt:ro")
+        docker_args+=(-e "CHROMADB_TLS_ENABLED=true")
+        log_info "ChromaDB TLS: certificate mounted (HTTPS enabled)"
+    else
+        log_info "ChromaDB TLS: certificate not found (using HTTP)"
+        docker_args+=(-e "CHROMADB_TLS_ENABLED=false")
     fi
 
     # SECURITY: Mount API key as secret file instead of environment variable
@@ -447,10 +570,19 @@ spawn_worker() {
         log_success "API key stored securely and mounted as secret file"
     fi
 
+    # Pass worker ID for identification (audit logging, debugging)
+    docker_args+=(-e "WORKER_ID=${WORKER_NAME}")
+    log_info "Worker ID: ${WORKER_NAME}"
+
+    # NOTE: ChromaDB is intentionally SHARED across all workers
+    # This is an architectural decision to enable cross-worker knowledge sharing
+    # Workers share the same ChromaDB collections and can search each other's data
+
     # Pass through ChromaDB cloud credentials if set
     # TODO: Move these to secret files as well in future iteration
     if [[ -n "${CHROMADB_TENANT:-}" ]]; then
         docker_args+=(-e CHROMADB_TENANT)
+        log_info "ChromaDB tenant: external configuration"
     fi
     if [[ -n "${CHROMADB_API_KEY:-}" ]]; then
         # SECURITY: Also store ChromaDB API key as secret file
@@ -472,6 +604,18 @@ spawn_worker() {
         log_info "Resource limits: memory=$WORKER_MEMORY, cpus=$WORKER_CPUS, pids=$WORKER_PIDS_LIMIT"
     else
         log_warn "Resource limits disabled"
+    fi
+
+    # SECURITY: Apply seccomp profile to block dangerous syscalls
+    # Profile must exist on HOST filesystem (Docker reads it before container starts)
+    # Blocks: mount, ptrace, setns, bpf, kexec_load, and other container escape vectors
+    if [[ -f "$SECCOMP_PROFILE" ]]; then
+        docker_args+=(--security-opt "seccomp=${SECCOMP_PROFILE}")
+        log_info "Seccomp profile: $SECCOMP_PROFILE (enforcing)"
+    else
+        log_warn "Seccomp profile not found: $SECCOMP_PROFILE"
+        log_warn "SECURITY: Workers will use Docker's default seccomp profile"
+        log_warn "Run 'hal-9000 daemon start' to initialize seccomp profiles"
     fi
 
     # Working directory
@@ -510,6 +654,13 @@ spawn_worker() {
                 audit_worker_spawn "$WORKER_NAME" "$WORKER_IMAGE" "${canonical_path:-$PROJECT_DIR}"
             fi
 
+            # Security audit: log worker spawn with security context
+            if command -v log_security_event >/dev/null 2>&1; then
+                local seccomp_status="default"
+                [[ -f "$SECCOMP_PROFILE" ]] && seccomp_status="custom"
+                log_security_event "WORKER_SPAWN" "name=${WORKER_NAME} image=${WORKER_IMAGE} project=\"${canonical_path:-$PROJECT_DIR}\" seccomp=${seccomp_status}" "INFO"
+            fi
+
             echo "$container_id"
         else
             log_error "Failed to start worker after retries"
@@ -524,6 +675,13 @@ spawn_worker() {
             if command -v audit_worker_spawn >/dev/null 2>&1; then
                 audit_worker_spawn "$WORKER_NAME" "$WORKER_IMAGE" "${canonical_path:-$PROJECT_DIR}"
             fi
+
+            # Security audit: log worker spawn with security context
+            if command -v log_security_event >/dev/null 2>&1; then
+                local seccomp_status="default"
+                [[ -f "$SECCOMP_PROFILE" ]] && seccomp_status="custom"
+                log_security_event "WORKER_SPAWN" "name=${WORKER_NAME} image=${WORKER_IMAGE} project=\"${canonical_path:-$PROJECT_DIR}\" seccomp=${seccomp_status}" "INFO"
+            fi
         else
             log_error "Failed to start worker after retries"
             cleanup_on_error "$WORKER_NAME"
@@ -533,6 +691,8 @@ spawn_worker() {
 }
 
 record_session_metadata() {
+    local user_hash
+    user_hash=$(get_user_hash)
     local session_file="${HAL9000_HOME:-$HOME/.hal9000}/sessions/${WORKER_NAME}.json"
 
     # SECURITY: Create file with restrictive permissions to prevent other users from reading
@@ -550,6 +710,16 @@ record_session_metadata() {
         "memory": "$WORKER_MEMORY",
         "cpus": "$WORKER_CPUS",
         "pids_limit": "$WORKER_PIDS_LIMIT"
+    },
+    "user_isolation": {
+        "user_hash": "$user_hash",
+        "user_id": "${USER:-$(id -un 2>/dev/null || echo uid-$(id -u))}",
+        "volumes": {
+            "claude_home": "hal9000-claude-home-${user_hash}",
+            "memory_bank": "hal9000-memory-bank-${user_hash}",
+            "tmux_sockets": "hal9000-tmux-sockets-${user_hash}",
+            "coordinator_state": "hal9000-coordinator-state-${user_hash}"
+        }
     }
 }
 EOF

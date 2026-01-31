@@ -295,6 +295,9 @@ pull_worker_image() {
 CHROMADB_PID=""
 CHROMADB_PORT="${CHROMADB_PORT:-8000}"
 CHROMADB_TOKEN_FILE="/run/secrets/chromadb_token"
+CHROMADB_CERT_FILE="/run/secrets/chromadb.crt"
+CHROMADB_KEY_FILE="/run/secrets/chromadb.key"
+CHROMADB_TLS_ENABLED="${CHROMADB_TLS_ENABLED:-true}"
 
 # generate_chromadb_token: Generate cryptographic token for ChromaDB authentication
 # Token is written directly to file, NOT stored in environment variable
@@ -320,6 +323,62 @@ generate_chromadb_token() {
     log_success "ChromaDB token generated: $CHROMADB_TOKEN_FILE"
 }
 
+# generate_chromadb_tls_cert: Generate self-signed TLS certificate for ChromaDB
+# Certificate is used for internal Docker network encryption only
+# Workers trust this certificate via SSL_CERT_FILE environment variable
+generate_chromadb_tls_cert() {
+    if [[ "$CHROMADB_TLS_ENABLED" != "true" ]]; then
+        log_info "ChromaDB TLS disabled (CHROMADB_TLS_ENABLED=false)"
+        return 0
+    fi
+
+    # Skip if certificate already exists and is valid
+    if [[ -f "$CHROMADB_CERT_FILE" && -f "$CHROMADB_KEY_FILE" ]]; then
+        # Check if certificate is still valid (not expired)
+        if openssl x509 -checkend 86400 -noout -in "$CHROMADB_CERT_FILE" 2>/dev/null; then
+            log_info "ChromaDB TLS certificate exists and is valid"
+            return 0
+        else
+            log_warn "ChromaDB TLS certificate expired or invalid, regenerating..."
+        fi
+    fi
+
+    log_info "Generating ChromaDB self-signed TLS certificate..."
+
+    # Create secrets directory if it doesn't exist
+    mkdir -p /run/secrets
+    chmod 0700 /run/secrets
+
+    # Get container hostname for certificate CN
+    local hostname="${HOSTNAME:-chromadb}"
+    local parent_name="${HAL9000_PARENT:-hal9000-parent}"
+
+    # Generate self-signed certificate with multiple SANs for flexible connectivity
+    # - CN: chromadb (service name)
+    # - SAN: localhost, chromadb, parent container name, hal9000-parent
+    # This allows workers to connect via any of these names
+    if ! openssl req -x509 -newkey rsa:2048 \
+        -keyout "$CHROMADB_KEY_FILE" \
+        -out "$CHROMADB_CERT_FILE" \
+        -days 365 -nodes \
+        -subj "/CN=chromadb" \
+        -addext "subjectAltName=DNS:localhost,DNS:chromadb,DNS:${parent_name},DNS:hal9000-parent,IP:127.0.0.1" \
+        2>/dev/null; then
+        log_error "Failed to generate ChromaDB TLS certificate"
+        return 1
+    fi
+
+    # SECURITY: Restrict certificate and key file permissions
+    chmod 0400 "$CHROMADB_KEY_FILE"
+    chmod 0444 "$CHROMADB_CERT_FILE"  # Certificate can be readable (public)
+
+    log_success "ChromaDB TLS certificate generated:"
+    log_info "  Certificate: $CHROMADB_CERT_FILE"
+    log_info "  Private Key: $CHROMADB_KEY_FILE"
+    log_info "  Valid for: 365 days"
+    log_info "  SANs: localhost, chromadb, ${parent_name}, hal9000-parent"
+}
+
 start_chromadb_server_async() {
     log_info "Starting ChromaDB server (async)..."
 
@@ -338,11 +397,26 @@ start_chromadb_server_async() {
         return 1
     }
 
+    # Generate TLS certificate for encrypted connections
+    generate_chromadb_tls_cert || {
+        log_error "Failed to generate ChromaDB TLS certificate"
+        return 1
+    }
+
     # SECURITY: Configure ChromaDB with token authentication
     # Token is read from file at server startup, not passed via environment
     # This prevents token leakage via docker inspect or /proc/*/environ
     export CHROMA_SERVER_AUTHN_PROVIDER="chromadb.auth.token_authn.TokenAuthenticationServerProvider"
     export CHROMA_SERVER_AUTHN_CREDENTIALS_FILE="$CHROMADB_TOKEN_FILE"
+
+    # SECURITY: Configure ChromaDB with TLS encryption
+    # This encrypts all traffic between workers and ChromaDB server
+    if [[ "$CHROMADB_TLS_ENABLED" == "true" ]]; then
+        export CHROMA_SERVER_SSL_ENABLED="true"
+        export CHROMA_SERVER_SSL_CERTFILE="$CHROMADB_CERT_FILE"
+        export CHROMA_SERVER_SSL_KEYFILE="$CHROMADB_KEY_FILE"
+        log_info "ChromaDB TLS enabled: all traffic will be encrypted"
+    fi
 
     # Start ChromaDB server in background (non-blocking)
     chroma run \
@@ -354,11 +428,22 @@ start_chromadb_server_async() {
     CHROMADB_PID=$!
     echo "$CHROMADB_PID" > "${HAL9000_HOME}/chromadb.pid"
 
-    log_info "ChromaDB starting in background (PID: $CHROMADB_PID) with token authentication"
+    local tls_status="HTTP"
+    if [[ "$CHROMADB_TLS_ENABLED" == "true" ]]; then
+        tls_status="HTTPS (TLS)"
+    fi
+    log_info "ChromaDB starting in background (PID: $CHROMADB_PID) with token auth + $tls_status"
 
     # Audit log ChromaDB start
     if command -v audit_chromadb_start >/dev/null 2>&1; then
         audit_chromadb_start "$CHROMADB_PORT" "$data_dir"
+    fi
+
+    # Security audit: log ChromaDB startup with security configuration
+    if command -v log_security_event >/dev/null 2>&1; then
+        local tls_status="disabled"
+        [[ "$CHROMADB_TLS_ENABLED" == "true" ]] && tls_status="enabled"
+        log_security_event "CHROMADB_START" "port=${CHROMADB_PORT} data_dir=${data_dir} auth=token tls=${tls_status}" "INFO"
     fi
 }
 
@@ -368,19 +453,26 @@ wait_for_chromadb() {
 
     log_info "Waiting for ChromaDB to be ready..."
 
-    # Read token from file for health check (SECURITY: not stored in variable longer than needed)
-    local auth_header=""
-    if [[ -f "$CHROMADB_TOKEN_FILE" ]]; then
-        auth_header="-H \"Authorization: Bearer \$(cat $CHROMADB_TOKEN_FILE)\""
+    # Determine protocol based on TLS setting
+    local protocol="http"
+    local curl_tls_opts=""
+    if [[ "$CHROMADB_TLS_ENABLED" == "true" ]]; then
+        protocol="https"
+        # Use the self-signed certificate for verification
+        curl_tls_opts="--cacert $CHROMADB_CERT_FILE"
     fi
 
     while [[ $waited -lt $max_wait ]]; do
         # Use circuit breaker to prevent cascade of health checks if service is failing
-        # Health check with authentication header
+        # Health check with authentication header and TLS certificate
         if circuit_breaker "chromadb-health" \
-            "curl -s -m 5 -H \"Authorization: Bearer \$(cat $CHROMADB_TOKEN_FILE 2>/dev/null || echo '')\" 'http://localhost:${CHROMADB_PORT}/api/v2/heartbeat' >/dev/null 2>&1" \
+            "curl -s -m 5 $curl_tls_opts -H \"Authorization: Bearer \$(cat $CHROMADB_TOKEN_FILE 2>/dev/null || echo '')\" '${protocol}://localhost:${CHROMADB_PORT}/api/v2/heartbeat' >/dev/null 2>&1" \
             5 10; then
-            log_success "ChromaDB ready on port $CHROMADB_PORT with authentication (waited: ${waited}s)"
+            local tls_status=""
+            if [[ "$CHROMADB_TLS_ENABLED" == "true" ]]; then
+                tls_status=" + TLS"
+            fi
+            log_success "ChromaDB ready on port $CHROMADB_PORT with authentication${tls_status} (waited: ${waited}s)"
             return 0
         fi
         sleep 1
@@ -439,6 +531,11 @@ run_coordinator() {
         audit_coordinator_start "hal9000-parent"
     fi
 
+    # Security audit: log coordinator start with security context
+    if command -v log_security_event >/dev/null 2>&1; then
+        log_security_event "COORDINATOR_START" "pid=$$ chromadb_port=${CHROMADB_PORT}" "INFO"
+    fi
+
     # Source coordinator functions if available
     if [[ -f "/scripts/coordinator.sh" ]]; then
         source /scripts/coordinator.sh
@@ -484,6 +581,11 @@ cleanup_on_exit() {
     # Audit log coordinator stop
     if command -v audit_coordinator_stop >/dev/null 2>&1; then
         audit_coordinator_stop "hal9000-parent" "$exit_code"
+    fi
+
+    # Security audit: log coordinator stop
+    if command -v log_security_event >/dev/null 2>&1; then
+        log_security_event "COORDINATOR_STOP" "exit_code=${exit_code}" "INFO"
     fi
 
     # List and optionally stop workers

@@ -37,19 +37,27 @@ test_result() {
 ##############################################################################
 
 test_volume_documentation() {
-    # Test that help mentions Docker volumes
+    # Test that help mentions Docker volumes (user-isolated)
     local help_output=$($HAL9000_SCRIPT --help 2>&1)
 
-    if echo "$help_output" | grep -q "hal9000-claude-home"; then
-        test_result "Help documents hal9000-claude-home volume" 0
+    # User-isolated volumes use hal9000-<type>-<hash> pattern
+    if echo "$help_output" | grep -q "hal9000-claude-home-<hash>"; then
+        test_result "Help documents hal9000-claude-home-<hash> volume" 0
     else
-        test_result "Help documents hal9000-claude-home volume" 1
+        test_result "Help documents hal9000-claude-home-<hash> volume" 1
     fi
 
-    if echo "$help_output" | grep -q "hal9000-memory-bank"; then
-        test_result "Help documents hal9000-memory-bank volume" 0
+    if echo "$help_output" | grep -q "hal9000-memory-bank-<hash>"; then
+        test_result "Help documents hal9000-memory-bank-<hash> volume" 0
     else
-        test_result "Help documents hal9000-memory-bank volume" 1
+        test_result "Help documents hal9000-memory-bank-<hash> volume" 1
+    fi
+
+    # Check for user isolation documentation
+    if echo "$help_output" | grep -q "User-Isolated"; then
+        test_result "Help documents user isolation" 0
+    else
+        test_result "Help documents user isolation" 1
     fi
 }
 
