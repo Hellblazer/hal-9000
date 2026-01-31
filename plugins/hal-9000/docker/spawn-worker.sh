@@ -315,7 +315,8 @@ spawn_worker() {
         # Also create TMUX sockets directory in host mode
         local tmux_sockets_dir="${hal9000_home}/tmux-sockets"
         mkdir -p "$tmux_sockets_dir" 2>/dev/null || true
-        chmod 0777 "$tmux_sockets_dir" 2>/dev/null || true
+        # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
+        chmod 0770 "$tmux_sockets_dir" 2>/dev/null || true
         docker_args+=(-v "${claude_home}:${claude_home_path}")
         log_info "Host mode: using shared directory $claude_home"
     fi

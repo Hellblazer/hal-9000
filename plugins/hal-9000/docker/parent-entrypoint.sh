@@ -46,7 +46,8 @@ init_directories() {
 
     # TMUX sockets directory
     mkdir -p "${TMUX_SOCKET_DIR:-/data/tmux-sockets}"
-    chmod 0777 "${TMUX_SOCKET_DIR:-/data/tmux-sockets}"
+    # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
+    chmod 0770 "${TMUX_SOCKET_DIR:-/data/tmux-sockets}"
 
     log_success "Directories initialized"
 }

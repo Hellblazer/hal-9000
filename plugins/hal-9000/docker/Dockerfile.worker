@@ -68,7 +68,8 @@ RUN groupadd -g ${CLAUDE_GID} claude && \
 # - /data/memory-bank: Memory Bank data (shared volume)
 # - /data/tmux-sockets: TMUX socket directory for inter-process communication
 RUN mkdir -p /workspace /home/claude/.claude /data/memory-bank /data/tmux-sockets /scripts && \
-    chmod 0777 /data/tmux-sockets && \
+    # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
+    chmod 0770 /data/tmux-sockets && \
     chown -R claude:claude /workspace /home/claude /data/memory-bank /scripts
 
 # ============================================================================

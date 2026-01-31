@@ -201,6 +201,15 @@ validate_worker_sessions() {
             socket_name=$(basename "$socket" .sock)
             local worker_name="${socket_name#worker-}"
 
+            # SECURITY: Validate worker name format (alphanumeric, dash, underscore only)
+            # Prevents command injection via specially-crafted socket filenames
+            if [[ ! "$worker_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+                log_error "Invalid worker name from socket: $worker_name (contains invalid characters)"
+                rm -f "$socket" 2>/dev/null || true
+                ((stale_count++))
+                continue
+            fi
+
             # Check if corresponding container is running
             if ! docker ps --format '{{.Names}}' | grep -q "^${worker_name}$"; then
                 log_warn "Removing stale TMUX socket: $socket"
@@ -220,6 +229,13 @@ get_worker_tmux_socket() {
 
     if [[ -z "$worker_name" ]]; then
         log_error "Worker name required"
+        return 1
+    fi
+
+    # SECURITY: Validate worker name format (alphanumeric, dash, underscore only)
+    # Prevents command injection via malformed worker names
+    if [[ ! "$worker_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+        log_error "Invalid worker name: $worker_name (contains invalid characters)"
         return 1
     fi
 
