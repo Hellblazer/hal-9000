@@ -121,7 +121,8 @@ init_tmux_server() {
 
     # Ensure socket directory exists
     mkdir -p "$tmux_socket_dir"
-    chmod 0777 "$tmux_socket_dir"
+    # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
+    chmod 0770 "$tmux_socket_dir"
 
     # Kill any existing tmux server from previous runs
     tmux -S "$parent_socket" kill-server 2>/dev/null || true

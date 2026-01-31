@@ -71,6 +71,14 @@ init_claude_home() {
     mkdir -p "$CLAUDE_HOME"
     mkdir -p "$MEMORY_BANK_ROOT"
 
+    # UPGRADE MIGRATION (Issue #8): UID changed from 1000 to 1001
+    # For existing volumes created by old image (UID 1000), fix ownership
+    if [[ -d "$CLAUDE_HOME" ]] && [[ $(find "$CLAUDE_HOME" -uid 1000 -print -quit 2>/dev/null) ]]; then
+        log_info "Migrating volume ownership from UID 1000 to UID 1001 (claude:claude)..."
+        find "$CLAUDE_HOME" -uid 1000 -exec chown claude:claude {} + 2>/dev/null || true
+        log_success "Volume ownership migrated - credentials and plugins now accessible"
+    fi
+
     # Check for authentication
     if [[ -f "$CLAUDE_HOME/.credentials.json" ]]; then
         log_success "Authentication credentials found"
@@ -185,8 +193,8 @@ verify_chromadb_connectivity() {
     local wait_time=2  # Start with 2 second wait
 
     while [[ $attempt -le $max_attempts ]]; do
-        # Use curl to check ChromaDB health endpoint
-        if curl -s -m 5 "http://${CHROMADB_HOST}:${CHROMADB_PORT}/api/v1/heartbeat" >/dev/null 2>&1; then
+        # Use curl to check ChromaDB health endpoint (v2 API - matches parent-entrypoint.sh)
+        if curl -s -m 5 "http://${CHROMADB_HOST}:${CHROMADB_PORT}/api/v2/heartbeat" >/dev/null 2>&1; then
             log_success "ChromaDB connectivity verified: http://${CHROMADB_HOST}:${CHROMADB_PORT}"
             return 0
         fi
@@ -303,7 +311,8 @@ init_tmux_sockets_dir() {
     log_info "Initializing TMUX socket directory: $TMUX_SOCKET_DIR"
 
     mkdir -p "$TMUX_SOCKET_DIR"
-    chmod 0777 "$TMUX_SOCKET_DIR"
+    # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
+    chmod 0770 "$TMUX_SOCKET_DIR"
 
     log_success "TMUX socket directory ready"
 }
