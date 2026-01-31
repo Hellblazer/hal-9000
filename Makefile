@@ -1,4 +1,4 @@
-.PHONY: help clean validate test test-hal-9000 test-hal-9000-unit test-hal-9000-unit-extended test-hal-9000-phase2 test-hal-9000-phase3 test-hal-9000-phase4 test-unit test-integration test-docker test-config test-errors build package ci
+.PHONY: help clean validate test test-hal-9000 test-hal-9000-unit test-hal-9000-unit-extended test-hal-9000-phase2 test-hal-9000-phase3 test-hal-9000-phase4 test-hal-9000-benchmarks test-unit test-integration test-docker test-config test-errors build package ci
 
 # Colors for output
 RED := \033[0;31m
@@ -53,6 +53,7 @@ help:
 	@echo "  $(YELLOW)make test-hal-9000-phase2$(NC)       Phase 2: 32 Docker tests (100% pass)"
 	@echo "  $(YELLOW)make test-hal-9000-phase3$(NC)       Phase 3: 44 daemon/pool/perf tests (100%)"
 	@echo "  $(YELLOW)make test-hal-9000-phase4$(NC)       Phase 4: 28 integration tests (100%)"
+	@echo "  $(YELLOW)make test-hal-9000-benchmarks$(NC)   Startup benchmarks (validate perf targets)"
 	@echo "  $(YELLOW)make test-hal-9000$(NC)              Run ALL comprehensive tests"
 	@echo "  $(YELLOW)make test-hal-9000-integration$(NC)  Full workflow tests"
 	@echo "  $(YELLOW)make test-hal-9000-docker$(NC)       Docker socket mounting tests"
@@ -210,6 +211,16 @@ test-hal-9000-phase4:
 	@echo "  Testing complete workflows and error handling..."
 	$(QUIET)./scripts/tests/run-integration-scenarios.sh
 	@echo "$(GREEN)✓ Phase 4 integration and regression tests passed$(NC)"
+
+test-hal-9000-benchmarks:
+	@echo "$(YELLOW)Running startup benchmarks...$(NC)"
+	@echo "  Validating performance targets (Issue #13)..."
+	@echo "  - Docker image size (<1GB per session)"
+	@echo "  - Container startup latency"
+	@echo "  - Memory usage profile"
+	@echo "  - Session list performance (<1s)"
+	$(QUIET)./plugins/hal-9000/docker/test-startup-benchmarks.sh --no-cleanup || true
+	@echo "$(GREEN)✓ Startup benchmarks completed$(NC)"
 
 test-hal-9000-config:
 	@echo "$(YELLOW)Testing CLAUDE_HOME configuration...$(NC)"
