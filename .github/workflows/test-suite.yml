@@ -1,0 +1,180 @@
+name: HAL-9000 Test Suite
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run Test Suite
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker
+      uses: docker/setup-buildx-action@v3
+
+    - name: Verify Docker is running
+      run: |
+        docker --version
+        docker ps
+
+    - name: Make hal-9000 executable
+      run: chmod +x hal-9000
+
+    - name: Run comprehensive test suite
+      run: |
+        echo "Running HAL-9000 comprehensive test suite..."
+        ./tests/run-all-tests.sh
+      continue-on-error: false
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: |
+          tests/*.log
+        retention-days: 30
+
+  lint:
+    name: Shell Script Linting
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run shellcheck on hal-9000 script
+      run: shellcheck hal-9000 || true
+
+    - name: Run shellcheck on install script
+      run: shellcheck install-hal-9000.sh || true
+
+    - name: Run shellcheck on test scripts
+      run: |
+        for script in tests/test-category-*.sh tests/run-all-tests.sh; do
+          if [ -f "$script" ]; then
+            echo "Checking $script..."
+            shellcheck "$script" || true
+          fi
+        done
+
+  version-check:
+    name: Version Consistency Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install jq
+      run: sudo apt-get update && sudo apt-get install -y jq
+
+    - name: Check version consistency
+      run: |
+        echo "Checking version consistency across artifacts..."
+
+        # Extract versions
+        README_VERSION=$(grep -o 'version-[0-9.]*-blue' README.md | head -1 | sed 's/version-\(.*\)-blue/\1/')
+        SCRIPT_VERSION=$(grep -o 'SCRIPT_VERSION="[0-9.]*"' hal-9000 | sed 's/SCRIPT_VERSION="\(.*\)"/\1/')
+        PLUGIN_VERSION=$(jq -r '.version' plugins/hal-9000/.claude-plugin/plugin.json)
+        MARKETPLACE_VERSION=$(jq -r '.plugins[] | select(.name=="hal-9000") | .version' .claude-plugin/marketplace.json)
+
+        echo "README version:      $README_VERSION"
+        echo "Script version:      $SCRIPT_VERSION"
+        echo "Plugin version:      $PLUGIN_VERSION"
+        echo "Marketplace version: $MARKETPLACE_VERSION"
+
+        # Check consistency
+        if [ "$README_VERSION" = "$SCRIPT_VERSION" ] && \
+           [ "$SCRIPT_VERSION" = "$PLUGIN_VERSION" ] && \
+           [ "$PLUGIN_VERSION" = "$MARKETPLACE_VERSION" ]; then
+          echo "✅ All versions are consistent: $SCRIPT_VERSION"
+          exit 0
+        else
+          echo "❌ Version mismatch detected!"
+          exit 1
+        fi
+
+  json-validation:
+    name: JSON Configuration Validation
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install jq
+      run: sudo apt-get update && sudo apt-get install -y jq
+
+    - name: Validate marketplace.json
+      run: |
+        echo "Validating marketplace.json..."
+        jq empty .claude-plugin/marketplace.json
+        echo "✅ marketplace.json is valid"
+
+    - name: Validate plugin.json
+      run: |
+        echo "Validating plugin.json..."
+        jq empty plugins/hal-9000/.claude-plugin/plugin.json
+        echo "✅ plugin.json is valid"
+
+    - name: Check marketplace structure
+      run: |
+        echo "Checking marketplace.json structure..."
+        HAS_PLUGINS=$(jq 'has("plugins")' .claude-plugin/marketplace.json)
+        if [ "$HAS_PLUGINS" = "true" ]; then
+          PLUGIN_COUNT=$(jq '.plugins | length' .claude-plugin/marketplace.json)
+          echo "✅ Marketplace has $PLUGIN_COUNT plugin(s)"
+        else
+          echo "❌ marketplace.json missing 'plugins' field"
+          exit 1
+        fi
+
+  security-check:
+    name: Security Checks
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check for secrets in code
+      run: |
+        echo "Scanning for potential secrets..."
+        if grep -r "ANTHROPIC_API_KEY.*=.*sk-ant-" . --exclude-dir=.git --exclude-dir=tests || \
+           grep -r "API_KEY.*=.*[a-zA-Z0-9]{20,}" . --exclude-dir=.git --exclude-dir=tests; then
+          echo "❌ Potential secrets found in code!"
+          exit 1
+        else
+          echo "✅ No hardcoded secrets detected"
+        fi
+
+    - name: Verify seccomp profiles exist
+      run: |
+        echo "Checking seccomp security profiles..."
+        if [ -f "plugins/hal-9000/seccomp/hal9000-base.json" ] && \
+           [ -f "plugins/hal-9000/seccomp/hal9000-audit.json" ]; then
+          echo "✅ Seccomp profiles present"
+        else
+          echo "❌ Seccomp profiles missing"
+          exit 1
+        fi
+
+    - name: Validate seccomp JSON syntax
+      run: |
+        if command -v jq &> /dev/null; then
+          jq empty plugins/hal-9000/seccomp/hal9000-base.json
+          jq empty plugins/hal-9000/seccomp/hal9000-audit.json
+          echo "✅ Seccomp profiles have valid JSON"
+        else
+          echo "⚠️  jq not available, skipping JSON validation"
+        fi
