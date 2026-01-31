@@ -28,6 +28,96 @@ log_warn() { printf "${YELLOW}[coord]${NC} %s\n" "$1"; }
 log_error() { printf "${RED}[coord]${NC} %s\n" "$1" >&2; }
 
 # ============================================================================
+# RESILIENCE FUNCTIONS
+# ============================================================================
+
+# retry_with_backoff: Execute command with exponential backoff
+# Usage: retry_with_backoff "command" [max_retries]
+# Default: 3 retries with backoff of 1s, 2s, 4s
+retry_with_backoff() {
+    local cmd="$1"
+    local max_retries="${2:-3}"
+    local attempt=1
+    local wait_time=1
+
+    while [[ $attempt -le $max_retries ]]; do
+        if eval "$cmd"; then
+            return 0
+        fi
+
+        if [[ $attempt -lt $max_retries ]]; then
+            log_warn "Command failed (attempt $attempt/$max_retries), retrying in ${wait_time}s: $cmd"
+            sleep "$wait_time"
+            wait_time=$((wait_time * 2))
+        else
+            log_error "Command failed after $max_retries attempts: $cmd"
+            return 1
+        fi
+
+        ((attempt++))
+    done
+
+    return 1
+}
+
+# circuit_breaker: Track failures and open circuit after threshold
+# Global circuit state: CIRCUIT_BREAKER_STATE and CIRCUIT_BREAKER_FAILURES
+declare -gA CIRCUIT_BREAKER_STATE
+declare -gA CIRCUIT_BREAKER_FAILURES
+declare -gA CIRCUIT_BREAKER_LAST_ATTEMPT
+
+circuit_breaker() {
+    local service_name="$1"
+    local cmd="$2"
+    local failure_threshold="${3:-5}"
+    local half_open_wait="${4:-30}"
+
+    local state="${CIRCUIT_BREAKER_STATE[$service_name]:-closed}"
+    local failures="${CIRCUIT_BREAKER_FAILURES[$service_name]:-0}"
+    local last_attempt="${CIRCUIT_BREAKER_LAST_ATTEMPT[$service_name]:-0}"
+    local now
+    now=$(date +%s)
+
+    # OPEN: Circuit is open, reject immediately
+    if [[ "$state" == "open" ]]; then
+        local elapsed=$((now - last_attempt))
+        if [[ $elapsed -ge $half_open_wait ]]; then
+            log_warn "Circuit breaker transitioning to half-open ($service_name)"
+            CIRCUIT_BREAKER_STATE[$service_name]="half-open"
+            state="half-open"
+        else
+            log_error "Circuit breaker OPEN ($service_name) - rejecting request (wait ${half_open_wait}s)"
+            return 1
+        fi
+    fi
+
+    # HALF-OPEN or CLOSED: Try to execute command
+    if eval "$cmd"; then
+        # Success: reset failures and close circuit
+        CIRCUIT_BREAKER_FAILURES[$service_name]=0
+        CIRCUIT_BREAKER_STATE[$service_name]="closed"
+        if [[ "$state" == "half-open" ]]; then
+            log_success "Circuit breaker CLOSED ($service_name) - service recovered"
+        fi
+        return 0
+    else
+        # Failure: increment counter
+        ((failures++))
+        CIRCUIT_BREAKER_FAILURES[$service_name]=$failures
+
+        if [[ $failures -ge $failure_threshold ]]; then
+            log_error "Circuit breaker OPEN ($service_name) - $failures failures reached threshold ($failure_threshold)"
+            CIRCUIT_BREAKER_STATE[$service_name]="open"
+            CIRCUIT_BREAKER_LAST_ATTEMPT[$service_name]=$now
+            return 1
+        else
+            log_warn "Circuit breaker failure count: $failures/$failure_threshold ($service_name)"
+            return 1
+        fi
+    fi
+}
+
+# ============================================================================
 # VALIDATION
 # ============================================================================
 
@@ -132,11 +222,18 @@ stop_worker() {
 
     log_info "Stopping worker: $worker_name"
 
-    if docker stop "$worker_name" >/dev/null 2>&1; then
+    # Use circuit breaker for Docker stop operation (can fail transiently)
+    if circuit_breaker "docker-stop" \
+        "docker stop '$worker_name' >/dev/null 2>&1" \
+        3 15; then
         log_success "Worker stopped: $worker_name"
 
-        # Clean up session metadata
-        cleanup_session_metadata "$worker_name"
+        # Clean up session metadata with retry
+        if retry_with_backoff "cleanup_session_metadata '$worker_name'" 2; then
+            log_success "Session metadata cleaned up"
+        else
+            log_warn "Failed to clean up session metadata for $worker_name"
+        fi
     else
         log_error "Failed to stop worker: $worker_name"
         return 1
@@ -241,7 +338,14 @@ init_coordinator_state() {
 
 update_worker_registry() {
     local workers
-    workers=$(docker ps --filter "name=hal9000-worker" --format "{{.Names}}" 2>/dev/null)
+
+    # Fetch worker list with retry (Docker daemon might be temporarily unresponsive)
+    if ! retry_with_backoff \
+        "workers=\$(docker ps --filter 'name=hal9000-worker' --format '{{.Names}}' 2>/dev/null)" \
+        2; then
+        log_warn "Failed to fetch worker list after retries, using stale registry"
+        return 1
+    fi
 
     init_coordinator_state
 
@@ -264,11 +368,17 @@ update_worker_registry() {
                 tmux_ok="true"
             fi
 
-            # Get container info
+            # Get container info with circuit breaker for transient failures
             local container_id
-            container_id=$(docker ps --filter "name=^${worker_name}$" --format "{{.ID}}" 2>/dev/null)
+            if circuit_breaker "docker-inspect" \
+                "container_id=\$(docker ps --filter 'name=^${worker_name}\$' --format '{{.ID}}' 2>/dev/null)" \
+                3 10; then
+                :
+            else
+                container_id="unknown"
+            fi
 
-            # Get uptime
+            # Get uptime - non-critical, use default if fails
             local created_at
             created_at=$(docker inspect "$container_id" --format='{{.Created}}' 2>/dev/null || echo "unknown")
 

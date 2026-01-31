@@ -33,6 +33,96 @@ log_warn() { printf "${YELLOW}[${WORKER_NAME}]${NC} %s\n" "$1"; }
 log_error() { printf "${RED}[${WORKER_NAME}]${NC} %s\n" "$1" >&2; }
 
 # ============================================================================
+# RESILIENCE FUNCTIONS
+# ============================================================================
+
+# retry_with_backoff: Execute command with exponential backoff
+# Usage: retry_with_backoff "command" [max_retries]
+# Default: 3 retries with backoff of 1s, 2s, 4s
+retry_with_backoff() {
+    local cmd="$1"
+    local max_retries="${2:-3}"
+    local attempt=1
+    local wait_time=1
+
+    while [[ $attempt -le $max_retries ]]; do
+        if eval "$cmd"; then
+            return 0
+        fi
+
+        if [[ $attempt -lt $max_retries ]]; then
+            log_warn "Command failed (attempt $attempt/$max_retries), retrying in ${wait_time}s: $cmd"
+            sleep "$wait_time"
+            wait_time=$((wait_time * 2))
+        else
+            log_error "Command failed after $max_retries attempts: $cmd"
+            return 1
+        fi
+
+        ((attempt++))
+    done
+
+    return 1
+}
+
+# circuit_breaker: Track failures and open circuit after threshold
+# Global circuit state: CIRCUIT_BREAKER_STATE and CIRCUIT_BREAKER_FAILURES
+declare -gA CIRCUIT_BREAKER_STATE
+declare -gA CIRCUIT_BREAKER_FAILURES
+declare -gA CIRCUIT_BREAKER_LAST_ATTEMPT
+
+circuit_breaker() {
+    local service_name="$1"
+    local cmd="$2"
+    local failure_threshold="${3:-5}"
+    local half_open_wait="${4:-30}"
+
+    local state="${CIRCUIT_BREAKER_STATE[$service_name]:-closed}"
+    local failures="${CIRCUIT_BREAKER_FAILURES[$service_name]:-0}"
+    local last_attempt="${CIRCUIT_BREAKER_LAST_ATTEMPT[$service_name]:-0}"
+    local now
+    now=$(date +%s)
+
+    # OPEN: Circuit is open, reject immediately
+    if [[ "$state" == "open" ]]; then
+        local elapsed=$((now - last_attempt))
+        if [[ $elapsed -ge $half_open_wait ]]; then
+            log_warn "Circuit breaker transitioning to half-open ($service_name)"
+            CIRCUIT_BREAKER_STATE[$service_name]="half-open"
+            state="half-open"
+        else
+            log_error "Circuit breaker OPEN ($service_name) - rejecting request (wait ${half_open_wait}s)"
+            return 1
+        fi
+    fi
+
+    # HALF-OPEN or CLOSED: Try to execute command
+    if eval "$cmd"; then
+        # Success: reset failures and close circuit
+        CIRCUIT_BREAKER_FAILURES[$service_name]=0
+        CIRCUIT_BREAKER_STATE[$service_name]="closed"
+        if [[ "$state" == "half-open" ]]; then
+            log_success "Circuit breaker CLOSED ($service_name) - service recovered"
+        fi
+        return 0
+    else
+        # Failure: increment counter
+        ((failures++))
+        CIRCUIT_BREAKER_FAILURES[$service_name]=$failures
+
+        if [[ $failures -ge $failure_threshold ]]; then
+            log_error "Circuit breaker OPEN ($service_name) - $failures failures reached threshold ($failure_threshold)"
+            CIRCUIT_BREAKER_STATE[$service_name]="open"
+            CIRCUIT_BREAKER_LAST_ATTEMPT[$service_name]=$now
+            return 1
+        else
+            log_warn "Circuit breaker failure count: $failures/$failure_threshold ($service_name)"
+            return 1
+        fi
+    fi
+}
+
+# ============================================================================
 # CONFIGURATION
 # ============================================================================
 
@@ -187,31 +277,18 @@ verify_claude() {
 verify_chromadb_connectivity() {
     log_info "Verifying ChromaDB connectivity..."
 
-    # Try to connect to ChromaDB with retries and exponential backoff
-    local max_attempts=5
-    local attempt=1
-    local wait_time=2  # Start with 2 second wait
-
-    while [[ $attempt -le $max_attempts ]]; do
-        # Use curl to check ChromaDB health endpoint (v2 API - matches parent-entrypoint.sh)
-        if curl -s -m 5 "http://${CHROMADB_HOST}:${CHROMADB_PORT}/api/v2/heartbeat" >/dev/null 2>&1; then
-            log_success "ChromaDB connectivity verified: http://${CHROMADB_HOST}:${CHROMADB_PORT}"
-            return 0
-        fi
-
-        if [[ $attempt -lt $max_attempts ]]; then
-            log_warn "ChromaDB connection attempt $attempt/$max_attempts failed, retrying in ${wait_time}s..."
-            sleep "$wait_time"
-            # Exponential backoff: 2s, 4s, 8s, 16s
-            wait_time=$((wait_time * 2))
-        fi
-
-        ((attempt++))
-    done
+    # Use circuit breaker pattern to prevent cascading failures
+    # ChromaDB health check with retry
+    if retry_with_backoff \
+        "curl -s -m 5 'http://${CHROMADB_HOST}:${CHROMADB_PORT}/api/v2/heartbeat' >/dev/null 2>&1" \
+        3; then
+        log_success "ChromaDB connectivity verified: http://${CHROMADB_HOST}:${CHROMADB_PORT}"
+        return 0
+    fi
 
     # ChromaDB not responding - log warning but don't fail
     # (ChromaDB may start later, chroma-mcp has its own reconnection logic)
-    log_warn "ChromaDB not responding after $max_attempts attempts"
+    log_warn "ChromaDB not responding after retries"
     log_warn "ChromaDB configuration: host=${CHROMADB_HOST}, port=${CHROMADB_PORT}"
     log_info "Note: chroma-mcp client will retry automatically when Claude uses ChromaDB"
     return 1  # Warning, not fatal
@@ -374,17 +451,43 @@ start_tmux_session() {
 # Worker process cannot directly clean up host-side metadata files
 
 cleanup_on_exit() {
-    log_info "Worker shutting down..."
+    local exit_code=$?
+    log_info "Worker shutting down (exit code: $exit_code)..."
 
+    # Graceful TMUX cleanup
     if [[ "$TMUX_ENABLED" == "true" && -n "${TMUX_SOCKET:-}" ]]; then
         log_info "Cleaning up TMUX server..."
-        tmux -S "$TMUX_SOCKET" kill-server 2>/dev/null || true
+
+        if [[ -S "$TMUX_SOCKET" ]]; then
+            # Try graceful shutdown first
+            if tmux -S "$TMUX_SOCKET" kill-server 2>/dev/null; then
+                log_success "TMUX server stopped gracefully"
+            else
+                log_warn "Failed to stop TMUX gracefully, forcing shutdown"
+            fi
+            sleep 1
+        fi
     fi
 
-    exit 0
+    # Clean up any temporary files created during startup
+    if [[ -d "$CLAUDE_HOME/.tmp" ]]; then
+        find "$CLAUDE_HOME/.tmp" -type f -mtime +1 -delete 2>/dev/null || true
+    fi
+
+    # Cleanup stale background processes
+    # Jobs list shows backgrounded processes in this shell
+    local jobs_count
+    jobs_count=$(jobs -p | wc -l)
+    if [[ $jobs_count -gt 0 ]]; then
+        log_info "Killing $jobs_count background processes..."
+        jobs -p | xargs -r kill -9 2>/dev/null || true
+    fi
+
+    log_info "Worker cleanup complete"
+    exit "$exit_code"
 }
 
-trap cleanup_on_exit SIGTERM SIGINT
+trap cleanup_on_exit SIGTERM SIGINT EXIT
 
 # ============================================================================
 # MAIN
