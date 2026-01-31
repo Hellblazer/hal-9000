@@ -70,6 +70,49 @@ verify_docker_socket() {
     log_success "Docker socket verified"
 }
 
+check_resource_limits() {
+    log_info "Checking resource limits (Issue #10)..."
+
+    # Check memory limit
+    if [ -f /sys/fs/cgroup/memory.limit_in_bytes ]; then
+        local mem_limit=$(cat /sys/fs/cgroup/memory.limit_in_bytes 2>/dev/null || echo "9223372036854775807")
+        # 9223372036854775807 is the unlimited value in cgroups v1
+        if [ "$mem_limit" -eq "9223372036854775807" ]; then
+            log_warn "No memory limit set - recommend: --memory=2g --memory-swap=2g"
+        else
+            local mem_gb=$(( mem_limit / 1024 / 1024 / 1024 ))
+            if [ "$mem_gb" -lt 2 ]; then
+                log_warn "Memory limit is only ${mem_gb}GB - recommend 2GB minimum"
+            else
+                log_success "Memory limit configured: ${mem_gb}GB"
+            fi
+        fi
+    elif [ -f /sys/fs/cgroup/memory.max ]; then
+        # cgroups v2
+        local mem_limit=$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo "max")
+        if [ "$mem_limit" = "max" ]; then
+            log_warn "No memory limit set - recommend: --memory=2g --memory-swap=2g"
+        else
+            local mem_gb=$(( mem_limit / 1024 / 1024 / 1024 ))
+            if [ "$mem_gb" -lt 2 ]; then
+                log_warn "Memory limit is only ${mem_gb}GB - recommend 2GB minimum"
+            else
+                log_success "Memory limit configured: ${mem_gb}GB"
+            fi
+        fi
+    else
+        log_info "Cannot determine cgroup version - skipping resource validation"
+    fi
+
+    # Check CPU limit via cpuset
+    if [ -f /sys/fs/cgroup/cpuset.cpus ]; then
+        local cpus=$(cat /sys/fs/cgroup/cpuset.cpus 2>/dev/null || echo "")
+        if [ -n "$cpus" ]; then
+            log_success "CPU affinity configured: $cpus"
+        fi
+    fi
+}
+
 init_tmux_server() {
     log_info "Initializing parent TMUX server..."
 
@@ -352,6 +395,7 @@ main() {
     # Phase 1: Critical initialization (must be synchronous)
     init_directories
     verify_docker_socket
+    check_resource_limits
     log_startup_time "Phase 1 (critical init)"
 
     # Phase 2: Parallel service startup
