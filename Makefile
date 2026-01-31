@@ -1,4 +1,4 @@
-.PHONY: help clean validate test test-hal-9000 test-hal-9000-unit test-hal-9000-unit-extended test-hal-9000-phase2 test-unit test-integration test-docker test-config test-errors build package ci
+.PHONY: help clean validate test test-hal-9000 test-hal-9000-unit test-hal-9000-unit-extended test-hal-9000-phase2 test-hal-9000-phase3 test-unit test-integration test-docker test-config test-errors build package ci
 
 # Colors for output
 RED := \033[0;31m
@@ -49,8 +49,9 @@ help:
 	@echo "$(GREEN)hal-9000 Testing:$(NC)"
 	@echo "  $(YELLOW)make test-hal-9000-syntax$(NC)        Check bash syntax"
 	@echo "  $(YELLOW)make test-hal-9000-unit$(NC)         Unit tests (profile, session naming)"
-	@echo "  $(YELLOW)make test-hal-9000-unit-extended$(NC) Extended unit tests (Phase 1: 30 edge cases)"
-	@echo "  $(YELLOW)make test-hal-9000-phase2$(NC)       Phase 2: Session lifecycle (32 Docker tests)"
+	@echo "  $(YELLOW)make test-hal-9000-unit-extended$(NC) Phase 1: 30 edge case tests"
+	@echo "  $(YELLOW)make test-hal-9000-phase2$(NC)       Phase 2: 32 Docker integration tests"
+	@echo "  $(YELLOW)make test-hal-9000-phase3$(NC)       Phase 3: 44 daemon/pool/perf tests"
 	@echo "  $(YELLOW)make test-hal-9000-integration$(NC)  Full workflow tests"
 	@echo "  $(YELLOW)make test-hal-9000-docker$(NC)       Docker socket mounting tests"
 	@echo "  $(YELLOW)make test-hal-9000-config$(NC)       Configuration override tests"
@@ -156,7 +157,7 @@ test: test-hal-9000
 	@echo "$(GREEN)║         All Tests Passed ✓                        ║$(NC)"
 	@echo "$(GREEN)╚═══════════════════════════════════════════════════╝$(NC)"
 
-test-hal-9000: test-hal-9000-syntax test-hal-9000-unit test-hal-9000-unit-extended test-hal-9000-phase2 test-hal-9000-config test-hal-9000-errors test-hal-9000-integration test-hal-9000-docker
+test-hal-9000: test-hal-9000-syntax test-hal-9000-unit test-hal-9000-unit-extended test-hal-9000-phase2 test-hal-9000-phase3 test-hal-9000-config test-hal-9000-errors test-hal-9000-integration test-hal-9000-docker
 	@echo "$(GREEN)✓ All hal-9000 tests passed$(NC)"
 
 test-hal-9000-syntax: validate-bash
@@ -196,6 +197,12 @@ test-hal-9000-phase2:
 	@echo "  Testing session management..."
 	$(QUIET)./plugins/hal-9000/docker/test-phase2-session-lifecycle.sh
 	@echo "$(GREEN)✓ Phase 2 Docker integration tests passed$(NC)"
+
+test-hal-9000-phase3:
+	@echo "$(YELLOW)Running Phase 3 daemon, pool, and performance tests...$(NC)"
+	@echo "  Testing daemon orchestration, worker pools, and performance targets..."
+	$(QUIET)./plugins/hal-9000/docker/test-phase3-performance.sh
+	@echo "$(GREEN)✓ Phase 3 daemon/pool/performance tests passed$(NC)"
 
 test-hal-9000-config:
 	@echo "$(YELLOW)Testing CLAUDE_HOME configuration...$(NC)"
