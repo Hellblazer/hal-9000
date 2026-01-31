@@ -228,16 +228,20 @@ spawn_worker() {
     # Instead, they connect to ChromaDB via HTTP using parent's IP address
     docker_args+=(--network "bridge")
 
-    # Get parent container IP for ChromaDB access
+    # Use parent container name for DNS-based service discovery (more resilient than IP)
+    # Docker DNS automatically resolves container names to current IPs
     if [[ -n "$PARENT_CONTAINER" ]]; then
+        # Pass parent container name instead of IP for DNS resolution
+        # This allows parent IP changes (e.g., on restart) without breaking connections
+        docker_args+=(-e "PARENT_HOSTNAME=$PARENT_CONTAINER")
+        log_info "Parent hostname: $PARENT_CONTAINER (DNS-based service discovery)"
+
+        # Also pass PARENT_IP for backward compatibility (will attempt DNS resolution first)
         local parent_ip
         parent_ip=$(docker inspect "$PARENT_CONTAINER" --format='{{.NetworkSettings.IPAddress}}' 2>/dev/null || echo "")
-
         if [[ -n "$parent_ip" ]]; then
             docker_args+=(-e "PARENT_IP=$parent_ip")
-            log_info "Parent IP: $parent_ip (workers will access services via this IP)"
-        else
-            log_warn "Could not determine parent IP - workers will use hostname resolution"
+            log_info "Parent fallback IP: $parent_ip (for backward compatibility)"
         fi
     else
         log_warn "Parent container not specified - workers will need explicit service configuration"

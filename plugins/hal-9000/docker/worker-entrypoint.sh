@@ -40,14 +40,24 @@ CLAUDE_HOME="${CLAUDE_HOME:-/home/claude/.claude}"
 WORKSPACE="${WORKSPACE:-/workspace}"
 MEMORY_BANK_ROOT="${MEMORY_BANK_ROOT:-/data/memory-bank}"
 
-# ChromaDB configuration
-# If PARENT_IP is set (network decoupling mode), use it as ChromaDB host
-# Otherwise, fall back to CHROMADB_HOST or localhost
+# ChromaDB configuration with DNS-based service discovery
+# Prefer PARENT_HOSTNAME (container name) for Docker DNS resolution - more resilient than IP
+# Falls back to PARENT_IP for backward compatibility
+# Finally falls back to explicit CHROMADB_HOST or localhost
 CHROMADB_HOST="${CHROMADB_HOST:-}"
-if [[ -z "$CHROMADB_HOST" && -n "${PARENT_IP:-}" ]]; then
-    CHROMADB_HOST="${PARENT_IP}"
+if [[ -z "$CHROMADB_HOST" ]]; then
+    if [[ -n "${PARENT_HOSTNAME:-}" ]]; then
+        # Use parent container name - Docker DNS resolves to current IP
+        # More resilient: survives parent container restart with new IP
+        CHROMADB_HOST="${PARENT_HOSTNAME}"
+    elif [[ -n "${PARENT_IP:-}" ]]; then
+        # Fallback to IP for backward compatibility (less resilient)
+        CHROMADB_HOST="${PARENT_IP}"
+    else
+        # Default to localhost (for standalone worker or local development)
+        CHROMADB_HOST="localhost"
+    fi
 fi
-CHROMADB_HOST="${CHROMADB_HOST:-localhost}"
 CHROMADB_PORT="${CHROMADB_PORT:-8000}"
 
 # ============================================================================
@@ -125,8 +135,10 @@ EOF
     log_info "  - memory-bank: ${MEMORY_BANK_ROOT}"
 
     # Log ChromaDB configuration with network mode info
-    if [[ -n "${PARENT_IP:-}" ]]; then
-        log_info "  - chromadb: http://${CHROMADB_HOST}:${CHROMADB_PORT} (via PARENT_IP)"
+    if [[ -n "${PARENT_HOSTNAME:-}" ]]; then
+        log_info "  - chromadb: http://${CHROMADB_HOST}:${CHROMADB_PORT} (DNS via PARENT_HOSTNAME: ${PARENT_HOSTNAME})"
+    elif [[ -n "${PARENT_IP:-}" ]]; then
+        log_info "  - chromadb: http://${CHROMADB_HOST}:${CHROMADB_PORT} (fallback IP via PARENT_IP)"
     else
         log_info "  - chromadb: http://${CHROMADB_HOST}:${CHROMADB_PORT}"
     fi
