@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
 [![Container](https://img.shields.io/badge/docker-dind-success?logo=docker)](../../docker/README.md)
 
-Containerized Claude with Docker-in-Docker orchestration, persistent session state, multi-branch development, and safety tools.
+Containerized Claude with Docker-in-Docker orchestration, persistent storage, multi-branch development, and safety tools.
 
 ## Components
 
@@ -38,7 +38,7 @@ Core infrastructure MCP servers running at host level (set up via `setup-foundat
 - **Memory Bank** - Persistent cross-session memory with project-based organization
 - **Sequential Thinking** - Step-by-step reasoning for complex problem-solving
 
-These servers are automatically available in all worker containers and persist across sessions.
+These servers are automatically available in all worker containers. Configurations and data persist in volumes; use Memory Bank MCP to save work across container restarts.
 
 ### Development Environments
 
@@ -96,7 +96,8 @@ tmux-list-sessions.sh --json # JSON output
 - Each worker runs independent TMUX server via socket in `/data/tmux-sockets`
 - Socket-based IPC (no TTY, no namespace sharing)
 - Better isolation, performance, and scalability
-- Session persistence (survives detach/attach)
+- Active session maintained in TMUX process (survives detach/attach while parent runs)
+- For cross-session persistence, save work to Memory Bank MCP before stopping containers
 
 [TMUX Architecture Guide →](docs/TMUX_ARCHITECTURE.md)
 
@@ -130,7 +131,7 @@ aod-broadcast "cmd"              # Send to all sessions
 aod-cleanup                      # Stop all sessions
 ```
 
-**v2.0.0 Architecture:** Docker-in-Docker parent-worker orchestration with Foundation MCP servers (ChromaDB, Memory Bank, Sequential Thinking) running at host level. Workers share persistent volumes for credentials, plugins, and cross-session state.
+**v2.0.0 Architecture:** Docker-in-Docker parent-worker orchestration with Foundation MCP servers (ChromaDB, Memory Bank, Sequential Thinking) running at host level. Workers share persistent volumes for credentials, plugins, and data storage.
 
 ### hal9000 Sessions
 
