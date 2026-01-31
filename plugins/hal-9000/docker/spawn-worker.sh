@@ -34,6 +34,63 @@ log_success() { printf "${GREEN}[spawn]${NC} %s\n" "$1"; }
 log_warn() { printf "${YELLOW}[spawn]${NC} %s\n" "$1"; }
 log_error() { printf "${RED}[spawn]${NC} ERROR: %s\n" "$1" >&2; }
 
+# Issue #9: Error handling resilience
+# Retry logic for transient failures with exponential backoff
+retry_with_backoff() {
+    local max_attempts="${1:-3}"
+    local initial_wait="${2:-1}"
+    local description="${3:-operation}"
+    shift 3
+    local -a cmd=("$@")
+
+    local attempt=1
+    local wait_time=$initial_wait
+
+    while [ $attempt -le $max_attempts ]; do
+        log_info "Attempting $description (attempt $attempt/$max_attempts)..."
+
+        if "${cmd[@]}"; then
+            return 0
+        fi
+
+        local exit_code=$?
+
+        if [ $attempt -lt $max_attempts ]; then
+            log_warn "Command failed with exit code $exit_code, retrying in ${wait_time}s..."
+            sleep "$wait_time"
+            # Exponential backoff: double the wait time (1s, 2s, 4s, ...)
+            wait_time=$((wait_time * 2))
+        else
+            log_error "Command failed after $max_attempts attempts"
+            return $exit_code
+        fi
+
+        ((attempt++))
+    done
+
+    return 1
+}
+
+cleanup_on_error() {
+    local worker_name="$1"
+
+    log_warn "Cleaning up due to error..."
+
+    # Attempt to remove container if it was created
+    if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${worker_name}$"; then
+        log_info "Removing failed container: $worker_name"
+        docker rm -f "$worker_name" 2>/dev/null || log_warn "Could not remove container: $worker_name"
+    fi
+
+    # Remove session metadata
+    local session_file="${HAL9000_HOME:-$HOME/.hal9000}/sessions/${worker_name}.json"
+    if [ -f "$session_file" ]; then
+        rm -f "$session_file" 2>/dev/null || log_warn "Could not remove session file: $session_file"
+    fi
+
+    log_info "Cleanup completed"
+}
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -228,16 +285,20 @@ spawn_worker() {
     # Instead, they connect to ChromaDB via HTTP using parent's IP address
     docker_args+=(--network "bridge")
 
-    # Get parent container IP for ChromaDB access
+    # Use parent container name for DNS-based service discovery (more resilient than IP)
+    # Docker DNS automatically resolves container names to current IPs
     if [[ -n "$PARENT_CONTAINER" ]]; then
+        # Pass parent container name instead of IP for DNS resolution
+        # This allows parent IP changes (e.g., on restart) without breaking connections
+        docker_args+=(-e "PARENT_HOSTNAME=$PARENT_CONTAINER")
+        log_info "Parent hostname: $PARENT_CONTAINER (DNS-based service discovery)"
+
+        # Also pass PARENT_IP for backward compatibility (will attempt DNS resolution first)
         local parent_ip
         parent_ip=$(docker inspect "$PARENT_CONTAINER" --format='{{.NetworkSettings.IPAddress}}' 2>/dev/null || echo "")
-
         if [[ -n "$parent_ip" ]]; then
             docker_args+=(-e "PARENT_IP=$parent_ip")
-            log_info "Parent IP: $parent_ip (workers will access services via this IP)"
-        else
-            log_warn "Could not determine parent IP - workers will use hostname resolution"
+            log_info "Parent fallback IP: $parent_ip (for backward compatibility)"
         fi
     else
         log_warn "Parent container not specified - workers will need explicit service configuration"
@@ -298,7 +359,7 @@ spawn_worker() {
     # Use a single shared volume for all workers
     local claude_volume="hal9000-claude-home"
 
-    # SECURITY: Workers run as non-root user 'claude' (UID 1000)
+    # SECURITY: Workers run as non-root user 'claude' (UID 1001)
     # Mount to /home/claude/.claude instead of /root/.claude
     local claude_home_path="/home/claude/.claude"
 
@@ -315,7 +376,8 @@ spawn_worker() {
         # Also create TMUX sockets directory in host mode
         local tmux_sockets_dir="${hal9000_home}/tmux-sockets"
         mkdir -p "$tmux_sockets_dir" 2>/dev/null || true
-        chmod 0777 "$tmux_sockets_dir" 2>/dev/null || true
+        # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
+        chmod 0770 "$tmux_sockets_dir" 2>/dev/null || true
         docker_args+=(-v "${claude_home}:${claude_home_path}")
         log_info "Host mode: using shared directory $claude_home"
     fi
@@ -396,16 +458,31 @@ spawn_worker() {
     log_info "Image: $WORKER_IMAGE"
 
     # Record session metadata
-    record_session_metadata
+    record_session_metadata || {
+        log_error "Failed to record session metadata"
+        return 1
+    }
 
-    # Execute docker run
+    # Execute docker run with retry logic (Issue #9)
+    # Transient Docker errors (image pull, network issues) are retried
     if [[ "$DETACH" == "true" ]]; then
         local container_id
-        container_id=$("${docker_args[@]}")
-        log_success "Worker started: $container_id"
-        echo "$container_id"
+        if container_id=$(retry_with_backoff 3 2 "docker run for worker $WORKER_NAME" "${docker_args[@]}"); then
+            log_success "Worker started: $container_id"
+            echo "$container_id"
+        else
+            log_error "Failed to start worker after retries"
+            cleanup_on_error "$WORKER_NAME"
+            return 1
+        fi
     else
-        "${docker_args[@]}"
+        if retry_with_backoff 3 2 "docker run for worker $WORKER_NAME" "${docker_args[@]}"; then
+            log_success "Worker started successfully"
+        else
+            log_error "Failed to start worker after retries"
+            cleanup_on_error "$WORKER_NAME"
+            return 1
+        fi
     fi
 }
 

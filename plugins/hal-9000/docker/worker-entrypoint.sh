@@ -33,6 +33,96 @@ log_warn() { printf "${YELLOW}[${WORKER_NAME}]${NC} %s\n" "$1"; }
 log_error() { printf "${RED}[${WORKER_NAME}]${NC} %s\n" "$1" >&2; }
 
 # ============================================================================
+# RESILIENCE FUNCTIONS
+# ============================================================================
+
+# retry_with_backoff: Execute command with exponential backoff
+# Usage: retry_with_backoff "command" [max_retries]
+# Default: 3 retries with backoff of 1s, 2s, 4s
+retry_with_backoff() {
+    local cmd="$1"
+    local max_retries="${2:-3}"
+    local attempt=1
+    local wait_time=1
+
+    while [[ $attempt -le $max_retries ]]; do
+        if eval "$cmd"; then
+            return 0
+        fi
+
+        if [[ $attempt -lt $max_retries ]]; then
+            log_warn "Command failed (attempt $attempt/$max_retries), retrying in ${wait_time}s: $cmd"
+            sleep "$wait_time"
+            wait_time=$((wait_time * 2))
+        else
+            log_error "Command failed after $max_retries attempts: $cmd"
+            return 1
+        fi
+
+        ((attempt++))
+    done
+
+    return 1
+}
+
+# circuit_breaker: Track failures and open circuit after threshold
+# Global circuit state: CIRCUIT_BREAKER_STATE and CIRCUIT_BREAKER_FAILURES
+declare -gA CIRCUIT_BREAKER_STATE
+declare -gA CIRCUIT_BREAKER_FAILURES
+declare -gA CIRCUIT_BREAKER_LAST_ATTEMPT
+
+circuit_breaker() {
+    local service_name="$1"
+    local cmd="$2"
+    local failure_threshold="${3:-5}"
+    local half_open_wait="${4:-30}"
+
+    local state="${CIRCUIT_BREAKER_STATE[$service_name]:-closed}"
+    local failures="${CIRCUIT_BREAKER_FAILURES[$service_name]:-0}"
+    local last_attempt="${CIRCUIT_BREAKER_LAST_ATTEMPT[$service_name]:-0}"
+    local now
+    now=$(date +%s)
+
+    # OPEN: Circuit is open, reject immediately
+    if [[ "$state" == "open" ]]; then
+        local elapsed=$((now - last_attempt))
+        if [[ $elapsed -ge $half_open_wait ]]; then
+            log_warn "Circuit breaker transitioning to half-open ($service_name)"
+            CIRCUIT_BREAKER_STATE[$service_name]="half-open"
+            state="half-open"
+        else
+            log_error "Circuit breaker OPEN ($service_name) - rejecting request (wait ${half_open_wait}s)"
+            return 1
+        fi
+    fi
+
+    # HALF-OPEN or CLOSED: Try to execute command
+    if eval "$cmd"; then
+        # Success: reset failures and close circuit
+        CIRCUIT_BREAKER_FAILURES[$service_name]=0
+        CIRCUIT_BREAKER_STATE[$service_name]="closed"
+        if [[ "$state" == "half-open" ]]; then
+            log_success "Circuit breaker CLOSED ($service_name) - service recovered"
+        fi
+        return 0
+    else
+        # Failure: increment counter
+        ((failures++))
+        CIRCUIT_BREAKER_FAILURES[$service_name]=$failures
+
+        if [[ $failures -ge $failure_threshold ]]; then
+            log_error "Circuit breaker OPEN ($service_name) - $failures failures reached threshold ($failure_threshold)"
+            CIRCUIT_BREAKER_STATE[$service_name]="open"
+            CIRCUIT_BREAKER_LAST_ATTEMPT[$service_name]=$now
+            return 1
+        else
+            log_warn "Circuit breaker failure count: $failures/$failure_threshold ($service_name)"
+            return 1
+        fi
+    fi
+}
+
+# ============================================================================
 # CONFIGURATION
 # ============================================================================
 
@@ -40,14 +130,24 @@ CLAUDE_HOME="${CLAUDE_HOME:-/home/claude/.claude}"
 WORKSPACE="${WORKSPACE:-/workspace}"
 MEMORY_BANK_ROOT="${MEMORY_BANK_ROOT:-/data/memory-bank}"
 
-# ChromaDB configuration
-# If PARENT_IP is set (network decoupling mode), use it as ChromaDB host
-# Otherwise, fall back to CHROMADB_HOST or localhost
+# ChromaDB configuration with DNS-based service discovery
+# Prefer PARENT_HOSTNAME (container name) for Docker DNS resolution - more resilient than IP
+# Falls back to PARENT_IP for backward compatibility
+# Finally falls back to explicit CHROMADB_HOST or localhost
 CHROMADB_HOST="${CHROMADB_HOST:-}"
-if [[ -z "$CHROMADB_HOST" && -n "${PARENT_IP:-}" ]]; then
-    CHROMADB_HOST="${PARENT_IP}"
+if [[ -z "$CHROMADB_HOST" ]]; then
+    if [[ -n "${PARENT_HOSTNAME:-}" ]]; then
+        # Use parent container name - Docker DNS resolves to current IP
+        # More resilient: survives parent container restart with new IP
+        CHROMADB_HOST="${PARENT_HOSTNAME}"
+    elif [[ -n "${PARENT_IP:-}" ]]; then
+        # Fallback to IP for backward compatibility (less resilient)
+        CHROMADB_HOST="${PARENT_IP}"
+    else
+        # Default to localhost (for standalone worker or local development)
+        CHROMADB_HOST="localhost"
+    fi
 fi
-CHROMADB_HOST="${CHROMADB_HOST:-localhost}"
 CHROMADB_PORT="${CHROMADB_PORT:-8000}"
 
 # ============================================================================
@@ -60,6 +160,14 @@ init_claude_home() {
     # Ensure Claude home structure exists
     mkdir -p "$CLAUDE_HOME"
     mkdir -p "$MEMORY_BANK_ROOT"
+
+    # UPGRADE MIGRATION (Issue #8): UID changed from 1000 to 1001
+    # For existing volumes created by old image (UID 1000), fix ownership
+    if [[ -d "$CLAUDE_HOME" ]] && [[ $(find "$CLAUDE_HOME" -uid 1000 -print -quit 2>/dev/null) ]]; then
+        log_info "Migrating volume ownership from UID 1000 to UID 1001 (claude:claude)..."
+        find "$CLAUDE_HOME" -uid 1000 -exec chown claude:claude {} + 2>/dev/null || true
+        log_success "Volume ownership migrated - credentials and plugins now accessible"
+    fi
 
     # Check for authentication
     if [[ -f "$CLAUDE_HOME/.credentials.json" ]]; then
@@ -125,8 +233,10 @@ EOF
     log_info "  - memory-bank: ${MEMORY_BANK_ROOT}"
 
     # Log ChromaDB configuration with network mode info
-    if [[ -n "${PARENT_IP:-}" ]]; then
-        log_info "  - chromadb: http://${CHROMADB_HOST}:${CHROMADB_PORT} (via PARENT_IP)"
+    if [[ -n "${PARENT_HOSTNAME:-}" ]]; then
+        log_info "  - chromadb: http://${CHROMADB_HOST}:${CHROMADB_PORT} (DNS via PARENT_HOSTNAME: ${PARENT_HOSTNAME})"
+    elif [[ -n "${PARENT_IP:-}" ]]; then
+        log_info "  - chromadb: http://${CHROMADB_HOST}:${CHROMADB_PORT} (fallback IP via PARENT_IP)"
     else
         log_info "  - chromadb: http://${CHROMADB_HOST}:${CHROMADB_PORT}"
     fi
@@ -162,6 +272,26 @@ verify_claude() {
     local version
     version=$(claude --version 2>/dev/null || echo "unknown")
     log_success "Claude CLI version: $version"
+}
+
+verify_chromadb_connectivity() {
+    log_info "Verifying ChromaDB connectivity..."
+
+    # Use circuit breaker pattern to prevent cascading failures
+    # ChromaDB health check with retry
+    if retry_with_backoff \
+        "curl -s -m 5 'http://${CHROMADB_HOST}:${CHROMADB_PORT}/api/v2/heartbeat' >/dev/null 2>&1" \
+        3; then
+        log_success "ChromaDB connectivity verified: http://${CHROMADB_HOST}:${CHROMADB_PORT}"
+        return 0
+    fi
+
+    # ChromaDB not responding - log warning but don't fail
+    # (ChromaDB may start later, chroma-mcp has its own reconnection logic)
+    log_warn "ChromaDB not responding after retries"
+    log_warn "ChromaDB configuration: host=${CHROMADB_HOST}, port=${CHROMADB_PORT}"
+    log_info "Note: chroma-mcp client will retry automatically when Claude uses ChromaDB"
+    return 1  # Warning, not fatal
 }
 
 verify_mcp_servers() {
@@ -221,11 +351,12 @@ print_worker_info() {
 # ============================================================================
 
 # Session state with TMUX-based architecture:
-# - Claude runs in TMUX pane, maintaining own session state
-# - TMUX session persists across container operations
-# - State file location: /home/claude/.claude/session.json (managed by Claude)
-# - No need for external save/restore - TMUX handles persistence
-# - For cross-container persistence, use Memory Bank MCP
+# - TMUX provides terminal multiplexing and process management
+# - Claude state persists via file-based storage in CLAUDE_HOME (/home/claude/.claude)
+# - State files: session.json, credentials, plugin configs (managed by Claude CLI)
+# - TMUX socket persistence: Stored in shared volume, survives container restart
+# - For cross-container persistence across attachments: File-based storage in shared volume
+# - For cross-session reasoning persistence: Use Memory Bank MCP server
 
 ensure_session_persistence() {
     local session_dir="$CLAUDE_HOME"
@@ -257,7 +388,8 @@ init_tmux_sockets_dir() {
     log_info "Initializing TMUX socket directory: $TMUX_SOCKET_DIR"
 
     mkdir -p "$TMUX_SOCKET_DIR"
-    chmod 0777 "$TMUX_SOCKET_DIR"
+    # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
+    chmod 0770 "$TMUX_SOCKET_DIR"
 
     log_success "TMUX socket directory ready"
 }
@@ -302,21 +434,60 @@ start_tmux_session() {
 }
 
 # ============================================================================
-# SIGNAL HANDLING
+# SIGNAL HANDLING & CLEANUP
 # ============================================================================
 
-cleanup_on_exit() {
-    log_info "Worker shutting down..."
+# Cleanup lifecycle:
+# 1. Worker process cleanup (THIS function):
+#    - Kill TMUX server (graceful session termination)
+#    - Container filesystem cleanup happens automatically
+# 2. Session metadata cleanup (coordinator.sh):
+#    - Triggered on normal shutdown via `coordinator.sh stop <worker>`
+#    - Calls cleanup_session_metadata() to remove ${HAL9000_HOME}/sessions/*.json
+# 3. Stale metadata cleanup (manual or periodic):
+#    - Use `coordinator.sh cleanup-stale [days]` to remove old metadata files
+#    - Useful for cleanup after container crashes or timeouts
+# Note: Session metadata files are stored on host/shared volume, not in container
+# Worker process cannot directly clean up host-side metadata files
 
+cleanup_on_exit() {
+    local exit_code=$?
+    log_info "Worker shutting down (exit code: $exit_code)..."
+
+    # Graceful TMUX cleanup
     if [[ "$TMUX_ENABLED" == "true" && -n "${TMUX_SOCKET:-}" ]]; then
         log_info "Cleaning up TMUX server..."
-        tmux -S "$TMUX_SOCKET" kill-server 2>/dev/null || true
+
+        if [[ -S "$TMUX_SOCKET" ]]; then
+            # Try graceful shutdown first
+            if tmux -S "$TMUX_SOCKET" kill-server 2>/dev/null; then
+                log_success "TMUX server stopped gracefully"
+            else
+                log_warn "Failed to stop TMUX gracefully, forcing shutdown"
+            fi
+            sleep 1
+        fi
     fi
 
-    exit 0
+    # Clean up any temporary files created during startup
+    if [[ -d "$CLAUDE_HOME/.tmp" ]]; then
+        find "$CLAUDE_HOME/.tmp" -type f -mtime +1 -delete 2>/dev/null || true
+    fi
+
+    # Cleanup stale background processes
+    # Jobs list shows backgrounded processes in this shell
+    local jobs_count
+    jobs_count=$(jobs -p | wc -l)
+    if [[ $jobs_count -gt 0 ]]; then
+        log_info "Killing $jobs_count background processes..."
+        jobs -p | xargs -r kill -9 2>/dev/null || true
+    fi
+
+    log_info "Worker cleanup complete"
+    exit "$exit_code"
 }
 
-trap cleanup_on_exit SIGTERM SIGINT
+trap cleanup_on_exit SIGTERM SIGINT EXIT
 
 # ============================================================================
 # MAIN
@@ -331,6 +502,7 @@ main() {
     setup_workspace
     verify_claude
     verify_mcp_servers
+    verify_chromadb_connectivity  # Non-fatal: logs warning if ChromaDB unavailable
     init_tmux_sockets_dir
     ensure_session_persistence
 

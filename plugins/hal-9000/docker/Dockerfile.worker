@@ -56,7 +56,11 @@ ARG CLAUDE_UID=1001
 ARG CLAUDE_GID=1001
 
 RUN groupadd -g ${CLAUDE_GID} claude && \
-    useradd -u ${CLAUDE_UID} -g claude -m -d /home/claude -s /bin/bash claude
+    useradd -u ${CLAUDE_UID} -g claude -m -d /home/claude -s /bin/bash claude && \
+    # Create hal9000 group (GID 1002 for supplementary membership)
+    # Workers need access to parent's hal9000-owned sockets/directories
+    groupadd -g 1002 hal9000 && \
+    usermod -aG hal9000 claude
 
 # ============================================================================
 # Directory Structure
@@ -68,7 +72,8 @@ RUN groupadd -g ${CLAUDE_GID} claude && \
 # - /data/memory-bank: Memory Bank data (shared volume)
 # - /data/tmux-sockets: TMUX socket directory for inter-process communication
 RUN mkdir -p /workspace /home/claude/.claude /data/memory-bank /data/tmux-sockets /scripts && \
-    chmod 0777 /data/tmux-sockets && \
+    # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
+    chmod 0770 /data/tmux-sockets && \
     chown -R claude:claude /workspace /home/claude /data/memory-bank /scripts
 
 # ============================================================================

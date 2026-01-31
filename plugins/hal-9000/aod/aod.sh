@@ -391,7 +391,7 @@ launch_session() {
     warn_credential_visibility
 
     # Build docker command using array for proper quoting
-    # SECURITY: Container runs as non-root user 'claude' (UID 1000)
+    # SECURITY: Container runs as non-root user 'claude' (UID 1001)
     # Mount paths must match container user home directory
     local -a docker_args=(
         docker run -it --rm

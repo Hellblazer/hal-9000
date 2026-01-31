@@ -8,11 +8,25 @@
 # - Workers connect to ChromaDB via HTTP (safe for concurrent access)
 #
 # Build: docker build -f Dockerfile.parent -t ghcr.io/hellblazer/hal-9000:parent .
-# Run: docker run -d --name hal9000-parent \
-#        -v /var/run/docker.sock:/var/run/docker.sock \
-#        -v ~/.hal9000:/root/.hal9000 \
-#        -v hal9000-chromadb:/data/chromadb \
-#        ghcr.io/hellblazer/hal-9000:parent
+# Run with resource limits (Issue #10 - Resource limits):
+#   docker run -d --name hal9000-parent \
+#     --memory=2g --memory-swap=2g \
+#     --cpus=2 \
+#     -v /var/run/docker.sock:/var/run/docker.sock \
+#     -v ~/.hal9000:/root/.hal9000 \
+#     -v hal9000-chromadb:/data/chromadb \
+#     ghcr.io/hellblazer/hal-9000:parent
+#
+# Resource limits configuration (optional, defaults recommended):
+#   --memory=2g          # Memory limit: 2GB (accommodate ChromaDB + orchestration)
+#   --memory-swap=2g     # Swap limit: same as memory (disable swap)
+#   --cpus=2             # CPU limit: 2 cores (for orchestration + ChromaDB)
+#
+# Note: Workers inherit resource limits from Docker daemon configuration.
+# For production use, ensure host has sufficient resources:
+#   - Parent: 2GB RAM, 2 CPU cores
+#   - Workers: 512MB-1GB RAM each, shared CPU
+#   - Total: 8GB+ RAM for 10 concurrent workers + parent
 
 FROM debian:bookworm-slim
 
@@ -42,6 +56,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
     && locale-gen
+
+# Create hal9000 group for socket directory group ownership
+# GID 1001 matches worker's claude user GID for consistency
+RUN groupadd -g 1001 hal9000
 
 # Install ChromaDB server in a virtual environment
 RUN python3 -m venv /opt/chromadb-venv \
@@ -98,6 +116,14 @@ ENV HAL9000_HOME=/root/.hal9000
 ENV HAL9000_SESSIONS_DIR=/root/.hal9000/sessions
 ENV HAL9000_LOGS_DIR=/root/.hal9000/logs
 ENV WORKER_IMAGE=ghcr.io/hellblazer/hal-9000:worker
+
+# Resource limit configuration (Issue #10)
+# These are defaults that can be overridden at runtime with docker run flags.
+# Actual enforcement requires --memory and --cpus flags to docker run.
+ENV HAL9000_MEMORY_LIMIT=2g
+ENV HAL9000_CPU_LIMIT=2
+ENV CHROMADB_MEMORY_LIMIT=1g
+ENV WORKER_MEMORY_LIMIT=512m
 
 # ChromaDB server configuration
 ENV CHROMADB_HOST=0.0.0.0

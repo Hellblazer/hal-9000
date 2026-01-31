@@ -30,6 +30,96 @@ log_warn() { printf "${YELLOW}[parent]${NC} %s\n" "$1"; }
 log_error() { printf "${RED}[parent]${NC} %s\n" "$1" >&2; }
 
 # ============================================================================
+# RESILIENCE FUNCTIONS
+# ============================================================================
+
+# retry_with_backoff: Execute command with exponential backoff
+# Usage: retry_with_backoff "command" [max_retries]
+# Default: 3 retries with backoff of 1s, 2s, 4s
+retry_with_backoff() {
+    local cmd="$1"
+    local max_retries="${2:-3}"
+    local attempt=1
+    local wait_time=1
+
+    while [[ $attempt -le $max_retries ]]; do
+        if eval "$cmd"; then
+            return 0
+        fi
+
+        if [[ $attempt -lt $max_retries ]]; then
+            log_warn "Command failed (attempt $attempt/$max_retries), retrying in ${wait_time}s: $cmd"
+            sleep "$wait_time"
+            wait_time=$((wait_time * 2))
+        else
+            log_error "Command failed after $max_retries attempts: $cmd"
+            return 1
+        fi
+
+        ((attempt++))
+    done
+
+    return 1
+}
+
+# circuit_breaker: Track failures and open circuit after threshold
+# Global circuit state: CIRCUIT_BREAKER_STATE and CIRCUIT_BREAKER_FAILURES
+declare -gA CIRCUIT_BREAKER_STATE
+declare -gA CIRCUIT_BREAKER_FAILURES
+declare -gA CIRCUIT_BREAKER_LAST_ATTEMPT
+
+circuit_breaker() {
+    local service_name="$1"
+    local cmd="$2"
+    local failure_threshold="${3:-5}"
+    local half_open_wait="${4:-30}"
+
+    local state="${CIRCUIT_BREAKER_STATE[$service_name]:-closed}"
+    local failures="${CIRCUIT_BREAKER_FAILURES[$service_name]:-0}"
+    local last_attempt="${CIRCUIT_BREAKER_LAST_ATTEMPT[$service_name]:-0}"
+    local now
+    now=$(date +%s)
+
+    # OPEN: Circuit is open, reject immediately
+    if [[ "$state" == "open" ]]; then
+        local elapsed=$((now - last_attempt))
+        if [[ $elapsed -ge $half_open_wait ]]; then
+            log_warn "Circuit breaker transitioning to half-open ($service_name)"
+            CIRCUIT_BREAKER_STATE[$service_name]="half-open"
+            state="half-open"
+        else
+            log_error "Circuit breaker OPEN ($service_name) - rejecting request (wait ${half_open_wait}s)"
+            return 1
+        fi
+    fi
+
+    # HALF-OPEN or CLOSED: Try to execute command
+    if eval "$cmd"; then
+        # Success: reset failures and close circuit
+        CIRCUIT_BREAKER_FAILURES[$service_name]=0
+        CIRCUIT_BREAKER_STATE[$service_name]="closed"
+        if [[ "$state" == "half-open" ]]; then
+            log_success "Circuit breaker CLOSED ($service_name) - service recovered"
+        fi
+        return 0
+    else
+        # Failure: increment counter
+        ((failures++))
+        CIRCUIT_BREAKER_FAILURES[$service_name]=$failures
+
+        if [[ $failures -ge $failure_threshold ]]; then
+            log_error "Circuit breaker OPEN ($service_name) - $failures failures reached threshold ($failure_threshold)"
+            CIRCUIT_BREAKER_STATE[$service_name]="open"
+            CIRCUIT_BREAKER_LAST_ATTEMPT[$service_name]=$now
+            return 1
+        else
+            log_warn "Circuit breaker failure count: $failures/$failure_threshold ($service_name)"
+            return 1
+        fi
+    fi
+}
+
+# ============================================================================
 # INITIALIZATION
 # ============================================================================
 
@@ -42,11 +132,21 @@ init_directories() {
 
     # Coordinator state directories
     mkdir -p "${COORDINATOR_STATE_DIR:-/data/coordinator-state}"
-    chmod 0777 "${COORDINATOR_STATE_DIR:-/data/coordinator-state}"
+    # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
+    chmod 0770 "${COORDINATOR_STATE_DIR:-/data/coordinator-state}"
+    # Set group ownership to hal9000 if available
+    if getent group hal9000 >/dev/null 2>&1; then
+        chgrp hal9000 "${COORDINATOR_STATE_DIR:-/data/coordinator-state}" 2>/dev/null || true
+    fi
 
     # TMUX sockets directory
     mkdir -p "${TMUX_SOCKET_DIR:-/data/tmux-sockets}"
-    chmod 0777 "${TMUX_SOCKET_DIR:-/data/tmux-sockets}"
+    # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
+    chmod 0770 "${TMUX_SOCKET_DIR:-/data/tmux-sockets}"
+    # Set group ownership to hal9000 if available
+    if getent group hal9000 >/dev/null 2>&1; then
+        chgrp hal9000 "${TMUX_SOCKET_DIR:-/data/tmux-sockets}" 2>/dev/null || true
+    fi
 
     log_success "Directories initialized"
 }
@@ -69,6 +169,49 @@ verify_docker_socket() {
     log_success "Docker socket verified"
 }
 
+check_resource_limits() {
+    log_info "Checking resource limits (Issue #10)..."
+
+    # Check memory limit
+    if [ -f /sys/fs/cgroup/memory.limit_in_bytes ]; then
+        local mem_limit=$(cat /sys/fs/cgroup/memory.limit_in_bytes 2>/dev/null || echo "9223372036854775807")
+        # 9223372036854775807 is the unlimited value in cgroups v1
+        if [ "$mem_limit" -eq "9223372036854775807" ]; then
+            log_warn "No memory limit set - recommend: --memory=2g --memory-swap=2g"
+        else
+            local mem_gb=$(( mem_limit / 1024 / 1024 / 1024 ))
+            if [ "$mem_gb" -lt 2 ]; then
+                log_warn "Memory limit is only ${mem_gb}GB - recommend 2GB minimum"
+            else
+                log_success "Memory limit configured: ${mem_gb}GB"
+            fi
+        fi
+    elif [ -f /sys/fs/cgroup/memory.max ]; then
+        # cgroups v2
+        local mem_limit=$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo "max")
+        if [ "$mem_limit" = "max" ]; then
+            log_warn "No memory limit set - recommend: --memory=2g --memory-swap=2g"
+        else
+            local mem_gb=$(( mem_limit / 1024 / 1024 / 1024 ))
+            if [ "$mem_gb" -lt 2 ]; then
+                log_warn "Memory limit is only ${mem_gb}GB - recommend 2GB minimum"
+            else
+                log_success "Memory limit configured: ${mem_gb}GB"
+            fi
+        fi
+    else
+        log_info "Cannot determine cgroup version - skipping resource validation"
+    fi
+
+    # Check CPU limit via cpuset
+    if [ -f /sys/fs/cgroup/cpuset.cpus ]; then
+        local cpus=$(cat /sys/fs/cgroup/cpuset.cpus 2>/dev/null || echo "")
+        if [ -n "$cpus" ]; then
+            log_success "CPU affinity configured: $cpus"
+        fi
+    fi
+}
+
 init_tmux_server() {
     log_info "Initializing parent TMUX server..."
 
@@ -77,7 +220,12 @@ init_tmux_server() {
 
     # Ensure socket directory exists
     mkdir -p "$tmux_socket_dir"
-    chmod 0777 "$tmux_socket_dir"
+    # SECURITY: Use 0770 instead of 0777 (restrict socket access to owner and group, not world)
+    chmod 0770 "$tmux_socket_dir"
+    # Set group ownership to hal9000 if available
+    if getent group hal9000 >/dev/null 2>&1; then
+        chgrp hal9000 "$tmux_socket_dir" 2>/dev/null || true
+    fi
 
     # Kill any existing tmux server from previous runs
     tmux -S "$parent_socket" kill-server 2>/dev/null || true
@@ -146,8 +294,11 @@ start_chromadb_server_async() {
     local host="${CHROMADB_HOST:-0.0.0.0}"
     local data_dir="${CHROMADB_DATA_DIR:-/data/chromadb}"
 
-    # Ensure data directory exists
-    mkdir -p "$data_dir"
+    # Ensure data directory exists with retry
+    retry_with_backoff "mkdir -p '$data_dir'" 2 || {
+        log_error "Failed to create ChromaDB data directory"
+        return 1
+    }
 
     # Start ChromaDB server in background (non-blocking)
     chroma run \
@@ -169,7 +320,10 @@ wait_for_chromadb() {
     log_info "Waiting for ChromaDB to be ready..."
 
     while [[ $waited -lt $max_wait ]]; do
-        if curl -s "http://localhost:${CHROMADB_PORT}/api/v2/heartbeat" >/dev/null 2>&1; then
+        # Use circuit breaker to prevent cascade of health checks if service is failing
+        if circuit_breaker "chromadb-health" \
+            "curl -s -m 5 'http://localhost:${CHROMADB_PORT}/api/v2/heartbeat' >/dev/null 2>&1" \
+            5 10; then
             log_success "ChromaDB ready on port $CHROMADB_PORT (waited: ${waited}s)"
             return 0
         fi
@@ -258,7 +412,8 @@ run_coordinator() {
 }
 
 cleanup_on_exit() {
-    log_warn "Shutting down coordinator..."
+    local exit_code=$?
+    log_warn "Shutting down coordinator (exit code: $exit_code)..."
 
     # List and optionally stop workers
     local workers
@@ -273,27 +428,49 @@ cleanup_on_exit() {
         # Use --rm flag when spawning workers for auto-cleanup
     fi
 
-    # Stop ChromaDB server
-    stop_chromadb_server
+    # Stop ChromaDB server with retry
+    if retry_with_backoff "stop_chromadb_server" 2; then
+        log_success "ChromaDB server stopped"
+    else
+        log_warn "Failed to gracefully stop ChromaDB, forcing shutdown"
+        if [[ -n "$CHROMADB_PID" ]] && kill -0 "$CHROMADB_PID" 2>/dev/null; then
+            kill -9 "$CHROMADB_PID" 2>/dev/null || true
+        fi
+    fi
 
     # Stop pool manager if running
     if [[ -f "${HAL9000_HOME}/pool/pool-manager.pid" ]]; then
         local pool_pid
         pool_pid=$(cat "${HAL9000_HOME}/pool/pool-manager.pid")
-        kill "$pool_pid" 2>/dev/null || true
+        if kill -0 "$pool_pid" 2>/dev/null; then
+            log_info "Stopping pool manager (PID: $pool_pid)..."
+            kill "$pool_pid" 2>/dev/null || true
+            sleep 2
+            kill -9 "$pool_pid" 2>/dev/null || true
+        fi
+        rm -f "${HAL9000_HOME}/pool/pool-manager.pid"
     fi
 
     # Clean up parent TMUX server
     if [[ -n "${TMUX_SOCKET:-}" ]]; then
         log_info "Cleaning up parent TMUX server..."
-        tmux -S "$TMUX_SOCKET" kill-server 2>/dev/null || true
+        if [[ -S "$TMUX_SOCKET" ]]; then
+            tmux -S "$TMUX_SOCKET" kill-server 2>/dev/null || true
+            sleep 1
+        fi
+    fi
+
+    # Clean up temporary coordinator state
+    if [[ -d "${COORDINATOR_STATE_DIR:-/data/coordinator-state}" ]]; then
+        # Only clean up stale registries, not active worker data
+        find "${COORDINATOR_STATE_DIR:-/data/coordinator-state}" -name "*.tmp" -mtime +1 -delete 2>/dev/null || true
     fi
 
     # Remove PID file
     rm -f "${HAL9000_HOME}/coordinator.pid"
 
     log_info "Coordinator stopped"
-    exit 0
+    exit "$exit_code"
 }
 
 # ============================================================================
@@ -348,9 +525,13 @@ log_startup_time() {
 main() {
     log_info "HAL-9000 Parent Container starting..."
 
+    # Setup signal handlers for graceful shutdown
+    trap cleanup_on_exit SIGTERM SIGINT EXIT
+
     # Phase 1: Critical initialization (must be synchronous)
     init_directories
     verify_docker_socket
+    check_resource_limits
     log_startup_time "Phase 1 (critical init)"
 
     # Phase 2: Parallel service startup
