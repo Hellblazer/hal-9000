@@ -138,31 +138,40 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Phase 1 - Foundation Tests
+      - name: Phase 1 - Foundation Tests (30 tests)
         run: |
-          echo "Running Phase 1: Foundation Tests (30 tests)..."
-          bash scripts/build/test-hal9000-unit-extended.sh help
-          bash scripts/build/test-hal9000-unit-extended.sh profile
-          bash scripts/build/test-hal9000-unit-extended.sh session
+          echo "Running Phase 1: Foundation Tests..."
+          bash scripts/build/test-hal9000-unit-extended.sh all
           echo "✓ Phase 1 passed"
 
-      - name: Phase 2 - Docker Integration Tests
+      - name: Phase 3 - Daemon & Performance Tests (44 tests)
         run: |
-          echo "Running Phase 2: Docker Integration Tests (32 tests)..."
-          bash plugins/hal-9000/docker/test-phase2-session-lifecycle.sh
-          echo "✓ Phase 2 passed"
-
-      - name: Phase 3 - Daemon & Performance Tests
-        run: |
-          echo "Running Phase 3: Daemon & Performance Tests (44 tests)..."
+          echo "Running Phase 3: Daemon & Performance Tests..."
           bash plugins/hal-9000/docker/test-phase3-performance.sh
           echo "✓ Phase 3 passed"
 
-      - name: Phase 4 - Integration Scenarios
+      - name: Phase 4 - Integration Scenarios (28 tests)
         run: |
-          echo "Running Phase 4: Integration Scenarios (28 tests)..."
+          echo "Running Phase 4: Integration Scenarios..."
           bash scripts/tests/run-integration-scenarios.sh
           echo "✓ Phase 4 passed"
+
+      - name: Test Summary
+        run: |
+          echo ""
+          echo "========================================"
+          echo "Comprehensive Tests Summary (CI Mode)"
+          echo "========================================"
+          echo "Phase 1: Foundation Tests........... ✓"
+          echo "Phase 2: Skipped (local Docker required)"
+          echo "Phase 3: Daemon & Performance....... ✓"
+          echo "Phase 4: Integration Scenarios...... ✓"
+          echo "----------------------------------------"
+          echo "Total tests in CI: 102 (Phases 1,3,4)"
+          echo ""
+          echo "Note: Phase 2 (Docker images) runs"
+          echo "separately after Docker build job"
+          echo "========================================"
 
   docker-build-test:
     name: Docker Build Test
@@ -248,7 +257,10 @@ jobs:
     steps:
       - name: Check test results
         run: |
-          echo "=== Test Results ==="
+          echo ""
+          echo "========================================="
+          echo "        CI TEST SUITE RESULTS"
+          echo "========================================="
           echo ""
 
           if [ "${{ needs.quick-smoke-test.result }}" = "success" ]; then
@@ -258,7 +270,10 @@ jobs:
           fi
 
           if [ "${{ needs.comprehensive-tests.result }}" = "success" ]; then
-            echo "✓ Comprehensive Tests (134 tests): PASSED"
+            echo "✓ Comprehensive Tests (102 tests): PASSED"
+            echo "  - Phase 1: Foundation Tests (30)"
+            echo "  - Phase 3: Daemon & Performance (44)"
+            echo "  - Phase 4: Integration Scenarios (28)"
           else
             echo "✗ Comprehensive Tests: FAILED"
           fi
@@ -270,12 +285,17 @@ jobs:
           fi
 
           echo ""
+          echo "Note: Phase 2 (Docker image tests)"
+          echo "requires pre-built images and runs"
+          echo "separately in local testing"
+          echo "========================================="
+          echo ""
 
           if [ "${{ needs.quick-smoke-test.result }}" != "success" ] || \
              [ "${{ needs.comprehensive-tests.result }}" != "success" ] || \
              [ "${{ needs.docker-build-test.result }}" != "success" ]; then
-            echo "Some tests failed!"
+            echo "❌ Some tests failed - PR BLOCKED"
             exit 1
           fi
 
-          echo "All tests passed (quick-smoke + comprehensive + docker-build)!"
+          echo "✅ All CI tests passed!"
