@@ -34,6 +34,63 @@ log_success() { printf "${GREEN}[spawn]${NC} %s\n" "$1"; }
 log_warn() { printf "${YELLOW}[spawn]${NC} %s\n" "$1"; }
 log_error() { printf "${RED}[spawn]${NC} ERROR: %s\n" "$1" >&2; }
 
+# Issue #9: Error handling resilience
+# Retry logic for transient failures with exponential backoff
+retry_with_backoff() {
+    local max_attempts="${1:-3}"
+    local initial_wait="${2:-1}"
+    local description="${3:-operation}"
+    shift 3
+    local -a cmd=("$@")
+
+    local attempt=1
+    local wait_time=$initial_wait
+
+    while [ $attempt -le $max_attempts ]; do
+        log_info "Attempting $description (attempt $attempt/$max_attempts)..."
+
+        if "${cmd[@]}"; then
+            return 0
+        fi
+
+        local exit_code=$?
+
+        if [ $attempt -lt $max_attempts ]; then
+            log_warn "Command failed with exit code $exit_code, retrying in ${wait_time}s..."
+            sleep "$wait_time"
+            # Exponential backoff: double the wait time (1s, 2s, 4s, ...)
+            wait_time=$((wait_time * 2))
+        else
+            log_error "Command failed after $max_attempts attempts"
+            return $exit_code
+        fi
+
+        ((attempt++))
+    done
+
+    return 1
+}
+
+cleanup_on_error() {
+    local worker_name="$1"
+
+    log_warn "Cleaning up due to error..."
+
+    # Attempt to remove container if it was created
+    if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^${worker_name}$"; then
+        log_info "Removing failed container: $worker_name"
+        docker rm -f "$worker_name" 2>/dev/null || log_warn "Could not remove container: $worker_name"
+    fi
+
+    # Remove session metadata
+    local session_file="${HAL9000_HOME:-$HOME/.hal9000}/sessions/${worker_name}.json"
+    if [ -f "$session_file" ]; then
+        rm -f "$session_file" 2>/dev/null || log_warn "Could not remove session file: $session_file"
+    fi
+
+    log_info "Cleanup completed"
+}
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -401,16 +458,31 @@ spawn_worker() {
     log_info "Image: $WORKER_IMAGE"
 
     # Record session metadata
-    record_session_metadata
+    record_session_metadata || {
+        log_error "Failed to record session metadata"
+        return 1
+    }
 
-    # Execute docker run
+    # Execute docker run with retry logic (Issue #9)
+    # Transient Docker errors (image pull, network issues) are retried
     if [[ "$DETACH" == "true" ]]; then
         local container_id
-        container_id=$("${docker_args[@]}")
-        log_success "Worker started: $container_id"
-        echo "$container_id"
+        if container_id=$(retry_with_backoff 3 2 "docker run for worker $WORKER_NAME" "${docker_args[@]}"); then
+            log_success "Worker started: $container_id"
+            echo "$container_id"
+        else
+            log_error "Failed to start worker after retries"
+            cleanup_on_error "$WORKER_NAME"
+            return 1
+        fi
     else
-        "${docker_args[@]}"
+        if retry_with_backoff 3 2 "docker run for worker $WORKER_NAME" "${docker_args[@]}"; then
+            log_success "Worker started successfully"
+        else
+            log_error "Failed to start worker after retries"
+            cleanup_on_error "$WORKER_NAME"
+            return 1
+        fi
     fi
 }
 
