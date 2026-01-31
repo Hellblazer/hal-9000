@@ -9,6 +9,7 @@ readonly SCRIPT_VERSION="2.0.0"
 readonly HAL9000_HOME="${HOME}/.hal9000"
 readonly HAL9000_PROFILES_DIR="${HAL9000_HOME}/profiles"
 readonly HAL9000_CONFIG_FILE="${HAL9000_HOME}/config"
+readonly HAL9000_SECRETS_DIR="${HAL9000_HOME}/secrets"
 readonly PARENT_CONTAINER="hal9000-parent"
 readonly PARENT_IMAGE="ghcr.io/hellblazer/hal-9000:parent"
 readonly DEFAULT_PROFILE="base"
@@ -101,6 +102,55 @@ load_config() {
                 ;;
         esac
     done < "$HAL9000_CONFIG_FILE"
+}
+
+#==============================================================================
+# Secrets management
+#==============================================================================
+
+# Initialize secrets directory with secure permissions
+init_secrets_dir() {
+    if [[ ! -d "$HAL9000_SECRETS_DIR" ]]; then
+        mkdir -p "$HAL9000_SECRETS_DIR"
+        chmod 700 "$HAL9000_SECRETS_DIR"
+    fi
+}
+
+# Store API key securely in secrets directory
+# Usage: store_api_key_secret
+# Reads from ANTHROPIC_API_KEY env var and stores to file
+store_api_key_secret() {
+    if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+        return 0
+    fi
+
+    init_secrets_dir
+
+    local secret_file="${HAL9000_SECRETS_DIR}/anthropic_key"
+
+    # Write with restrictive permissions (umask ensures file is created securely)
+    (umask 077 && echo "$ANTHROPIC_API_KEY" > "$secret_file")
+    chmod 400 "$secret_file"
+}
+
+# Get path to API key secret file (if it exists)
+# Returns: path to secret file, or empty if not available
+get_api_key_secret_path() {
+    local secret_file="${HAL9000_SECRETS_DIR}/anthropic_key"
+    if [[ -f "$secret_file" ]]; then
+        echo "$secret_file"
+    fi
+}
+
+# Check if API key is available (either as env var or secret file)
+has_api_key() {
+    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+        return 0
+    fi
+    if [[ -f "${HAL9000_SECRETS_DIR}/anthropic_key" ]]; then
+        return 0
+    fi
+    return 1
 }
 
 # Get container image base with precedence: env var > config file > default
@@ -253,6 +303,9 @@ check_subscription_auth() {
 run_claude_command() {
     ensure_volumes
 
+    # Store API key to secret file if available (security: avoid env var exposure)
+    store_api_key_secret
+
     local image_base
     image_base=$(get_container_image_base)
     local image="${image_base}:base"
@@ -267,14 +320,21 @@ run_claude_command() {
         -e "MEMORY_BANK_ROOT=/root/memory-bank"
     )
 
-    # Pass through API key if available
-    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-        docker_args+=(-e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
+    # SECURITY: Mount API key as secret file instead of environment variable
+    # This prevents exposure via 'docker inspect' or /proc/1/environ
+    local secret_path
+    secret_path=$(get_api_key_secret_path)
+    if [[ -n "$secret_path" ]]; then
+        docker_args+=(-v "${secret_path}:/run/secrets/anthropic_key:ro")
     fi
 
     # Run claude with session state restoration and persistence
     # This ensures commands like /login save credentials properly
     "${docker_args[@]}" "$image" bash -c '
+        # SECURITY: Read API key from secret file, not environment
+        if [ -f /run/secrets/anthropic_key ]; then
+          export ANTHROPIC_API_KEY=$(cat /run/secrets/anthropic_key)
+        fi
         # Restore session state from persistent volume
         if [ -f /root/.claude-session/.claude.json ]; then
           cp /root/.claude-session/.claude.json /root/.claude.json
@@ -772,6 +832,9 @@ daemon_start() {
     mkdir -p "$HAL9000_HOME/logs"
     mkdir -p "$HAL9000_HOME/config"
 
+    # Store API key to secret file if available (security: avoid env var exposure)
+    store_api_key_secret
+
     # Start parent container
     info "Starting parent container..."
     local docker_args=(
@@ -787,9 +850,12 @@ daemon_start() {
         -v hal9000-plugins:/data/plugins
     )
 
-    # Pass through API key if set
-    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-        docker_args+=(-e ANTHROPIC_API_KEY)
+    # SECURITY: Mount API key as secret file instead of environment variable
+    # This prevents exposure via 'docker inspect' or /proc/1/environ
+    local secret_path
+    secret_path=$(get_api_key_secret_path)
+    if [[ -n "$secret_path" ]]; then
+        docker_args+=(-v "${secret_path}:/run/secrets/anthropic_key:ro")
     fi
 
     docker_args+=("$PARENT_IMAGE")
@@ -1005,20 +1071,23 @@ launch_via_parent() {
     # talks to the host's Docker daemon via socket
     spawn_args+=("$abs_project_path")
 
+    # Store API key to secret file if provided (security: avoid env var exposure)
+    if [[ -n "$api_key" ]]; then
+        ANTHROPIC_API_KEY="$api_key" store_api_key_secret
+    else
+        store_api_key_secret
+    fi
+
     # Execute spawn-worker.sh inside parent container
-    # Pass through environment variables
+    # SECURITY: Do not pass API key as environment variable
+    # The secret file is already mounted into the parent container via HAL9000_HOME
     local exec_args=(docker exec)
 
     if [[ "$detach" != "true" ]]; then
         exec_args+=(-it)
     fi
 
-    if [[ -n "$api_key" ]]; then
-        exec_args+=(-e "ANTHROPIC_API_KEY=$api_key")
-    elif [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-        exec_args+=(-e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
-    fi
-
+    # Parent container has access to secrets via /root/.hal9000/secrets mount
     exec_args+=("$PARENT_CONTAINER" /scripts/spawn-worker.sh "${spawn_args[@]}")
 
     info "Executing: ${exec_args[*]}"
@@ -1235,11 +1304,21 @@ attach_session() {
     if [[ "$shell_mode" == "true" ]]; then
         # Shell mode: just attach to bash
         info "Type 'exit' to disconnect"
-        docker exec -it "$session_name" bash
+        docker exec -it "$session_name" bash -c '
+            # SECURITY: Read API key from secret file, not environment
+            if [ -f /run/secrets/anthropic_key ]; then
+              export ANTHROPIC_API_KEY=$(cat /run/secrets/anthropic_key)
+            fi
+            exec bash
+        '
     else
         # Normal mode: restore session state and run Claude with proper TTY
         info "Launching Claude..."
-        docker exec -it "$session_name" bash -c "
+        docker exec -it "$session_name" bash -c '
+            # SECURITY: Read API key from secret file, not environment
+            if [ -f /run/secrets/anthropic_key ]; then
+              export ANTHROPIC_API_KEY=$(cat /run/secrets/anthropic_key)
+            fi
             # Restore Claude session state from persistent volume
             if [ -f /root/.claude-session/.claude.json ]; then
               cp /root/.claude-session/.claude.json /root/.claude.json
@@ -1248,7 +1327,7 @@ attach_session() {
             claude
             # Save Claude session state back to persistent volume after exit
             [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
-        "
+        '
     fi
 }
 
@@ -1284,6 +1363,13 @@ launch_container_session() {
     local abs_project_path
 
     abs_project_path=$(cd "$project_dir" && pwd)
+
+    # Store API key to secret file if provided (security: avoid env var exposure)
+    if [[ -n "$api_key" ]]; then
+        ANTHROPIC_API_KEY="$api_key" store_api_key_secret
+    else
+        store_api_key_secret
+    fi
 
     # Determine container image: local profile > remote profile > base
     local image_base=$(get_container_image_base)
@@ -1344,13 +1430,13 @@ launch_container_session() {
         -e "MEMORY_BANK_ROOT=/root/memory-bank"
     )
 
-    # Pass through API key if available
-    if [[ -n "$api_key" ]]; then
-        docker_args+=(-e "ANTHROPIC_API_KEY=$api_key")
-        info "  Auth: API key"
-    elif [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-        docker_args+=(-e "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY")
-        info "  Auth: API key (from environment)"
+    # SECURITY: Mount API key as secret file instead of environment variable
+    # This prevents exposure via 'docker inspect' or /proc/1/environ
+    local secret_path
+    secret_path=$(get_api_key_secret_path)
+    if [[ -n "$secret_path" ]]; then
+        docker_args+=(-v "${secret_path}:/run/secrets/anthropic_key:ro")
+        info "  Auth: API key (mounted as secret file)"
     else
         info "  Auth: Subscription (from volume) or interactive login"
     fi
@@ -1399,11 +1485,21 @@ launch_container_session() {
         if [[ "$shell_mode" == "true" ]]; then
             # Shell mode: just attach to bash
             info "Type 'exit' to disconnect"
-            docker exec -it "$session_name" bash
+            docker exec -it "$session_name" bash -c '
+                # SECURITY: Read API key from secret file, not environment
+                if [ -f /run/secrets/anthropic_key ]; then
+                  export ANTHROPIC_API_KEY=$(cat /run/secrets/anthropic_key)
+                fi
+                exec bash
+            '
         else
             # Normal mode: restore session state and run Claude with proper TTY
             info "Launching Claude..."
-            docker exec -it "$session_name" bash -c "
+            docker exec -it "$session_name" bash -c '
+                # SECURITY: Read API key from secret file, not environment
+                if [ -f /run/secrets/anthropic_key ]; then
+                  export ANTHROPIC_API_KEY=$(cat /run/secrets/anthropic_key)
+                fi
                 # FILE-BASED SESSION PERSISTENCE:
                 # State is persisted across session attachments via .claude.json file
                 # Restore Claude session state from persistent volume
@@ -1415,7 +1511,7 @@ launch_container_session() {
                 # Save Claude session state back to persistent volume after exit
                 # This enables resuming the exact session on next attach
                 [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
-            "
+            '
         fi
 
         # Clean up container after interactive session ends

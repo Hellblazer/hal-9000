@@ -13,8 +13,16 @@
 #   MEMORY_BANK_ROOT  - Memory bank data (default: /data/memory-bank)
 #   CHROMADB_HOST     - ChromaDB server host (default: localhost)
 #   CHROMADB_PORT     - ChromaDB server port (default: 8000)
-#   ANTHROPIC_API_KEY - API key for Claude (optional if using session auth)
 #   WORKER_NAME       - Name of this worker (for logging)
+#
+# Secret Files (SECURITY: preferred over environment variables):
+#   /run/secrets/anthropic_key     - Anthropic API key (mounted read-only)
+#   /run/secrets/chromadb_api_key  - ChromaDB API key (mounted read-only)
+#   /run/secrets/chromadb_token    - ChromaDB auth token (mounted read-only)
+#
+# SECURITY NOTE: API keys should be passed via secret files, NOT environment variables.
+# Environment variables are visible via 'docker inspect' and /proc/1/environ.
+# Secret files mounted read-only are much more secure.
 
 set -euo pipefail
 
@@ -150,6 +158,9 @@ if [[ -z "$CHROMADB_HOST" ]]; then
 fi
 CHROMADB_PORT="${CHROMADB_PORT:-8000}"
 
+# ChromaDB authentication token file (mounted read-only from parent)
+CHROMADB_TOKEN_FILE="/run/secrets/chromadb_token"
+
 # ============================================================================
 # INITIALIZATION
 # ============================================================================
@@ -167,6 +178,20 @@ init_claude_home() {
         log_info "Migrating volume ownership from UID 1000 to UID 1001 (claude:claude)..."
         find "$CLAUDE_HOME" -uid 1000 -exec chown claude:claude {} + 2>/dev/null || true
         log_success "Volume ownership migrated - credentials and plugins now accessible"
+    fi
+
+    # SECURITY: Read API key from secret file, not environment variable
+    # Secret files mounted at /run/secrets are not visible via 'docker inspect' or /proc/1/environ
+    # This is the secure way to pass credentials to containers
+    if [[ -f /run/secrets/anthropic_key ]]; then
+        export ANTHROPIC_API_KEY=$(cat /run/secrets/anthropic_key)
+        log_success "Using ANTHROPIC_API_KEY from secret file (secure)"
+    fi
+
+    # SECURITY: Read ChromaDB API key from secret file if available
+    if [[ -f /run/secrets/chromadb_api_key ]]; then
+        export CHROMADB_API_KEY=$(cat /run/secrets/chromadb_api_key)
+        log_success "Using CHROMADB_API_KEY from secret file (secure)"
     fi
 
     # Check for authentication
@@ -199,6 +224,20 @@ setup_foundation_mcp() {
         return 0
     fi
 
+    # Check for ChromaDB authentication token
+    local chromadb_auth_env=""
+    if [[ -f "$CHROMADB_TOKEN_FILE" ]]; then
+        # SECURITY: Configure chroma-mcp client to use token authentication
+        # The token file path is passed via environment variable
+        # chroma-mcp reads the token from file at startup (not stored in settings.json)
+        chromadb_auth_env=',
+        "CHROMA_CLIENT_AUTH_PROVIDER": "chromadb.auth.token_authn.TokenAuthClientProvider",
+        "CHROMA_CLIENT_AUTH_CREDENTIALS_FILE": "'$CHROMADB_TOKEN_FILE'"'
+        log_info "ChromaDB authentication configured via token file"
+    else
+        log_warn "ChromaDB token not found - client will connect without authentication"
+    fi
+
     # Create settings.json with foundation MCP servers
     cat > "$settings_file" <<EOF
 {
@@ -223,7 +262,10 @@ setup_foundation_mcp() {
         "--client-type", "http",
         "--host", "${CHROMADB_HOST}",
         "--port", "${CHROMADB_PORT}"
-      ]
+      ],
+      "env": {
+        "CHROMA_ANONYMIZED_TELEMETRY": "false"${chromadb_auth_env}
+      }
     }
   }
 }
@@ -233,12 +275,17 @@ EOF
     log_info "  - memory-bank: ${MEMORY_BANK_ROOT}"
 
     # Log ChromaDB configuration with network mode info
+    local auth_status="without auth"
+    if [[ -f "$CHROMADB_TOKEN_FILE" ]]; then
+        auth_status="with token auth"
+    fi
+
     if [[ -n "${PARENT_HOSTNAME:-}" ]]; then
-        log_info "  - chromadb: http://${CHROMADB_HOST}:${CHROMADB_PORT} (DNS via PARENT_HOSTNAME: ${PARENT_HOSTNAME})"
+        log_info "  - chromadb: http://${CHROMADB_HOST}:${CHROMADB_PORT} ($auth_status, DNS via PARENT_HOSTNAME: ${PARENT_HOSTNAME})"
     elif [[ -n "${PARENT_IP:-}" ]]; then
-        log_info "  - chromadb: http://${CHROMADB_HOST}:${CHROMADB_PORT} (fallback IP via PARENT_IP)"
+        log_info "  - chromadb: http://${CHROMADB_HOST}:${CHROMADB_PORT} ($auth_status, fallback IP via PARENT_IP)"
     else
-        log_info "  - chromadb: http://${CHROMADB_HOST}:${CHROMADB_PORT}"
+        log_info "  - chromadb: http://${CHROMADB_HOST}:${CHROMADB_PORT} ($auth_status)"
     fi
 
     log_info "  - sequential-thinking: enabled"
@@ -277,12 +324,31 @@ verify_claude() {
 verify_chromadb_connectivity() {
     log_info "Verifying ChromaDB connectivity..."
 
+    # Check for authentication token
+    local auth_available=false
+    if [[ -f "$CHROMADB_TOKEN_FILE" ]]; then
+        auth_available=true
+        log_info "ChromaDB auth token available: $CHROMADB_TOKEN_FILE"
+    else
+        log_warn "ChromaDB auth token not found - authentication will fail"
+    fi
+
     # Use circuit breaker pattern to prevent cascading failures
-    # ChromaDB health check with retry
+    # ChromaDB health check with retry and authentication
+    local curl_cmd="curl -s -m 5"
+    if [[ "$auth_available" == "true" ]]; then
+        # SECURITY: Read token at execution time, not stored in variable
+        curl_cmd="curl -s -m 5 -H \"Authorization: Bearer \$(cat $CHROMADB_TOKEN_FILE)\""
+    fi
+
     if retry_with_backoff \
-        "curl -s -m 5 'http://${CHROMADB_HOST}:${CHROMADB_PORT}/api/v2/heartbeat' >/dev/null 2>&1" \
+        "$curl_cmd 'http://${CHROMADB_HOST}:${CHROMADB_PORT}/api/v2/heartbeat' >/dev/null 2>&1" \
         3; then
-        log_success "ChromaDB connectivity verified: http://${CHROMADB_HOST}:${CHROMADB_PORT}"
+        if [[ "$auth_available" == "true" ]]; then
+            log_success "ChromaDB connectivity verified with authentication: http://${CHROMADB_HOST}:${CHROMADB_PORT}"
+        else
+            log_success "ChromaDB connectivity verified (no auth): http://${CHROMADB_HOST}:${CHROMADB_PORT}"
+        fi
         return 0
     fi
 
@@ -290,6 +356,9 @@ verify_chromadb_connectivity() {
     # (ChromaDB may start later, chroma-mcp has its own reconnection logic)
     log_warn "ChromaDB not responding after retries"
     log_warn "ChromaDB configuration: host=${CHROMADB_HOST}, port=${CHROMADB_PORT}"
+    if [[ "$auth_available" != "true" ]]; then
+        log_warn "Authentication token missing - this may be causing connection failures"
+    fi
     log_info "Note: chroma-mcp client will retry automatically when Claude uses ChromaDB"
     return 1  # Warning, not fatal
 }

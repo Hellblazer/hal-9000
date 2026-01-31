@@ -13,8 +13,23 @@
         ]
       },
       {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/file_access_hook.py",
+            "timeout": 10
+          }
+        ]
+      },
+      {
         "matcher": "Edit",
         "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/file_access_hook.py",
+            "timeout": 10
+          },
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/file_length_limit_hook.py",
@@ -25,6 +40,11 @@
       {
         "matcher": "Write",
         "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/file_access_hook.py",
+            "timeout": 10
+          },
           {
             "type": "command",
             "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/file_length_limit_hook.py",

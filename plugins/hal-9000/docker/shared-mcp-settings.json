@@ -1,6 +1,6 @@
 {
   "$schema": "https://claude.ai/settings-schema.json",
-  "$comment": "HAL-9000 Worker MCP Settings - Connect to parent's ChromaDB server",
+  "$comment": "HAL-9000 Worker MCP Settings - Connect to parent's ChromaDB server with authentication",
 
   "theme": "dark",
   "preferredNotificationChannel": "terminal",
@@ -15,7 +15,9 @@
         "--port", "8000"
       ],
       "env": {
-        "CHROMA_ANONYMIZED_TELEMETRY": "false"
+        "CHROMA_ANONYMIZED_TELEMETRY": "false",
+        "CHROMA_CLIENT_AUTH_PROVIDER": "chromadb.auth.token_authn.TokenAuthClientProvider",
+        "CHROMA_CLIENT_AUTH_CREDENTIALS_FILE": "/run/secrets/chromadb_token"
       }
     },
 

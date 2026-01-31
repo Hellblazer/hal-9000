@@ -294,6 +294,31 @@ pull_worker_image() {
 # Global to track ChromaDB startup state
 CHROMADB_PID=""
 CHROMADB_PORT="${CHROMADB_PORT:-8000}"
+CHROMADB_TOKEN_FILE="/run/secrets/chromadb_token"
+
+# generate_chromadb_token: Generate cryptographic token for ChromaDB authentication
+# Token is written directly to file, NOT stored in environment variable
+# This prevents exposure via /proc/*/environ or docker inspect
+generate_chromadb_token() {
+    log_info "Generating ChromaDB authentication token..."
+
+    # Create secrets directory if it doesn't exist
+    mkdir -p /run/secrets
+    chmod 0700 /run/secrets
+
+    # Generate 32-byte cryptographic random token
+    # tr removes characters that could cause issues in HTTP headers
+    # SECURITY: Write directly to file, not to shell variable
+    if ! openssl rand -base64 32 | tr -d '/+=' | head -c 32 > "$CHROMADB_TOKEN_FILE"; then
+        log_error "Failed to generate ChromaDB token"
+        return 1
+    fi
+
+    # SECURITY: Restrict token file permissions (owner read-only)
+    chmod 0400 "$CHROMADB_TOKEN_FILE"
+
+    log_success "ChromaDB token generated: $CHROMADB_TOKEN_FILE"
+}
 
 start_chromadb_server_async() {
     log_info "Starting ChromaDB server (async)..."
@@ -307,6 +332,18 @@ start_chromadb_server_async() {
         return 1
     }
 
+    # Generate authentication token (written directly to file)
+    generate_chromadb_token || {
+        log_error "Failed to generate ChromaDB authentication token"
+        return 1
+    }
+
+    # SECURITY: Configure ChromaDB with token authentication
+    # Token is read from file at server startup, not passed via environment
+    # This prevents token leakage via docker inspect or /proc/*/environ
+    export CHROMA_SERVER_AUTHN_PROVIDER="chromadb.auth.token_authn.TokenAuthenticationServerProvider"
+    export CHROMA_SERVER_AUTHN_CREDENTIALS_FILE="$CHROMADB_TOKEN_FILE"
+
     # Start ChromaDB server in background (non-blocking)
     chroma run \
         --host "$host" \
@@ -317,7 +354,7 @@ start_chromadb_server_async() {
     CHROMADB_PID=$!
     echo "$CHROMADB_PID" > "${HAL9000_HOME}/chromadb.pid"
 
-    log_info "ChromaDB starting in background (PID: $CHROMADB_PID)"
+    log_info "ChromaDB starting in background (PID: $CHROMADB_PID) with token authentication"
 
     # Audit log ChromaDB start
     if command -v audit_chromadb_start >/dev/null 2>&1; then
@@ -331,12 +368,19 @@ wait_for_chromadb() {
 
     log_info "Waiting for ChromaDB to be ready..."
 
+    # Read token from file for health check (SECURITY: not stored in variable longer than needed)
+    local auth_header=""
+    if [[ -f "$CHROMADB_TOKEN_FILE" ]]; then
+        auth_header="-H \"Authorization: Bearer \$(cat $CHROMADB_TOKEN_FILE)\""
+    fi
+
     while [[ $waited -lt $max_wait ]]; do
         # Use circuit breaker to prevent cascade of health checks if service is failing
+        # Health check with authentication header
         if circuit_breaker "chromadb-health" \
-            "curl -s -m 5 'http://localhost:${CHROMADB_PORT}/api/v2/heartbeat' >/dev/null 2>&1" \
+            "curl -s -m 5 -H \"Authorization: Bearer \$(cat $CHROMADB_TOKEN_FILE 2>/dev/null || echo '')\" 'http://localhost:${CHROMADB_PORT}/api/v2/heartbeat' >/dev/null 2>&1" \
             5 10; then
-            log_success "ChromaDB ready on port $CHROMADB_PORT (waited: ${waited}s)"
+            log_success "ChromaDB ready on port $CHROMADB_PORT with authentication (waited: ${waited}s)"
             return 0
         fi
         sleep 1
