@@ -573,8 +573,68 @@ show_login_instructions() {
     echo "  5. Copy the code from the browser back here"
     echo ""
     warn "If you see 'Unknown scope: us' error, the URL was truncated."
-    echo "    Make sure to copy the ENTIRE URL (all lines)."
+    echo "    Run 'hal-9000 fix-url' to fix the URL in your clipboard."
     echo ""
+}
+
+# Fix OAuth URL in clipboard by removing newlines
+# Workaround for Claude CLI bug: https://github.com/anthropics/claude-code/issues/6827
+fix_clipboard_url() {
+    local clipboard_read=""
+    local clipboard_write=""
+    local url=""
+
+    # Detect clipboard commands based on OS
+    if [[ "$(uname)" == "Darwin" ]]; then
+        clipboard_read="pbpaste"
+        clipboard_write="pbcopy"
+    elif command -v xclip &>/dev/null; then
+        clipboard_read="xclip -selection clipboard -o"
+        clipboard_write="xclip -selection clipboard -i"
+    elif command -v xsel &>/dev/null; then
+        clipboard_read="xsel --clipboard --output"
+        clipboard_write="xsel --clipboard --input"
+    elif command -v wl-paste &>/dev/null; then
+        # Wayland
+        clipboard_read="wl-paste"
+        clipboard_write="wl-copy"
+    else
+        error "No clipboard utility found. Install xclip, xsel, or wl-clipboard." 1
+    fi
+
+    # Read clipboard
+    url=$(eval "$clipboard_read" 2>/dev/null) || {
+        error "Failed to read clipboard" 1
+    }
+
+    # Check if it looks like an OAuth URL
+    if [[ ! "$url" =~ ^https://.*oauth.*authorize ]]; then
+        warn "Clipboard doesn't appear to contain an OAuth URL"
+        echo "Content starts with: ${url:0:50}..."
+        echo ""
+        read -p "Fix anyway? [y/N] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            info "Cancelled"
+            return 0
+        fi
+    fi
+
+    # Remove newlines and carriage returns
+    local fixed_url
+    fixed_url=$(echo "$url" | tr -d '\n\r')
+
+    # Write back to clipboard
+    echo -n "$fixed_url" | eval "$clipboard_write" || {
+        error "Failed to write to clipboard" 1
+    }
+
+    success "URL fixed and copied to clipboard"
+    echo ""
+    info "Fixed URL:"
+    echo "$fixed_url"
+    echo ""
+    info "Paste this URL into your browser to continue authentication."
 }
 
 #==============================================================================
@@ -656,6 +716,14 @@ AUTHENTICATION:
   Always use file-based secrets for API keys.
 
   Auth is stored in shared Docker volume - login once, use everywhere.
+
+  TROUBLESHOOTING LOGIN:
+  If you see "Unknown scope: us" error when pasting the OAuth URL:
+    1. Press 'c' to copy the URL to clipboard
+    2. Run: hal-9000 fix-url
+    3. Paste the fixed URL into your browser
+
+  This fixes a known Claude CLI bug where long URLs get line breaks inserted.
 
 EXAMPLES:
   hal-9000                                    # Current dir, auto-detect profile
@@ -1836,6 +1904,12 @@ main() {
                 error "Unknown profiles command: $1" 2
                 ;;
         esac
+    fi
+
+    # Handle fix-url command (workaround for Claude CLI OAuth URL bug)
+    if [[ "${1:-}" == "fix-url" ]]; then
+        fix_clipboard_url
+        exit 0
     fi
 
     # Handle claude subcommand passthrough (plugin, mcp, doctor, etc.)
