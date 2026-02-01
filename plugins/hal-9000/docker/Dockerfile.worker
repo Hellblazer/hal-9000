@@ -119,6 +119,7 @@ RUN test -x /home/claude/.local/bin/claude && \
 USER root
 
 # Copy entrypoint and utility scripts
+COPY docker/worker-init.sh /scripts/worker-init.sh
 COPY docker/worker-entrypoint.sh /scripts/worker-entrypoint.sh
 COPY scripts/tmux-send.sh /scripts/tmux-send.sh
 COPY scripts/tmux-attach.sh /scripts/tmux-attach.sh
@@ -134,12 +135,8 @@ ENV CHROMADB_PORT=8000
 ENV HOME=/home/claude
 ENV PATH="/home/claude/.local/bin:${PATH}"
 
-# Switch to non-root user
+# Verify installations as claude user - fail build if critical tools are missing
 USER claude
-
-WORKDIR /workspace
-
-# Verify installations - fail build if critical tools are missing
 RUN echo "Verifying installations..." && \
     claude --version && \
     node --version && \
@@ -151,9 +148,15 @@ RUN echo "Verifying installations..." && \
     which chroma-mcp && echo "✓ chroma-mcp found" && \
     echo "Build verification complete - all tools functional"
 
-# Health check
-HEALTHCHECK --interval=60s --timeout=10s --start-period=5s --retries=3 \
-    CMD claude --version >/dev/null 2>&1 || exit 1
+# Switch back to root for init script (will drop to claude after fixing permissions)
+USER root
 
-ENTRYPOINT ["/scripts/worker-entrypoint.sh"]
+WORKDIR /workspace
+
+# Health check - run as claude user
+HEALTHCHECK --interval=60s --timeout=10s --start-period=5s --retries=3 \
+    CMD su - claude -c "claude --version" >/dev/null 2>&1 || exit 1
+
+# Init script runs as root, fixes permissions, then execs entrypoint as claude
+ENTRYPOINT ["/scripts/worker-init.sh"]
 CMD ["claude"]

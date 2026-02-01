@@ -344,6 +344,21 @@ ensure_user_volume() {
     fi
 }
 
+# Initialize tmux-sockets volume with correct permissions
+# Worker runs as claude (uid 1001), needs write access to create sockets
+init_tmux_volume_permissions() {
+    local volume_name="$1"
+    log_info "Initializing tmux volume permissions: $volume_name"
+    # Set ownership to claude:hal9000 (1001:1001) with mode 770
+    # This allows the claude user to create tmux sockets
+    if docker run --rm -v "${volume_name}:/data" alpine \
+        sh -c "chown 1001:1001 /data && chmod 770 /data" 2>&1; then
+        log_success "Tmux volume permissions set"
+    else
+        log_warn "Failed to set tmux volume permissions (may already be correct)"
+    fi
+}
+
 # ============================================================================
 # VOLUME MIGRATION (Legacy -> User-Scoped)
 # ============================================================================
@@ -939,6 +954,7 @@ spawn_worker() {
     local tmux_volume
     tmux_volume=$(get_user_volume "tmux-sockets")
     ensure_user_volume "$tmux_volume"
+    init_tmux_volume_permissions "$tmux_volume"
     docker_args+=(-v "${tmux_volume}:/data/tmux-sockets")
     log_info "User-isolated TMUX sockets: $tmux_volume"
 
@@ -1090,11 +1106,8 @@ spawn_worker() {
     # Image
     docker_args+=("$WORKER_IMAGE")
 
-    # For detached mode, override command to keep container running
-    # Default entrypoint is bash which exits without TTY
-    if [[ "$DETACH" == "true" ]]; then
-        docker_args+=(bash -c "sleep infinity")
-    fi
+    # Worker image handles its own process management via tmux + tail -f /dev/null
+    # No command override needed - use default CMD ["claude"] from Dockerfile
 
     log_info "Spawning worker: $WORKER_NAME"
     log_info "Image: $WORKER_IMAGE"
