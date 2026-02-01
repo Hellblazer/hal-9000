@@ -525,7 +525,7 @@ migrate_legacy_volumes() {
         # Check if this legacy volume exists
         if echo "$legacy_volumes" | grep -q "$old_vol"; then
             if migrate_single_volume "$old_vol" "$new_vol"; then
-                ((migration_count++))
+                ((++migration_count))  # Use pre-increment to avoid set -e exit when count is 0
                 if [[ "$first" == "true" ]]; then
                     first=false
                 else
@@ -683,11 +683,18 @@ parse_args() {
 #   - Test with: spawn-worker.sh -i ghcr.io/hellblazer/hal-9000:worker-v3.1.0
 #   - Remove v3.0.0 entries after validation (optional, can keep for rollback)
 ALLOWED_IMAGES=(
+    # Versioned images (pinned for production)
     "ghcr.io/hellblazer/hal-9000:worker-v3.0.0"
     "ghcr.io/hellblazer/hal-9000:base-v3.0.0"
     "ghcr.io/hellblazer/hal-9000:python-v3.0.0"
     "ghcr.io/hellblazer/hal-9000:node-v3.0.0"
     "ghcr.io/hellblazer/hal-9000:java-v3.0.0"
+    # Unversioned images (for development/latest)
+    "ghcr.io/hellblazer/hal-9000:worker"
+    "ghcr.io/hellblazer/hal-9000:base"
+    "ghcr.io/hellblazer/hal-9000:python"
+    "ghcr.io/hellblazer/hal-9000:node"
+    "ghcr.io/hellblazer/hal-9000:java"
 )
 
 validate_worker_image() {
