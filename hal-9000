@@ -1389,6 +1389,29 @@ launch_via_parent() {
         daemon_start
     fi
 
+    # Check if worker container already exists
+    local existing_status
+    existing_status=$(docker inspect "$session_name" --format='{{.State.Status}}' 2>/dev/null || echo "")
+
+    if [[ "$existing_status" == "running" ]]; then
+        # Worker already running - attach to it instead of creating new
+        info "Worker already running: $session_name"
+        if [[ "$detach" == "true" ]]; then
+            success "Worker already running in background: $session_name"
+            info "Attach with: docker exec -it $session_name bash"
+            return 0
+        else
+            info "Attaching to existing worker..."
+            exec docker exec -it "$session_name" tmux attach -t claude 2>/dev/null || \
+                docker exec -it "$session_name" bash
+            return $?
+        fi
+    elif [[ -n "$existing_status" ]]; then
+        # Container exists but not running - remove it
+        info "Removing stopped worker: $session_name"
+        docker rm -f "$session_name" >/dev/null 2>&1
+    fi
+
     info "Launching worker via parent container..."
     info "  Worker: $session_name"
     info "  Profile: $profile"
