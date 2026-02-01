@@ -1402,8 +1402,19 @@ launch_via_parent() {
             return 0
         else
             info "Attaching to existing worker..."
-            exec docker exec -it "$session_name" tmux attach -t claude 2>/dev/null || \
-                docker exec -it "$session_name" bash
+            # Find tmux socket and session in the worker container
+            # Session name is worker-${WORKER_NAME}, socket is in /data/tmux-sockets/
+            local tmux_socket
+            tmux_socket=$(docker exec "$session_name" sh -c 'ls /data/tmux-sockets/*.sock 2>/dev/null | head -1')
+            if [[ -n "$tmux_socket" ]]; then
+                local tmux_session
+                tmux_session=$(docker exec "$session_name" tmux -S "$tmux_socket" list-sessions -F '#{session_name}' 2>/dev/null | head -1)
+                if [[ -n "$tmux_session" ]]; then
+                    exec docker exec -it "$session_name" tmux -S "$tmux_socket" attach -t "$tmux_session"
+                fi
+            fi
+            # Fallback to bash if tmux not available
+            exec docker exec -it "$session_name" bash
             return $?
         fi
     elif [[ -n "$existing_status" ]]; then
