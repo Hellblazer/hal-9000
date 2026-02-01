@@ -3,21 +3,8 @@ name: Integration Tests
 on:
   push:
     branches: [ main ]
-    paths:
-      - 'plugins/hal-9000/**'
-      - 'scripts/build/test-*.sh'
-      - 'scripts/tests/run-*.sh'
-      - 'templates/**'
-      - 'Makefile'
-      - '.github/workflows/integration-test.yml'
   pull_request:
     branches: [ main ]
-    paths:
-      - 'plugins/hal-9000/**'
-      - 'scripts/build/test-*.sh'
-      - 'scripts/tests/run-*.sh'
-      - 'templates/**'
-      - 'Makefile'
   workflow_dispatch:
 
 jobs:
