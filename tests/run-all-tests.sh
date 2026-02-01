@@ -139,13 +139,13 @@ for test_spec in "${TESTS[@]}"; do
         continue
     fi
 
-    ((TOTAL_CATEGORIES++))
+    TOTAL_CATEGORIES=$((TOTAL_CATEGORIES + 1))
 
     TEST_SCRIPT="$SCRIPT_DIR/$script_name"
 
     if [[ ! -x "$TEST_SCRIPT" ]]; then
         printf "${RED}✗${NC} Category $category_num ($category_name): Script not found or not executable\n"
-        ((CATEGORIES_FAILED++))
+        CATEGORIES_FAILED=$((CATEGORIES_FAILED + 1))
         continue
     fi
 
@@ -184,10 +184,10 @@ for test_spec in "${TESTS[@]}"; do
     # Category status
     if [[ $test_exit_code -eq 0 ]] && [[ $failed -eq 0 ]]; then
         printf "${GREEN}✓${NC} Category $category_num: PASSED\n"
-        ((CATEGORIES_PASSED++))
+        CATEGORIES_PASSED=$((CATEGORIES_PASSED + 1))
     else
         printf "${RED}✗${NC} Category $category_num: FAILED\n"
-        ((CATEGORIES_FAILED++))
+        CATEGORIES_FAILED=$((CATEGORIES_FAILED + 1))
 
         if [[ "$STOP_ON_FAIL" == "true" ]]; then
             printf "\n${RED}Stopping due to test failure (--stop-on-fail)${NC}\n"
