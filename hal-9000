@@ -1521,6 +1521,7 @@ verify_prerequisites() {
     check_api_key_security
 
     # Check authentication - secret file OR subscription login
+    # If not authenticated, warn but allow session to start (user can /login inside Claude)
     local secret_file="${HAL9000_SECRETS_DIR}/anthropic_key"
     if [[ -f "$secret_file" ]]; then
         success "Authentication: API key (secure file: $secret_file)"
@@ -1530,15 +1531,9 @@ verify_prerequisites() {
         echo ""
         warn "No authentication configured"
         echo ""
-        info "Option 1: Subscription login (recommended)"
-        echo "  hal-9000 /login"
+        info "You can login inside Claude by typing /login"
+        info "Or use an API key file: ~/.hal9000/secrets/anthropic_key"
         echo ""
-        info "Option 2: API key (via secure file)"
-        echo "  echo 'sk-ant-api03-...' > ~/.hal9000/secrets/anthropic_key"
-        echo "  chmod 400 ~/.hal9000/secrets/anthropic_key"
-        echo "  Get key at: https://console.anthropic.com/settings/keys"
-        echo ""
-        error "Run 'hal-9000 /login' to authenticate with your Claude subscription" 4
     fi
 
     success "Prerequisites verified"
