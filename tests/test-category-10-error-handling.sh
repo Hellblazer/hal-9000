@@ -164,9 +164,11 @@ test_err_007() {
     fi
 }
 
-# ERR-008: Invalid API key format → Error with exit 1
+# ERR-008: API key via environment variable → Security rejection
+# NOTE: As of security remediation (commit 973cbb2), API keys via environment
+# variables are rejected for security reasons. Use file-based secrets instead.
 test_err_008() {
-    log_test "ERR-008: Invalid API key format → error exit 1"
+    log_test "ERR-008: API key via env var → security rejection"
 
     # Clear subscription credentials
     docker run --rm -v hal9000-claude-home:/root/.claude alpine:latest sh -c '
@@ -179,25 +181,25 @@ test_err_008() {
 
     local output
     local exit_code=0
-    output=$(ANTHROPIC_API_KEY="badkey123" "$HAL9000_CMD" "$test_dir" 2>&1) || exit_code=$?
+    output=$(ANTHROPIC_API_KEY="sk-ant-api03-test" "$HAL9000_CMD" "$test_dir" 2>&1) || exit_code=$?
 
     rm -rf "$test_dir"
 
-    # Should exit with code 1 (validation error)
+    # Should exit with non-zero code (security rejection)
     if [[ $exit_code -eq 1 ]]; then
-        log_pass "Invalid API key format exits with code 1"
+        log_pass "API key via env var rejected (exit 1)"
     elif [[ $exit_code -ne 0 ]]; then
-        log_pass "Invalid API key format rejected (exit $exit_code)"
+        log_pass "API key via env var rejected (exit $exit_code)"
     else
         log_fail "Expected non-zero exit code, got $exit_code"
         return 1
     fi
 
-    # Check error message mentions format or sk-ant
-    if echo "$output" | grep -qiE "(invalid|format|sk-ant)"; then
-        log_pass "Error message mentions invalid format"
+    # Check error message mentions security
+    if echo "$output" | grep -qiE "(security|violation|environment.variable|secret.file)"; then
+        log_pass "Error message explains security requirement"
     else
-        log_fail "Error message doesn't explain format issue"
+        log_fail "Error message doesn't explain security requirement"
         log_info "Output: $output"
         return 1
     fi

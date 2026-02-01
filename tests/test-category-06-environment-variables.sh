@@ -223,9 +223,11 @@ test_env_012() {
     log_skip "ENV-012: DOCKER_SOCKET validation (requires Docker daemon control)"
 }
 
-# ENV-013: ANTHROPIC_API_KEY invalid format → Rejected
+# ENV-013: ANTHROPIC_API_KEY via environment variable → Rejected (security hardening)
+# NOTE: As of security remediation (commit 973cbb2), API keys via environment
+# variables are rejected for security reasons. Use file-based secrets instead.
 test_env_013() {
-    log_test "ENV-013: ANTHROPIC_API_KEY invalid format → rejected"
+    log_test "ENV-013: ANTHROPIC_API_KEY via env var → rejected (security)"
 
     # Clear subscription credentials
     docker run --rm -v hal9000-claude-home:/root/.claude alpine:latest sh -c '
@@ -238,24 +240,24 @@ test_env_013() {
 
     local output
     local exit_code=0
-    # Use invalid API key format
-    output=$(ANTHROPIC_API_KEY="invalid_key_format" "$HAL9000_CMD" "$test_dir" 2>&1) || exit_code=$?
+    # Attempt to use API key via environment variable (should be rejected)
+    output=$(ANTHROPIC_API_KEY="sk-ant-api03-test" "$HAL9000_CMD" "$test_dir" 2>&1) || exit_code=$?
 
     rm -rf "$test_dir"
 
-    # Should exit with non-zero code (exit 1 for validation error)
+    # Should exit with non-zero code (security rejection)
     if [[ $exit_code -ne 0 ]]; then
-        log_pass "Invalid API key format rejected (exit $exit_code)"
+        log_pass "API key via env var rejected (exit $exit_code)"
     else
         log_fail "Expected non-zero exit code, got $exit_code"
         return 1
     fi
 
-    # Check error message mentions invalid format
-    if echo "$output" | grep -qiE "(invalid|format|sk-ant)"; then
-        log_pass "Error message mentions invalid API key format"
+    # Check error message mentions security violation
+    if echo "$output" | grep -qiE "(security|violation|environment.variable|secret.file)"; then
+        log_pass "Error message explains security requirement"
     else
-        log_fail "Error message doesn't explain invalid format"
+        log_fail "Error message doesn't mention security requirement"
         log_info "Output: $output"
         return 1
     fi

@@ -105,6 +105,13 @@ TOTAL_PASSED=0
 TOTAL_FAILED=0
 TOTAL_SKIPPED=0
 
+# Per-test variables (used in loop)
+test_output=""
+test_exit_code=0
+passed=0
+failed=0
+skipped=0
+
 # Header
 echo ""
 printf "${BOLD}${CYAN}================================================${NC}\n"
@@ -146,8 +153,8 @@ for test_spec in "${TESTS[@]}"; do
     printf "${CYAN}────────────────────────────────────────────────${NC}\n"
 
     # Run test and capture output
-    local test_output
-    local test_exit_code=0
+    test_output=""
+    test_exit_code=0
 
     if [[ "$VERBOSE" == "true" ]]; then
         # Show full output
@@ -165,7 +172,6 @@ for test_spec in "${TESTS[@]}"; do
     fi
 
     # Parse results from output
-    local passed skipped failed
     passed=$(echo "$test_output" | grep -oP 'Passed:\s+\K\d+' || echo "0")
     failed=$(echo "$test_output" | grep -oP 'Failed:\s+\K\d+' || echo "0")
     skipped=$(echo "$test_output" | grep -oP 'Skipped:\s+\K\d+' || echo "0")
