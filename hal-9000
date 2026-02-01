@@ -1651,9 +1651,11 @@ attach_session() {
         '
     else
         # Normal mode: restore session state and run Claude with proper TTY
-        # Set COLUMNS very wide to prevent OAuth URL line wrapping
+        # Use stty to resize PTY to prevent OAuth URL line wrapping
         info "Launching Claude..."
-        docker exec -it -e COLUMNS=1000 -e TERM="${TERM:-xterm-256color}" "$session_name" bash -c '
+        docker exec -it -e TERM="${TERM:-xterm-256color}" "$session_name" bash -c '
+            # Resize terminal to very wide to prevent URL wrapping
+            stty cols 1000 2>/dev/null || true
             # Restore Claude session state from persistent volume
             if [ -f /root/.claude-session/.claude.json ]; then
               cp /root/.claude-session/.claude.json /root/.claude.json
@@ -1849,9 +1851,11 @@ launch_container_session() {
             '
         else
             # Normal mode: restore session state and run Claude with proper TTY
-            # Set COLUMNS very wide to prevent OAuth URL line wrapping
+            # Use stty to resize PTY to prevent OAuth URL line wrapping
             info "Launching Claude..."
-            docker exec -it -e COLUMNS=1000 -e TERM="${TERM:-xterm-256color}" "$session_name" bash -c '
+            docker exec -it -e TERM="${TERM:-xterm-256color}" "$session_name" bash -c '
+                # Resize terminal to very wide to prevent URL wrapping
+                stty cols 1000 2>/dev/null || true
                 # FILE-BASED SESSION PERSISTENCE:
                 # State is persisted across session attachments via .claude.json file
                 # Restore Claude session state from persistent volume
