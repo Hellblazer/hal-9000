@@ -479,6 +479,17 @@ run_claude_command() {
     # Store API key to secret file if available (security: avoid env var exposure)
     store_api_key_secret
 
+    # Show login instructions if running /login
+    if [[ "${1:-}" == "/login" ]]; then
+        show_login_instructions
+    fi
+
+    # Transform special commands (e.g., /login -> setup-token)
+    local transformed_cmd
+    transformed_cmd=$(transform_claude_command "${1:-}")
+    shift || true
+    set -- "$transformed_cmd" "$@"
+
     local image_base
     image_base=$(get_container_image_base)
     local image="${image_base}:base"
@@ -533,9 +544,37 @@ is_claude_subcommand() {
     local arg="${1:-}"
     # Match known subcommands (mcp, plugin, doctor, etc.)
     [[ "$arg" =~ ^($CLAUDE_SUBCOMMANDS)$ ]] && return 0
-    # Match Claude slash commands like /login, /help, /status
-    [[ "$arg" =~ ^/ ]] && [[ ! -d "$arg" ]] && return 0
+    # Special case: /login maps to setup-token (not a real slash command)
+    [[ "$arg" == "/login" ]] && return 0
     return 1
+}
+
+# Transform command for special cases (e.g., /login -> setup-token)
+transform_claude_command() {
+    local arg="${1:-}"
+    if [[ "$arg" == "/login" ]]; then
+        echo "setup-token"
+    else
+        echo "$arg"
+    fi
+}
+
+# Show login instructions before running setup-token
+show_login_instructions() {
+    echo ""
+    info "Claude Subscription Login"
+    echo ""
+    echo "An OAuth URL will be displayed. To authenticate:"
+    echo ""
+    echo "  1. The URL spans multiple lines - copy ALL of it"
+    echo "  2. Or press 'c' when prompted to copy to clipboard"
+    echo "  3. Paste the complete URL into your browser"
+    echo "  4. Complete the login in your browser"
+    echo "  5. Copy the code from the browser back here"
+    echo ""
+    warn "If you see 'Unknown scope: us' error, the URL was truncated."
+    echo "    Make sure to copy the ENTIRE URL (all lines)."
+    echo ""
 }
 
 #==============================================================================

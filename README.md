@@ -13,19 +13,23 @@ Run Claude Code in isolated Docker containers with Docker-in-Docker orchestratio
 # Install hal-9000
 curl -fsSL https://raw.githubusercontent.com/Hellblazer/hal-9000/main/install-hal-9000.sh | bash
 
-# Login with your Claude subscription (recommended)
-hal-9000 /login
+# REQUIRED: Authenticate before first use (one of the following)
 
-# Or use file-based API key (v2.1.0+ security requirement)
+# Option 1: Login with Claude subscription (recommended)
+hal-9000 /login
+# Note: When the OAuth URL appears, copy ALL lines of the URL
+# Or press 'c' to copy to clipboard
+
+# Option 2: Use file-based API key
 mkdir -p ~/.hal9000/secrets
-echo "sk-ant-api03-..." > ~/.hal9000/secrets/anthropic_api_key
-chmod 600 ~/.hal9000/secrets/anthropic_api_key
+echo "sk-ant-api03-..." > ~/.hal9000/secrets/anthropic_key
+chmod 400 ~/.hal9000/secrets/anthropic_key
 
 # Launch Claude in current directory
 hal-9000
 ```
 
-Auth is stored in a shared Docker volume - login once, use everywhere.
+**Important**: Authentication is REQUIRED before first use. Auth is stored in a shared Docker volume - login once, use everywhere.
 
 ## Security
 
@@ -228,21 +232,28 @@ graph LR
 
 - Docker
 - Bash
-- Claude subscription OR `ANTHROPIC_API_KEY`
+- Claude subscription (recommended) OR API key file (`~/.hal9000/secrets/anthropic_key`)
 
 ## Configuration
 
 ### Authentication
 
+**Authentication is REQUIRED before first use.**
+
 **Option 1 - Subscription Login (recommended):**
 ```bash
 hal-9000 /login    # Login once, persists in shared volume
 ```
+When the OAuth URL appears, copy ALL lines (it spans multiple lines) or press 'c' to copy to clipboard.
 
-**Option 2 - API Key:**
+**Option 2 - API Key (via secure file):**
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-api03-...
+mkdir -p ~/.hal9000/secrets
+echo "sk-ant-api03-..." > ~/.hal9000/secrets/anthropic_key
+chmod 400 ~/.hal9000/secrets/anthropic_key
 ```
+
+**Note:** Environment variable `ANTHROPIC_API_KEY` is NOT supported for security reasons (visible via docker inspect).
 
 ### Persistent Storage
 
