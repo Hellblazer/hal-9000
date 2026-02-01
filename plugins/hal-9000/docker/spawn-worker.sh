@@ -772,12 +772,18 @@ spawn_worker() {
         docker_args+=(-e "PARENT_HOSTNAME=$PARENT_CONTAINER")
         log_info "Parent hostname: $PARENT_CONTAINER (DNS-based service discovery)"
 
-        # Also pass PARENT_IP for backward compatibility (will attempt DNS resolution first)
+        # Get parent IP for network connectivity
+        # Default bridge network doesn't support DNS resolution, so we must use IP
         local parent_ip
-        parent_ip=$(docker inspect "$PARENT_CONTAINER" --format='{{.NetworkSettings.IPAddress}}' 2>/dev/null || echo "")
+        parent_ip=$(docker inspect "$PARENT_CONTAINER" --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null || echo "")
         if [[ -n "$parent_ip" ]]; then
             docker_args+=(-e "PARENT_IP=$parent_ip")
-            log_info "Parent fallback IP: $parent_ip (for backward compatibility)"
+            # Set ChromaDB host to parent IP (overrides worker image default of localhost)
+            # This is required because default bridge network doesn't support container name DNS
+            docker_args+=(-e "CHROMADB_HOST=$parent_ip")
+            log_info "Parent IP: $parent_ip (ChromaDB host and fallback)"
+        else
+            log_warn "Could not determine parent IP - ChromaDB connectivity may fail"
         fi
     else
         log_warn "Parent container not specified - workers will need explicit service configuration"

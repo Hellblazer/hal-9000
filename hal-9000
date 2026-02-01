@@ -1402,8 +1402,9 @@ launch_via_parent() {
         spawn_args+=(-d)
     fi
 
-    # Use worker image based on profile
-    local worker_image="${image_base}:${profile}"
+    # Use worker image (has tmux entrypoint for via-parent mode)
+    # Profile-specific images (base, python, etc.) are for direct mode only
+    local worker_image="${image_base}:worker"
     spawn_args+=(-i "$worker_image")
 
     # Project directory - use HOST path because spawn-worker.sh
@@ -1996,8 +1997,7 @@ Use file-based secrets instead:
                 shift
                 ;;
             --via-parent)
-                # Deprecated: via-parent is now the default
-                warn "--via-parent is deprecated (now the default). Use --direct to opt out."
+                # No-op: via-parent is now the default
                 shift
                 ;;
             --verify)
