@@ -5,6 +5,45 @@ All notable changes to hal-9000 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-02-01
+
+### Added
+- **Seccomp Syscall Filtering** - Block dangerous syscalls (mount, ptrace, kernel modules)
+  - Three profile levels: base, standard, audit
+  - Protection against container escape and privilege escalation
+  - See [seccomp/README.md](seccomp/README.md)
+
+- **Security Audit Logging** - Comprehensive structured logging
+  - JSON-formatted security events
+  - API key hashing (no plaintext exposure)
+  - Audit trail for all security-relevant operations
+  - See [docker/SECURITY-MONITORING.md](docker/SECURITY-MONITORING.md)
+
+- **Extended Hook Coverage**
+  - Grep tool protection
+  - NotebookEdit tool protection
+  - file_access hook for filesystem monitoring
+  - Symlink bypass protection in all hooks
+
+- **Supply Chain Hardening**
+  - SHA256 digest pinning for all Docker base images
+  - Script signature verification
+  - Dependency integrity checks
+  - See [docker/BASE_IMAGE_DIGESTS.md](docker/BASE_IMAGE_DIGESTS.md)
+
+- **Per-User Volume Isolation** - Prevent cross-user data access
+
+### Changed
+- **BREAKING: Environment variable API keys are now REJECTED**
+  - Must use file-based secrets: `~/.hal9000/secrets/anthropic_api_key`
+  - Or Docker secrets
+  - Or subscription login: `hal-9000 /login`
+
+### Security
+- All 139 integration tests passing
+- Security scanning integrated into CI pipeline
+- Docker image build verification
+
 ## [2.0.0] - 2026-01-28
 
 ### Added

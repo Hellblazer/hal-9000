@@ -16,8 +16,10 @@ curl -fsSL https://raw.githubusercontent.com/Hellblazer/hal-9000/main/install-ha
 # Login with your Claude subscription (recommended)
 hal-9000 /login
 
-# Or use API key instead
-export ANTHROPIC_API_KEY=sk-ant-api03-...
+# Or use file-based API key (v2.1.0+ security requirement)
+mkdir -p ~/.hal9000/secrets
+echo "sk-ant-api03-..." > ~/.hal9000/secrets/anthropic_api_key
+chmod 600 ~/.hal9000/secrets/anthropic_api_key
 
 # Launch Claude in current directory
 hal-9000
@@ -27,12 +29,24 @@ Auth is stored in a shared Docker volume - login once, use everywhere.
 
 ## Security
 
-hal-9000 includes comprehensive security hardening:
-- **Code Injection Prevention** - Safe config file parsing (no arbitrary code execution)
-- **Path Traversal Prevention** - Profile name validation blocks `../` attacks
-- **30/30 security tests passing** - Automated validation for all security features
+hal-9000 v2.1.0 includes comprehensive security hardening:
 
-[Read detailed security summary →](SECURITY.md)
+**Authentication & Secrets** (v2.1.0):
+- **File-based secrets only** - Environment variable API keys are rejected for security
+- **Docker secrets integration** - Secure credential injection
+- **Subscription login** - Recommended: `hal-9000 /login`
+
+**Defense in Depth**:
+- **Seccomp syscall filtering** - Blocks mount, ptrace, kernel module loading
+- **Per-user volume isolation** - Prevents cross-user data access
+- **Security audit logging** - Structured JSON logs with hashed credentials
+- **Extended hooks** - Protection for Grep, NotebookEdit, file_access operations
+
+**Supply Chain Hardening**:
+- **SHA256 digest pinning** - All Docker base images pinned
+- **Signature verification** - Critical scripts verified before execution
+
+[Read detailed security summary →](plugins/hal-9000/SECURITY.md)
 
 ## Marketplace Support
 

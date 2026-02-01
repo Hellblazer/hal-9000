@@ -22,12 +22,12 @@ docker ps
 If you already have hal-9000 installed:
 
 ```bash
-# Update hal-9000 to v0.7.0+
-./install-hal-9000.sh
+# Install or update hal-9000
+curl -fsSL https://raw.githubusercontent.com/Hellblazer/hal-9000/main/install-hal-9000.sh | bash
 
 # Verify version
 hal-9000 --version
-# Should show 0.7.0 or later
+# Should show 2.1.0 or later
 ```
 
 ### Method 2: Building Images Locally
@@ -35,23 +35,16 @@ hal-9000 --version
 ```bash
 # Clone the repository
 git clone https://github.com/Hellblazer/hal-9000.git
-cd hal-9000
+cd hal-9000/plugins/hal-9000/docker
 
-# Build parent image
-docker build -f plugins/hal-9000/docker/Dockerfile.parent \
-    -t ghcr.io/hellblazer/hal-9000:parent \
-    plugins/hal-9000/docker/
+# Build all profile images using the build script
+./build-profiles.sh
 
-# Build worker image (choose one)
-# Minimal (with git, 588MB):
-docker build -f plugins/hal-9000/docker/Dockerfile.worker-minimal \
-    -t ghcr.io/hellblazer/hal-9000:worker \
-    plugins/hal-9000/docker/
-
-# Ultra-minimal (no git, 469MB):
-docker build -f plugins/hal-9000/docker/Dockerfile.worker-ultramin \
-    -t ghcr.io/hellblazer/hal-9000:worker \
-    plugins/hal-9000/docker/
+# Or build specific profiles:
+./build-profiles.sh base     # Base image with Claude CLI + MCP servers
+./build-profiles.sh python   # + Python 3.11, uv, pip
+./build-profiles.sh node     # + Node.js 20, npm, yarn, pnpm
+./build-profiles.sh java     # + GraalVM 25 LTS, Maven, Gradle
 ```
 
 ### Method 3: Pulling Pre-built Images
@@ -103,15 +96,26 @@ hal-9000 daemon status
 
 ## Post-Installation
 
-### Configure Anthropic API Key
+### Configure Authentication (v2.1.0+)
 
+**Option 1: Subscription Login (Recommended)**
 ```bash
-# Set API key for all workers
-export ANTHROPIC_API_KEY="sk-ant-..."
-
-# Or add to ~/.bashrc or ~/.zshrc
-echo 'export ANTHROPIC_API_KEY="sk-ant-..."' >> ~/.bashrc
+hal-9000 /login
+# Follow the prompts to authenticate with your Claude subscription
+# Credentials persist across sessions
 ```
+
+**Option 2: File-based API Key**
+```bash
+# Create secrets directory
+mkdir -p ~/.hal9000/secrets
+
+# Store API key securely
+echo "sk-ant-api03-..." > ~/.hal9000/secrets/anthropic_api_key
+chmod 600 ~/.hal9000/secrets/anthropic_api_key
+```
+
+> ⚠️ **Note:** Environment variable API keys (`ANTHROPIC_API_KEY`) are rejected in v2.1.0+ for security reasons.
 
 ### Enable Warm Worker Pool (Optional)
 

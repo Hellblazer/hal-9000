@@ -1,6 +1,6 @@
 # HAL-9000 Plugin
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
+[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/Hellblazer/hal-9000/releases)
 [![Container](https://img.shields.io/badge/docker-dind-success?logo=docker)](../../docker/README.md)
 
 Containerized Claude with Docker-in-Docker orchestration, persistent storage, multi-branch development, and safety tools.
@@ -131,7 +131,7 @@ aod-broadcast "cmd"              # Send to all sessions
 aod-cleanup                      # Stop all sessions
 ```
 
-**v2.0.0 Architecture:** Docker-in-Docker parent-worker orchestration with Foundation MCP servers (ChromaDB, Memory Bank, Sequential Thinking) running at host level. Workers share persistent volumes for credentials, plugins, and data storage.
+**v2.1.0 Architecture:** Docker-in-Docker parent-worker orchestration with Foundation MCP servers (ChromaDB, Memory Bank, Sequential Thinking) running at host level. Workers share persistent volumes for credentials, plugins, and data storage.
 
 ### hal9000 Sessions
 

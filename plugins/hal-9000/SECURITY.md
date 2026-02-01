@@ -2,6 +2,23 @@
 
 This document describes the security model, known risks, and mitigations for the hal-9000 containerized Claude infrastructure.
 
+## v2.1.0 Security Features
+
+### Defense in Depth Layers
+
+| Layer | Feature | Documentation |
+|-------|---------|---------------|
+| **Syscall Filtering** | Seccomp profiles block dangerous syscalls (mount, ptrace, kernel modules) | [seccomp/README.md](seccomp/README.md) |
+| **Authentication** | File-based secrets only; env var API keys rejected | See [Credential Management](#credential-management-v210-security-update) below |
+| **Audit Logging** | Structured JSON security events with hashed credentials | [docker/SECURITY-MONITORING.md](docker/SECURITY-MONITORING.md) |
+| **Supply Chain** | SHA256 digest pinning for all base images | [docker/BASE_IMAGE_DIGESTS.md](docker/BASE_IMAGE_DIGESTS.md) |
+| **Hook Coverage** | Extended hooks for Grep, NotebookEdit, file_access | [hooks/hooks.json](hooks/hooks.json) |
+| **Volume Isolation** | Per-user Docker volumes prevent cross-user access | See below |
+
+### Breaking Changes in v2.1.0
+
+⚠️ **Environment variable API keys are now REJECTED.** Use file-based secrets or subscription login instead. See [Credential Management](#credential-management-v210-security-update) for migration instructions.
+
 ## Security Architecture
 
 ### Non-Root Container Execution
@@ -66,8 +83,8 @@ Worker images are validated against an allowlist to prevent supply chain attacks
 
 ```bash
 ALLOWED_IMAGES=(
-    "ghcr.io/hellblazer/hal-9000:worker-v3.0.0"
-    "ghcr.io/hellblazer/hal-9000:base-v3.0.0"
+    "ghcr.io/hellblazer/hal-9000:worker-v2.1.0"
+    "ghcr.io/hellblazer/hal-9000:base-v2.1.0"
     # Versioned tags for supply chain security
 )
 ```
@@ -75,7 +92,7 @@ ALLOWED_IMAGES=(
 **Rationale:** Prevents arbitrary image execution that could contain malicious code.
 
 **Security Levels:**
-1. **Version tags** (current): Tags like `:worker-v3.0.0` won't be reused, providing good protection
+1. **Version tags** (current): Tags like `:worker-v2.1.0` won't be reused, providing good protection
 2. **SHA digests** (maximum): Add `@sha256:...` suffix for cryptographic verification
 
 **Upgrading to SHA Digests:**
@@ -86,7 +103,7 @@ ALLOWED_IMAGES=(
 
 This produces entries like:
 ```bash
-"ghcr.io/hellblazer/hal-9000:worker-v3.0.0@sha256:abc123..."
+"ghcr.io/hellblazer/hal-9000:worker-v2.1.0@sha256:abc123..."
 ```
 
 ### Python Dependency Pinning
@@ -178,28 +195,42 @@ docker run --network hal9000-net -p 8000:8000 ghcr.io/hellblazer/hal-9000:parent
 # Workers automatically use parent's network namespace (isolated)
 ```
 
-### Credential Management (Risk: MEDIUM)
+### Credential Management (v2.1.0 Security Update)
 
-**Risk:** API keys passed via environment variables are visible in `docker inspect`.
+**⚠️ BREAKING CHANGE in v2.1.0:** Environment variable API keys are now **REJECTED** for security.
 
-**Current state:**
-- `ANTHROPIC_API_KEY` - Required for Claude CLI
-- `CHROMADB_API_KEY` - Optional for ChromaDB cloud
+**Why:** API keys in environment variables are visible via `docker inspect` and process listings, creating credential exposure risk.
 
-**Mitigations:**
-1. Security warnings logged when env vars used
-2. Claude CLI supports authentication via `claude /login` command
+**Approved Authentication Methods:**
 
-**Recommendation:** Use Claude CLI's built-in authentication instead of environment variables:
-
+1. **Subscription Login (Recommended):**
 ```bash
-# Inside container, authenticate interactively
-claude /login
-
-# Credentials stored in ~/.claude/ (mounted volume persists across sessions)
+hal-9000 /login
+# Credentials stored in Docker volume, persist across sessions
 ```
 
-**Note:** The credential file approach (`~/.claude/.credentials.json`) is a Claude CLI feature. Check Claude CLI documentation for current authentication methods.
+2. **File-based Secrets:**
+```bash
+mkdir -p ~/.hal9000/secrets
+echo "sk-ant-api03-..." > ~/.hal9000/secrets/anthropic_api_key
+chmod 600 ~/.hal9000/secrets/anthropic_api_key
+```
+
+3. **Docker Secrets (Production):**
+```bash
+echo "sk-ant-api03-..." | docker secret create anthropic_api_key -
+# Reference in docker-compose or swarm deployment
+```
+
+**Migration from Environment Variables:**
+If you were using `export ANTHROPIC_API_KEY=...`, switch to file-based secrets:
+```bash
+# One-time migration
+mkdir -p ~/.hal9000/secrets
+echo "$ANTHROPIC_API_KEY" > ~/.hal9000/secrets/anthropic_api_key
+chmod 600 ~/.hal9000/secrets/anthropic_api_key
+unset ANTHROPIC_API_KEY  # Remove from environment
+```
 
 ### Resource Exhaustion (Risk: LOW)
 
