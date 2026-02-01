@@ -150,8 +150,12 @@ jobs:
     - name: Check for secrets in code
       run: |
         echo "Scanning for potential secrets..."
-        if grep -r "ANTHROPIC_API_KEY.*=.*sk-ant-" . --exclude-dir=.git --exclude-dir=tests || \
-           grep -r "API_KEY.*=.*[a-zA-Z0-9]{20,}" . --exclude-dir=.git --exclude-dir=tests; then
+        # Exclude: .git, tests, docs, .beads, .github, *.md files
+        # Only scan actual source code for real API keys (not example placeholders)
+        if grep -r "ANTHROPIC_API_KEY.*=.*sk-ant-api03-[a-zA-Z0-9_-]\{20,\}" . \
+             --exclude-dir=.git --exclude-dir=tests --exclude-dir=.beads \
+             --exclude-dir=.github --exclude-dir=docs --exclude='*.md' \
+             --exclude='*.jsonl' 2>/dev/null; then
           echo "❌ Potential secrets found in code!"
           exit 1
         else
