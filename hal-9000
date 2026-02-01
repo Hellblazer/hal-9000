@@ -471,6 +471,131 @@ check_subscription_auth() {
         2>/dev/null
 }
 
+# Run the login flow with automatic URL fixing
+# Workaround for Claude CLI bug where OAuth URLs contain newlines
+run_login_flow() {
+    ensure_volumes
+
+    local image_base
+    image_base=$(get_container_image_base)
+    local image="${image_base}:base"
+
+    # SECURITY: Use user-scoped volumes for isolation
+    local claude_home_vol
+    local claude_session_vol
+    local memory_bank_vol
+    claude_home_vol=$(get_claude_home_volume)
+    claude_session_vol=$(get_claude_session_volume)
+    memory_bank_vol=$(get_memory_bank_volume)
+
+    # Create temp file for capturing output
+    local capture_file
+    capture_file=$(mktemp)
+    local url_file
+    url_file=$(mktemp)
+    trap "rm -f '$capture_file' '$url_file'" EXIT
+
+    echo ""
+    info "Claude Subscription Login"
+    echo ""
+    warn "IMPORTANT: When the OAuth URL appears, it may contain line breaks."
+    echo "  This script will automatically extract and fix the URL for you."
+    echo "  Watch for the '✓ FIXED OAuth URL' message below."
+    echo ""
+
+    # Build docker args - set very wide terminal to minimize wrapping
+    local docker_args=(
+        docker run --rm -it
+        -v "${claude_home_vol}:/root/.claude"
+        -v "${claude_session_vol}:/root/.claude-session"
+        -v "${memory_bank_vol}:/root/memory-bank"
+        -e "CLAUDE_HOME=/root/.claude"
+        -e "MEMORY_BANK_ROOT=/root/memory-bank"
+        -e "TERM=${TERM:-xterm-256color}"
+        -e "COLUMNS=500"
+    )
+
+    # Start a background process to watch for the URL and fix it
+    (
+        local url=""
+        local attempts=0
+        local max_attempts=120  # 60 seconds max wait
+
+        while [[ $attempts -lt $max_attempts ]]; do
+            sleep 0.5
+            ((attempts++))
+
+            if [[ -f "$capture_file" ]] && [[ -s "$capture_file" ]]; then
+                # Strip ANSI codes and extract OAuth URL
+                # The URL pattern: https://claude.ai/oauth/authorize?...&state=...
+                local cleaned
+                cleaned=$(cat "$capture_file" 2>/dev/null | \
+                    LC_ALL=C sed 's/\x1b\[[0-9;?]*[a-zA-Z]//g' | \
+                    tr -d '\r\n' | \
+                    tr -s ' ')
+
+                # Try to extract URL
+                if [[ "$cleaned" =~ (https://claude\.ai/oauth/authorize\?[^[:space:]]+state=[a-zA-Z0-9_-]+) ]]; then
+                    url="${BASH_REMATCH[1]}"
+
+                    # Validate URL has required parts
+                    if [[ "$url" =~ code_challenge= ]] && [[ "$url" =~ scope= ]]; then
+                        # Found valid URL! Save it
+                        echo "$url" > "$url_file"
+
+                        # Display prominently
+                        echo "" >&2
+                        echo "" >&2
+                        echo "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓" >&2
+                        echo "┃  ✓ FIXED OAuth URL - Copy this into your browser:               ┃" >&2
+                        echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛" >&2
+                        echo "" >&2
+                        echo "$url" >&2
+                        echo "" >&2
+
+                        # Copy to clipboard
+                        if [[ "$(uname)" == "Darwin" ]]; then
+                            echo -n "$url" | pbcopy 2>/dev/null && \
+                                echo "✓ URL automatically copied to clipboard!" >&2
+                        elif command -v xclip &>/dev/null; then
+                            echo -n "$url" | xclip -selection clipboard 2>/dev/null && \
+                                echo "✓ URL automatically copied to clipboard!" >&2
+                        elif command -v xsel &>/dev/null; then
+                            echo -n "$url" | xsel --clipboard --input 2>/dev/null && \
+                                echo "✓ URL automatically copied to clipboard!" >&2
+                        fi
+
+                        echo "" >&2
+                        echo "After authenticating in browser, paste the code at the prompt above." >&2
+                        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+                        break
+                    fi
+                fi
+            fi
+        done
+    ) &
+    local watcher_pid=$!
+
+    # Run setup-token with script to capture output
+    script -q "$capture_file" "${docker_args[@]}" "$image" bash -c '
+        if [ -f /root/.claude-session/.claude.json ]; then
+          cp /root/.claude-session/.claude.json /root/.claude.json
+        fi
+        claude setup-token
+        [ -f /root/.claude.json ] && cp /root/.claude.json /root/.claude-session/.claude.json
+    '
+    local exit_code=$?
+
+    # Clean up watcher
+    kill $watcher_pid 2>/dev/null || true
+    wait $watcher_pid 2>/dev/null || true
+
+    rm -f "$capture_file" "$url_file"
+    trap - EXIT
+
+    return $exit_code
+}
+
 # Run a claude command inside a container with shared volumes
 # Usage: run_claude_command <args...>
 run_claude_command() {
@@ -479,9 +604,10 @@ run_claude_command() {
     # Store API key to secret file if available (security: avoid env var exposure)
     store_api_key_secret
 
-    # Show login instructions if running /login
+    # Special handling for /login - use the smart login flow
     if [[ "${1:-}" == "/login" ]]; then
-        show_login_instructions
+        run_login_flow
+        return $?
     fi
 
     # Transform special commands (e.g., /login -> setup-token)
