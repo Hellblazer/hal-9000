@@ -992,8 +992,15 @@ main() {
             log_info "Starting Claude..."
             if start_tmux_session; then
                 log_success "TMUX session ready - keeping worker alive"
-                # Keep worker process alive (TMUX session is managing Claude)
-                exec tail -f /dev/null
+                # If running with a TTY (interactive), attach to tmux session
+                # Otherwise keep alive with tail for background/detached mode
+                if [ -t 0 ] && [ -t 1 ]; then
+                    log_info "Interactive mode - attaching to TMUX session"
+                    exec tmux -S "$TMUX_SOCKET" attach -t "worker-${WORKER_NAME}"
+                else
+                    # Keep worker process alive (TMUX session is managing Claude)
+                    exec tail -f /dev/null
+                fi
             else
                 log_warn "TMUX failed - falling back to direct execution"
                 # SECURITY: Use helper that reads secret at exec time only
