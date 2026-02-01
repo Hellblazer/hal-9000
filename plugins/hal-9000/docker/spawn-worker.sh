@@ -794,20 +794,24 @@ spawn_worker() {
         }
 
         # MEDIUM-4: SECURITY: Allowlist of permitted path prefixes (more secure than blocklist)
-        # Use $HOME instead of /home to restrict to current user's home directory only
-        # This prevents mounting other users' home directories
+        # In DinD mode, paths are HOST paths passed to docker for mounting.
+        # We must allow common host path patterns even when running inside a container.
         local allowed_prefixes=()
+
+        # Container paths
         if [[ -n "${HOME:-}" ]]; then
             allowed_prefixes+=("$HOME")
         fi
-        # macOS uses /Users, but only allow current user's directory
-        if [[ -d "/Users" && -n "${USER:-}" ]]; then
-            allowed_prefixes+=("/Users/${USER}")
-        fi
-        # Always allow /workspace (container workspace)
         allowed_prefixes+=("/workspace")
-        # Allow /tmp for temporary projects (read-only is recommended)
         allowed_prefixes+=("/tmp")
+        allowed_prefixes+=("/root")
+
+        # HOST paths (for DinD mode - paths passed through to docker daemon on host)
+        # macOS: /Users/<username>
+        # Linux: /home/<username>
+        # These are HOST paths that get mounted into the worker container
+        allowed_prefixes+=("/Users")
+        allowed_prefixes+=("/home")
 
         local path_allowed=false
         for prefix in "${allowed_prefixes[@]}"; do
