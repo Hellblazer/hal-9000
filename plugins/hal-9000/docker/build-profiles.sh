@@ -10,7 +10,7 @@ set -Eeuo pipefail
 
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly IMAGE_BASE="ghcr.io/hellblazer/hal-9000"
-readonly VERSION="2.0.0"
+readonly VERSION="2.1.0"
 
 # Colors
 readonly GREEN='\033[0;32m'
