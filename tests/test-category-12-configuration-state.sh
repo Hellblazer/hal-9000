@@ -168,9 +168,9 @@ test_script_exists() {
 test_version_format() {
     log_test "Version format: Matches semver pattern"
 
-    # Extract version from script
+    # Extract version from script (filter to line with "version X.Y.Z")
     local version
-    version=$("$HAL9000_CMD" --version 2>&1 | head -1 || true)
+    version=$("$HAL9000_CMD" --version 2>&1 | grep -oE "version [0-9]+\.[0-9]+\.[0-9]+" | head -1 || true)
 
     if echo "$version" | grep -qE "[0-9]+\.[0-9]+\.[0-9]+"; then
         log_pass "Version matches semver format: $version"

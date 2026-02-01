@@ -149,9 +149,11 @@ test_auth_009() {
     fi
 }
 
-# AUTH-010: ANTHROPIC_API_KEY="invalid" → Rejects with exit 1
+# AUTH-010: ANTHROPIC_API_KEY via env var → Security rejection
+# NOTE: As of security remediation, API keys via environment variables are
+# rejected for security reasons. Use file-based secrets instead.
 test_auth_010() {
-    log_test "AUTH-010: ANTHROPIC_API_KEY invalid format → fails"
+    log_test "AUTH-010: ANTHROPIC_API_KEY via env var → security rejection"
 
     # Clear any existing subscription credentials from volume
     docker run --rm -v hal9000-claude-home:/root/.claude alpine:latest sh -c '
@@ -170,19 +172,21 @@ test_auth_010() {
 
     rm -rf "$test_dir"
 
-    # Exit code should be 1 for invalid format
-    if [[ $exit_code -ne 0 ]]; then
-        log_pass "Non-zero exit code for invalid key format"
+    # Exit code should be 1 for security violation
+    if [[ $exit_code -eq 1 ]]; then
+        log_pass "API key via env var rejected (exit 1)"
+    elif [[ $exit_code -ne 0 ]]; then
+        log_pass "API key via env var rejected (exit $exit_code)"
     else
         log_fail "Expected non-zero exit code, got $exit_code"
         return 1
     fi
 
-    # Check error message mentions invalid format
-    if echo "$output" | grep -qiE "(invalid|format|sk-ant)"; then
-        log_pass "Error message mentions invalid format"
+    # Check error message mentions security violation
+    if echo "$output" | grep -qiE "(security|violation|environment.variable|secret.file)"; then
+        log_pass "Error message explains security requirement"
     else
-        log_fail "Error message doesn't explain invalid format"
+        log_fail "Error message doesn't explain security requirement"
         log_info "Output: $output"
         return 1
     fi
