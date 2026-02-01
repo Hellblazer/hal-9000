@@ -738,7 +738,7 @@ OPTIONS:
   --shell, -s            Start bash shell instead of Claude
   --name NAME            Custom session name (default: auto from directory)
   --detach, -d           Don't attach to tmux session after launch
-  --via-parent           Launch worker via parent container (requires daemon running)
+  --direct               Use direct container mode (bypass daemon/tmux)
   --verify               Verify prerequisites and exit
   --diagnose             Show diagnostic information
   --help, -h             Show this help message
@@ -772,10 +772,11 @@ AUTHENTICATION:
   This fixes a known Claude CLI bug where long URLs get line breaks inserted.
 
 EXAMPLES:
-  hal-9000                                    # Current dir, auto-detect profile
+  hal-9000                                    # Current dir (auto-starts daemon)
   hal-9000 --profile python                   # Force Python profile
   hal-9000 ~/projects/myapp                   # Specific directory
   hal-9000 --shell                            # Start with shell instead of Claude
+  hal-9000 --direct                           # Bypass daemon (direct container)
   hal-9000 plugin install memory-bank         # Install plugin (persists)
   hal-9000 mcp list                           # List MCP servers
   hal-9000 --diagnose                         # Check setup
@@ -789,10 +790,11 @@ SESSION EXAMPLES:
   hal-9000 kill hal-9000-myapp-abc123         # Stop a session
 
 DAEMON EXAMPLES:
-  hal-9000 daemon start                       # Start the orchestrator
+  hal-9000                                    # Auto-starts daemon and launches worker
+  hal-9000 daemon start                       # Manually start the orchestrator
   hal-9000 daemon status                      # Check status and workers
   hal-9000 daemon stop                        # Stop the orchestrator
-  hal-9000 --via-parent ~/project             # Launch worker via parent (DinD mode)
+  hal-9000 --direct ~/project                 # Bypass daemon (direct container mode)
 
 PROFILE COMMANDS:
   hal-9000 profiles                           # List available local profiles
@@ -1381,17 +1383,10 @@ launch_via_parent() {
     abs_project_path=$(cd "$project_dir" && pwd)
     image_base=$(get_container_image_base)
 
-    # Check if parent is running
+    # Auto-start daemon if not running (idempotent)
     if ! docker ps --format '{{.Names}}' | grep -q "^${PARENT_CONTAINER}$"; then
-        warn "Parent container not running"
-        echo ""
-        read -p "Start the orchestrator now? [Y/n] " -n 1 -r
-        echo ""
-        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-            daemon_start
-        else
-            error "Cannot launch via parent without orchestrator. Run 'hal-9000 daemon start' first." 3
-        fi
+        info "Starting orchestrator..."
+        daemon_start
     fi
 
     info "Launching worker via parent container..."
@@ -1895,7 +1890,7 @@ main() {
     local shell_mode=false
     local detach=false
     local verify_only=false
-    local via_parent=false
+    local direct_mode=false  # Default is now via-parent (tmux mode)
 
     # Ensure volumes exist and are initialized with pristine config
     # This runs once on first use, subsequent launches reuse initialized volumes
@@ -1996,8 +1991,13 @@ Use file-based secrets instead:
                 detach=true
                 shift
                 ;;
+            --direct)
+                direct_mode=true
+                shift
+                ;;
             --via-parent)
-                via_parent=true
+                # Deprecated: via-parent is now the default
+                warn "--via-parent is deprecated (now the default). Use --direct to opt out."
                 shift
                 ;;
             --verify)
@@ -2030,18 +2030,19 @@ Use file-based secrets instead:
         esac
     done
 
-    # Verify prerequisites (skip API key check for via-parent mode)
-    if [[ "$via_parent" == "true" ]]; then
-        # For via-parent, just check Docker is available
+    # Verify prerequisites
+    # Direct mode has stricter checks; via-parent mode (default) is more lenient
+    if [[ "$direct_mode" == "true" ]]; then
+        if ! verify_prerequisites; then
+            exit 1
+        fi
+    else
+        # For via-parent (default), just check Docker is available
         if ! command -v docker &> /dev/null; then
             error "Docker not found" 3
         fi
         if ! docker ps &> /dev/null; then
             error "Docker daemon not running" 3
-        fi
-    else
-        if ! verify_prerequisites; then
-            exit 1
         fi
     fi
 
@@ -2077,13 +2078,10 @@ Use file-based secrets instead:
         session_name=$(get_session_name "$project_dir")
     fi
 
-    # Launch via parent or direct
-    if [[ "$via_parent" == "true" ]]; then
-        # DinD mode: spawn worker via parent container
-        info "Using via-parent mode (DinD)"
-        launch_via_parent "$session_name" "$profile" "$project_dir" "$shell_mode" "$api_key" "$detach" || error "Failed to launch via parent" 3
-    else
-        # Direct mode: launch container directly
+    # Launch via parent (default) or direct mode (escape hatch)
+    if [[ "$direct_mode" == "true" ]]; then
+        # Direct mode: launch container directly (legacy/escape hatch)
+        info "Using direct mode"
         info "Initializing session..."
         init_session "$project_dir" "$profile" "$session_name" "$shell_mode" || error "Failed to initialize session" 1
 
@@ -2091,6 +2089,9 @@ Use file-based secrets instead:
 
         # Launch container
         launch_container_session "$session_name" "$profile" "$project_dir" "$shell_mode" "$api_key" "$detach" || error "Failed to launch container" 3
+    else
+        # Via-parent mode (default): spawn worker via parent container with tmux
+        launch_via_parent "$session_name" "$profile" "$project_dir" "$shell_mode" "$api_key" "$detach" || error "Failed to launch via parent" 3
     fi
 }
 

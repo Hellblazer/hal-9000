@@ -888,7 +888,8 @@ start_tmux_session() {
     fi
 
     # Create TMUX session with Claude in first window
-    tmux -S "$tmux_socket" new-session -d -s "$session_name" -x 120 -y 30 \
+    # Use wide terminal (500 cols) to prevent OAuth URL line wrapping
+    tmux -S "$tmux_socket" new-session -d -s "$session_name" -x 500 -y 50 \
         "$claude_cmd" 2>/dev/null || {
         log_error "Failed to create TMUX session"
         return 1
