@@ -171,6 +171,7 @@ store_api_key_secret() {
     check_api_key_security
 }
 
+
 # Initialize seccomp profile on host filesystem
 # Docker requires the seccomp profile to be on the HOST before container starts
 # This copies the profile from the plugin directory to HAL9000_HOME
@@ -1403,13 +1404,16 @@ launch_via_parent() {
         else
             info "Attaching to existing worker..."
             # Find tmux socket and session in the worker container
-            # Session name is worker-${WORKER_NAME}, socket is in /data/tmux-sockets/
             local tmux_socket
             tmux_socket=$(docker exec "$session_name" sh -c 'ls /data/tmux-sockets/*.sock 2>/dev/null | head -1')
             if [[ -n "$tmux_socket" ]]; then
                 local tmux_session
                 tmux_session=$(docker exec "$session_name" tmux -S "$tmux_socket" list-sessions -F '#{session_name}' 2>/dev/null | head -1)
                 if [[ -n "$tmux_session" ]]; then
+                    # Select Claude window and resize for OAuth URLs
+                    docker exec "$session_name" tmux -S "$tmux_socket" select-window -t "${tmux_session}:claude" 2>/dev/null || \
+                        docker exec "$session_name" tmux -S "$tmux_socket" select-window -t "${tmux_session}:0" 2>/dev/null || true
+                    docker exec "$session_name" tmux -S "$tmux_socket" resize-pane -x 500 2>/dev/null || true
                     exec docker exec -it "$session_name" tmux -S "$tmux_socket" attach -t "$tmux_session"
                 fi
             fi
@@ -1432,9 +1436,9 @@ launch_via_parent() {
     local spawn_args=()
     spawn_args+=(-n "$session_name")
 
-    if [[ "$detach" == "true" ]]; then
-        spawn_args+=(-d)
-    fi
+    # Always spawn in detached mode - we attach to tmux separately for interactive mode
+    # This ensures the container stays alive with tail -f /dev/null
+    spawn_args+=(-d)
 
     # Use worker image (has tmux entrypoint for via-parent mode)
     # Profile-specific images (base, python, etc.) are for direct mode only
@@ -1445,31 +1449,58 @@ launch_via_parent() {
     # talks to the host's Docker daemon via socket
     spawn_args+=("$abs_project_path")
 
-    # Store API key to secret file if provided (security: avoid env var exposure)
-    if [[ -n "$api_key" ]]; then
-        ANTHROPIC_API_KEY="$api_key" store_api_key_secret
-    else
-        store_api_key_secret
-    fi
-
     # Execute spawn-worker.sh inside parent container
     # SECURITY: Do not pass API key as environment variable
     # The secret file is already mounted into the parent container via HAL9000_HOME
-    local exec_args=(docker exec)
-
-    if [[ "$detach" != "true" ]]; then
-        exec_args+=(-it)
-    fi
-
-    # Parent container has access to secrets via /root/.hal9000/secrets mount
-    exec_args+=("$PARENT_CONTAINER" /scripts/spawn-worker.sh "${spawn_args[@]}")
+    # Note: No -it flag needed since we always spawn detached
+    local exec_args=(docker exec "$PARENT_CONTAINER" /scripts/spawn-worker.sh "${spawn_args[@]}")
 
     info "Executing: ${exec_args[*]}"
 
     if "${exec_args[@]}"; then
+        success "Worker spawned: $session_name"
+
         if [[ "$detach" == "true" ]]; then
-            success "Worker spawned in background: $session_name"
-            info "Attach with: docker exec -it $session_name bash"
+            info "Running in background. Attach with: docker exec -it $session_name bash"
+        else
+            # Interactive mode: wait for tmux session to be ready, then attach
+            info "Waiting for tmux session to be ready..."
+            local max_wait=30
+            local waited=0
+            local tmux_socket=""
+
+            while [[ $waited -lt $max_wait ]]; do
+                tmux_socket=$(docker exec "$session_name" sh -c 'ls /data/tmux-sockets/*.sock 2>/dev/null | head -1' 2>/dev/null || echo "")
+                if [[ -n "$tmux_socket" ]]; then
+                    # Check if tmux server is actually responding
+                    if docker exec "$session_name" tmux -S "$tmux_socket" list-sessions &>/dev/null; then
+                        break
+                    fi
+                fi
+                sleep 0.5
+                waited=$((waited + 1))
+            done
+
+            if [[ -z "$tmux_socket" ]]; then
+                warn "Tmux session not ready after ${max_wait}s - attaching to bash instead"
+                exec docker exec -it "$session_name" bash
+            fi
+
+            # Get the tmux session name
+            local tmux_session
+            tmux_session=$(docker exec "$session_name" tmux -S "$tmux_socket" list-sessions -F '#{session_name}' 2>/dev/null | head -1)
+
+            if [[ -n "$tmux_session" ]]; then
+                info "Attaching to tmux session: $tmux_session (window: claude)"
+                # Select Claude window before attaching - window 1 is the debug shell
+                docker exec "$session_name" tmux -S "$tmux_socket" select-window -t "${tmux_session}:claude" 2>/dev/null || true
+                # Resize pane to ensure OAuth URLs aren't truncated (needs 500+ cols)
+                docker exec "$session_name" tmux -S "$tmux_socket" resize-pane -x 500 2>/dev/null || true
+                exec docker exec -it "$session_name" tmux -S "$tmux_socket" attach -t "$tmux_session"
+            else
+                warn "Could not find tmux session - attaching to bash instead"
+                exec docker exec -it "$session_name" bash
+            fi
         fi
     else
         error "Failed to spawn worker via parent" 3

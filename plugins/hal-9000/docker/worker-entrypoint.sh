@@ -866,36 +866,21 @@ start_tmux_session() {
     tmux -S "$tmux_socket" kill-server 2>/dev/null || true
     sleep 0.5
 
-    # SECURITY: Build Claude command that reads secret at exec time only
-    # This ensures the API key is only in the Claude process environment, not in parent shells
-    # The key is never visible in the entrypoint process or stored in shell history
+    # Claude command - authentication is handled via persistent .claude/ directory
+    # On first run, Claude will prompt for OAuth login
+    # Credentials persist in mounted volume at /home/claude/.claude/.credentials.json
     local claude_cmd="exec claude"
-    if [[ -n "${ANTHROPIC_API_KEY_FILE:-}" ]] && [[ -f "${ANTHROPIC_API_KEY_FILE}" ]]; then
-        # SECURITY: Validate path to prevent command injection
-        # Path is interpolated into shell command, so must be strictly validated
-        if ! validate_secret_file_path "${ANTHROPIC_API_KEY_FILE}" "ANTHROPIC_API_KEY_FILE"; then
-            log_error "Cannot start TMUX session with invalid secret file path"
-            return 1
-        fi
-
-        # Use printf %q to safely escape the path for shell interpolation
-        local escaped_path
-        escaped_path=$(printf '%q' "${ANTHROPIC_API_KEY_FILE}")
-
-        # Read secret at exec time - key only exists in Claude process
-        claude_cmd='export ANTHROPIC_API_KEY=$(cat '"${escaped_path}"'); exec claude'
-        log_info "Claude will read API key from secret file at startup"
-    fi
+    log_info "Claude auth: using persistent .claude/ directory"
 
     # Create TMUX session with Claude in first window
     # Use wide terminal (500 cols) to prevent OAuth URL line wrapping
-    tmux -S "$tmux_socket" new-session -d -s "$session_name" -x 500 -y 50 \
+    tmux -S "$tmux_socket" new-session -d -s "$session_name" -n "claude" -x 500 -y 50 \
         "$claude_cmd" 2>/dev/null || {
         log_error "Failed to create TMUX session"
         return 1
     }
 
-    log_success "TMUX session created: $session_name"
+    log_success "TMUX session created: $session_name (window: claude)"
 
     # Create additional shell window for debugging
     tmux -S "$tmux_socket" new-window -t "$session_name" -n "shell" -c "$WORKSPACE" \
@@ -903,7 +888,10 @@ start_tmux_session() {
         log_warn "Failed to create shell window"
     }
 
-    log_success "Added shell debug window"
+    # Switch back to Claude window so it's the active one when attaching
+    tmux -S "$tmux_socket" select-window -t "${session_name}:claude" 2>/dev/null || true
+
+    log_success "Added shell debug window (use Ctrl+b n to switch)"
 
     # Export socket path for later use
     export TMUX_SOCKET="$tmux_socket"
