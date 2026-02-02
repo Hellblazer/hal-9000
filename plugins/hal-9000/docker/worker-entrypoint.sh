@@ -402,6 +402,42 @@ init_claude_home() {
         log_success "Volume ownership migrated - credentials and plugins now accessible"
     fi
 
+    # PERSISTENCE: Symlink .claude.json to inside CLAUDE_HOME for volume persistence
+    # Claude stores settings in ~/.claude.json (outside .claude/ directory)
+    # By symlinking to .claude/.claude.json, it persists with the volume
+    local claude_json_link="/home/claude/.claude.json"
+    local claude_json_target="$CLAUDE_HOME/.claude.json"
+
+    if [[ -L "$claude_json_link" ]]; then
+        # Already a symlink - verify it points to right place
+        if [[ "$(readlink "$claude_json_link")" != "$claude_json_target" ]]; then
+            rm -f "$claude_json_link"
+            ln -s "$claude_json_target" "$claude_json_link"
+            log_info "Fixed .claude.json symlink"
+        fi
+    elif [[ -f "$claude_json_link" ]]; then
+        # Regular file exists - migrate to persisted location
+        if [[ -f "$claude_json_target" ]]; then
+            # Both exist - keep the persisted one, it's newer
+            rm -f "$claude_json_link"
+        else
+            # Move to persistent location
+            mv "$claude_json_link" "$claude_json_target"
+        fi
+        ln -s "$claude_json_target" "$claude_json_link"
+        log_info "Migrated .claude.json to persistent storage"
+    else
+        # No file exists yet - create symlink so Claude writes to persistent location
+        # Touch the target so symlink resolves (Claude may check existence)
+        touch "$claude_json_target" 2>/dev/null || true
+        ln -s "$claude_json_target" "$claude_json_link" 2>/dev/null || true
+        log_info "Created .claude.json symlink for persistence"
+    fi
+
+    # Ensure proper ownership
+    chown claude:claude "$claude_json_target" 2>/dev/null || true
+    chown -h claude:claude "$claude_json_link" 2>/dev/null || true
+
     # SECURITY: Export secret file PATH, not content
     # This prevents secrets from appearing in process environment (visible via docker inspect, /proc/1/environ)
     # The secret will be read only at exec time by run_claude_with_secret()

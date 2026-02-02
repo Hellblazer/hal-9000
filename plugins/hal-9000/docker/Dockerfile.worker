@@ -119,8 +119,8 @@ RUN test -x /home/claude/.local/bin/claude && \
 USER root
 
 # Copy entrypoint and utility scripts
-COPY docker/worker-init.sh /scripts/worker-init.sh
-COPY docker/worker-entrypoint.sh /scripts/worker-entrypoint.sh
+COPY worker-init.sh /scripts/worker-init.sh
+COPY worker-entrypoint.sh /scripts/worker-entrypoint.sh
 COPY scripts/tmux-send.sh /scripts/tmux-send.sh
 COPY scripts/tmux-attach.sh /scripts/tmux-attach.sh
 COPY scripts/tmux-list-sessions.sh /scripts/tmux-list-sessions.sh
